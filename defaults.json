@@ -1,0 +1,27 @@
+{
+  "event": {
+    "timing_mode": "sensor",
+    "pt_mode": "add",
+    "pt_penalty_ms": 5000,
+    "heat_ranking": false,
+    "registration_mode": "public",
+    "queue_self_entry": true,
+    "max_course_time_sec": 180,
+    "sensor_lockout_ms": 800
+  },
+  "coefficients": {
+    "turbo_gasoline": 1.7,
+    "turbo_diesel": 1.5,
+    "rotary": 1.7,
+    "supercharger": 1.7
+  },
+  "displacement_classes": [
+    { "label": "~660cc",  "max_cc": 660 },
+    { "label": "~1600cc", "max_cc": 1600 },
+    { "label": "無制限",  "max_cc": null }
+  ],
+  "classes": {
+    "driver": ["現役", "学内OB", "社会人"],
+    "drivetrain": ["2WD", "4WD"]
+  }
+}
