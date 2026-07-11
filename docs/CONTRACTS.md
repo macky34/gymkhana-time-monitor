@@ -224,6 +224,16 @@ GET /api/combinations/{d}/{v}/logs?<rankingと同じフィルタ>
   → {"driver":{...},"vehicle":{...},"runs":[{"heat":1,"raw_ms":84310,"pt_count":0,"is_mc":false,
      "final_ms":84310,"invalid":false,"rank_in_filter":4,"timestamp_ms":...,"source":"sensor"}]}
 GET /api/settings → settingsトピックと同形
+GET /api/recent?limit=10   // monitor直近リザルト用
+  → {"items":[{"log_id":41,"driver":{"id":1,"name":"山田"},"vehicle":{"id":1,"number":1,"name":"EF9シビック"},
+      "heat":6,"raw_ms":83456,"pt_count":0,"is_mc":false,"final_ms":83456,"invalid":false,
+      "source":"sensor","timestamp_ms":1720000000000}]}   // timestamp_ms降順。ranking SSE受信を再取得トリガーにする
+POST /api/setup            // §2.1 初回ブートストラップ (settings行が無い間のみ有効、トークン必須)
+  req: {"token":"<setup token>","event_name":"...",
+        "event":{/* defaults.jsonのevent同形 */},"coefficients":{/*同*/},
+        "displacement_classes":[/*同*/],"classes":{"driver":["現役"],"drivetrain":["2WD"]},
+        "admin":{"name":"...","driver_class":"現役"}}
+  res: 200 {"ok":true} + Set-Cookie tm_session (登録者はrole=admin)。settings行が既に在れば404。
 ```
 ランキング系フィルタ (GET /api/ranking, CSV, combinations の共通クエリ):
 `class_driver=現役&drivetrain=2WD&disp=~1600cc&driver_id=1&vehicle_id=2&heat=2` (すべて任意)
@@ -295,6 +305,19 @@ type PageData struct {
 - ピットボード全画面: モックの `#fsview` 実装 (縦持ちのみ90°回転、`8:88.888` ダミー実測で幅96%固定、⇅反転、確定3秒後クローズ) をそのまま移植。
 - アイコン: 登録/マイページで Cropper.js (`/static/cropper.min.js`+`cropper.min.css` セルフホスト) → 128x128 JPEG → base64でPOST。
 - ランキングのフィルタ状態はURLクエリ同期 (`history.replaceState`)。絞り込み+連番振り直しのみクライアントで行う (ソート順はサーバ提供のまま)。
+
+## 4.5 UDPワイヤーフォーマット (ESP32 ⇔ RPi、:9999、JSON 1パケット1オブジェクト)
+
+```jsonc
+// トリガー (3連送50ms間隔、同一内容)
+{"type":"trigger","sensor_id":"start","boot_id":123456789,"seq":1,"timestamp_us":1720000000000000}
+// ハートビート (5秒毎)
+{"type":"hb","sensor_id":"goal","boot_id":123456789,"seq":42,"ntp_offset_ms":0.4}
+```
+
+- `sensor_id`: "start" | "goal"。`boot_id`: 起動毎乱数 (uint32範囲)。`seq`: トリガーとhbで独立カウンタでよい (重複排除キーは trigger の (sensor_id,boot_id,seq))。
+- 不正JSON・未知typeは黙って捨てる (ログのみ)。
+- 開発用シミュレータ: `tools/sensor-sim.py` (start/goal打刻・ハートビート送出)。
 
 ## 5. ウェーブ計画
 

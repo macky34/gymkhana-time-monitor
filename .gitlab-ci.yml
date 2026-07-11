@@ -1,0 +1,35 @@
+stages: [verify, build, release]
+variables: { GOFLAGS: "-mod=vendor", CGO_ENABLED: "0" }
+
+verify:
+  stage: verify
+  image: golang:1.22
+  script:
+    - test -z "$(gofmt -l .)"
+    - go vet ./...
+    - go test -race -count=1 ./...
+
+firmware:
+  stage: verify
+  image: python:3.12-slim
+  script: [ "pip install platformio", "cd firmware && pio run" ]
+  rules: [ { changes: ["firmware/**/*"] } ]
+  artifacts: { paths: ["firmware/.pio/build/*/firmware.bin"] }
+
+build:
+  stage: build
+  image: golang:1.22
+  parallel: { matrix: [ { GOARCH: [arm64, amd64] } ] }
+  script:
+    - GOOS=linux go build -trimpath -ldflags="-s -w -X main.version=${CI_COMMIT_SHORT_SHA}" -o timemon-linux-${GOARCH} ./cmd/timemon
+  artifacts: { paths: ["timemon-linux-*"], expire_in: 30 days }
+
+release:
+  stage: release
+  rules: [ { if: "$CI_COMMIT_TAG" } ]
+  script:
+    - |
+      for f in timemon-linux-*; do
+        curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" --upload-file "$f" \
+          "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/timemon/${CI_COMMIT_TAG}/${f}"
+      done
