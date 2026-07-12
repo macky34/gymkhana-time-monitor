@@ -33,6 +33,7 @@ type Server struct {
 
 	limiter *rateLimiter
 	course  *courseManager
+	orphans orphanTracker
 
 	setupMu    sync.Mutex
 	setupToken string
