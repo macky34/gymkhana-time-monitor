@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "timemon",
+      "runtimeExecutable": "C:\\Program Files\\Go\\bin\\go.exe",
+      "runtimeArgs": ["run", "./cmd/timemon", "-addr", ":8080", "-db", "./dev-event.sqlite3"],
+      "port": 8080
+    },
+    {
       "name": "mockup",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8931", "--directory", "plan"],

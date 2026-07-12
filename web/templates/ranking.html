@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{.EventName}} | ランキング</title>
+<style>
+  :root{
+    --bg:#14171c; --panel:#1d232c; --panel2:#242b36; --line:#313a47;
+    --tx:#e9edf3; --mut:#8b95a5; --dim:#5b6472;
+    --go:#3ad07f; --amber:#ffb224; --red:#ff5d5d; --blue:#5aa2ff;
+    --mono:"SFMono-Regular","Cascadia Mono","Consolas","Roboto Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:#0b0d10;color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+       display:flex;justify-content:center;padding:16px 0;min-height:100vh}
+  .phone{width:392px;max-width:100%;background:var(--bg);border:1px solid #262d38;border-radius:22px;
+         overflow:hidden;display:flex;flex-direction:column;height:820px;max-height:96vh;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
+  header{padding:10px 14px 8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px;flex:none}
+  header .ev{font-size:13px;font-weight:700;letter-spacing:.02em}
+  header .live{margin-left:auto;font-size:10px;color:var(--go);font-family:var(--mono);display:flex;align-items:center;gap:5px}
+  header .live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--go);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  main{flex:1;overflow-y:auto;overscroll-behavior:contain}
+  .screen{display:none;padding:12px 12px 20px}
+  .screen.on{display:block}
+  nav{flex:none;display:flex;border-top:1px solid var(--line);background:#161a20}
+  nav a{flex:1;background:none;border:none;color:var(--dim);font-size:10.5px;padding:9px 0 11px;cursor:pointer;text-decoration:none;
+             display:flex;flex-direction:column;gap:3px;align-items:center;font-family:inherit}
+  nav a .ic{font-size:16px;line-height:1}
+  nav a.on{color:var(--tx)}
+  nav a.on .ic{color:var(--amber)}
+  .sec{font-size:10.5px;color:var(--mut);letter-spacing:.14em;margin:16px 2px 7px;font-weight:600}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  .t{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:8px;
+       padding:7px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--go);border-color:var(--go);color:#08130c;font-weight:700}
+  .btn.danger{color:var(--red);border-color:#5a3038}
+  .badge{font-size:9.5px;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
+  .badge.main{border-color:var(--amber);color:var(--amber)}
+  .avatar{width:38px;height:38px;border-radius:50%;background:var(--panel2);display:flex;align-items:center;justify-content:center;
+          font-size:15px;font-weight:700;flex:none;border:1px solid var(--line);overflow:hidden}
+  .avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+  .avatar.sm{width:28px;height:28px;font-size:11px}
+  .avatar.xs{width:22px;height:22px;font-size:9.5px;display:inline-flex;vertical-align:-6px;margin-right:5px}
+  .toast{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:#2b3a2f;border:1px solid var(--go);
+         color:var(--go);font-size:12px;padding:9px 18px;border-radius:99px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:40;white-space:nowrap}
+  .toast.on{opacity:1}
+  .note{font-size:10px;color:var(--dim);margin-top:8px;line-height:1.6}
+  .grid2{display:block}
+  @media(min-width:900px){
+    body{padding:20px;align-items:flex-start}
+    .phone{width:min(1180px,97vw);height:94vh;max-height:none;border-radius:14px}
+    .phone{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto 1fr;
+           grid-template-areas:"header header" "nav main"}
+    header{grid-area:header}
+    main{grid-area:main}
+    nav{grid-area:nav;width:176px;flex-direction:column;justify-content:flex-start;
+        border-top:none;border-right:1px solid var(--line);padding:10px 0;gap:2px}
+    nav a{flex:0 0 auto;width:100%;flex-direction:row;justify-content:flex-start;
+               gap:11px;font-size:13px;padding:12px 22px;border-left:2px solid transparent}
+    nav a.on{border-left-color:var(--amber);background:rgba(255,178,36,.06)}
+    nav a .ic{font-size:15px}
+    header .ev{font-size:15px}
+    .screen{padding:20px 28px 32px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+    .avatar{width:46px;height:46px;font-size:18px}
+    .avatar.sm{width:30px;height:30px;font-size:12px}
+    .toast{bottom:auto;top:70px}
+  }
+  /* ---- ranking-specific ---- */
+  .frow{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px}
+  .frow .ax{font-size:10px;color:var(--dim);width:52px;flex:none;padding-top:7px;letter-spacing:.03em}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+  .chip{font-size:11px;padding:5px 11px;border-radius:99px;border:1px solid var(--line);background:var(--panel);
+        color:var(--mut);cursor:pointer;font-family:inherit}
+  .chip.on{background:#2b3a2f;border-color:var(--go);color:var(--go)}
+  .fsel{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);
+        padding:6px 9px;font-size:11.5px;font-family:inherit}
+  .fsel.on{border-color:var(--go);color:var(--go)}
+  .rk{width:100%;border-collapse:collapse;font-size:12.5px}
+  .rk th{font-size:9.5px;color:var(--dim);font-weight:600;letter-spacing:.1em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  .rk th.r,.rk td.r{text-align:right}
+  .rk td{padding:8px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .rk tr.row{cursor:pointer}
+  .rk tr.row:active{background:var(--panel2)}
+  .rk .pos{font-family:var(--mono);font-weight:700;font-size:14px;width:22px}
+  .rk tr:nth-child(1) .pos{color:var(--amber)}
+  .rk td.av{width:34px;padding-right:0}
+  .rk .nm b{display:block;font-weight:600}
+  .rk .nm span{font-size:10px;color:var(--mut)}
+  .rk .best{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:14px}
+  .rk .sub{font-family:var(--mono);font-size:10px;color:var(--mut)}
+  .rk tr.dead td{opacity:.45}
+  .rk tr.dead .best{text-decoration:line-through}
+  .modal-bg{position:absolute;inset:0;background:rgba(5,7,10,.7);display:none;align-items:flex-end;z-index:30}
+  .modal-bg.on{display:flex}
+  .modal{background:var(--panel);border-top:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;
+         max-height:70%;overflow-y:auto;padding:16px 16px 24px;animation:up .22s ease-out}
+  @keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+  .modal h3{font-size:15px}
+  .modal .sub{font-size:11px;color:var(--mut);margin:2px 0 12px}
+  .runs{width:100%;border-collapse:collapse;font-size:12px}
+  .runs th{font-size:9px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
+  .runs td{padding:8px 6px;border-bottom:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .runs td:first-child{color:var(--mut)}
+  .runs tr.dead td{color:var(--dim);text-decoration:line-through}
+  @media(min-width:900px){
+    .rk{font-size:14px}
+    .rk .best{font-size:16px}
+    .modal-bg{align-items:center;justify-content:center}
+    .modal{width:560px;border-radius:18px;border:1px solid var(--line)}
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header>
+    <span class="ev">{{.EventName}}</span>
+    <span class="live t">LIVE</span>
+  </header>
+
+  <main id="main">
+  <section class="screen on" id="sc-ranking">
+    <div class="grid2">
+      <div>
+        <div class="sec">FILTER</div>
+        <div class="frow"><span class="ax">ドライバー</span><div class="chips" id="f-driver"></div></div>
+        <div class="frow"><span class="ax">排気量</span><div class="chips" id="f-disp"></div></div>
+        <div class="frow"><span class="ax">駆動方式</span><div class="chips" id="f-dt"></div></div>
+        <div class="frow"><span class="ax">走者指定</span>
+          <select class="fsel" id="f-person"><option value="">すべての走者</option></select></div>
+        <div class="frow"><span class="ax">車両指定</span>
+          <select class="fsel" id="f-veh"><option value="">すべての車両</option></select></div>
+        <div class="frow" id="f-heat-row" style="display:none"><span class="ax">ヒート</span>
+          <select class="fsel" id="f-heat"><option value="">総合 (全ヒートのベスト)</option></select></div>
+      </div>
+      <div>
+        <div class="sec">RANKING — <span id="rk-label">総合</span></div>
+        <div class="card" style="overflow:hidden">
+          <table class="rk">
+            <thead><tr><th></th><th></th><th>DRIVER / CAR</th><th class="r">BEST</th></tr></thead>
+            <tbody id="rk-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+  </main>
+
+  <nav id="nav">
+    <a href="/"><span class="ic">⏱</span>Monitor</a>
+    <a href="/ranking" class="on"><span class="ic">🏆</span>Ranking</a>
+    <a href="/my"><span class="ic">👤</span>My</a>
+    {{if .IsAdmin}}<a href="/admin"><span class="ic">🛠</span>運営</a>{{end}}
+  </nav>
+
+  <div class="modal-bg" id="modal">
+    <div class="modal">
+      <h3 id="md-title"></h3>
+      <p class="sub" id="md-sub"></p>
+      <table class="runs">
+        <thead><tr><th>HEAT</th><th>RAW</th><th>PT</th><th>FINAL</th><th>順位*</th></tr></thead>
+        <tbody id="md-runs"></tbody>
+      </table>
+      <p class="note">*順位 = 現在のフィルタ内でその1本を比較した順位 (CSVと同定義)</p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+<script>
+'use strict';
+
+/* ---------- tiny DOM builder (no innerHTML anywhere) ---------- */
+function h(tag, attrs, ...children){
+  const e = document.createElement(tag);
+  if (attrs) for (const k in attrs){
+    if (k === 'class') e.className = attrs[k];
+    else if (k === 'style') e.setAttribute('style', attrs[k]);
+    else if (k.indexOf('on') === 0 && typeof attrs[k] === 'function') e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const c of children.flat(Infinity)){
+    if (c === null || c === undefined) continue;
+    e.appendChild((typeof c === 'string' || typeof c === 'number') ? document.createTextNode(String(c)) : c);
+  }
+  return e;
+}
+function clear(el){ while (el.firstChild) el.removeChild(el.firstChild); }
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toast._tm);
+  toast._tm = setTimeout(() => t.classList.remove('on'), 1800);
+}
+
+let offset = 0;
+function fmt3(ms){
+  if (ms === null || ms === undefined) return '—';
+  const s = Math.floor(ms / 1000), mmm = ((ms % 1000) + 1000) % 1000;
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '.' + String(mmm).padStart(3, '0');
+}
+
+async function apiGet(url){
+  const res = await fetch(url, { credentials: 'same-origin' });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
+}
+
+/* ---------- filter state (synced to URL query) ---------- */
+const FIL = { class_driver: '', drivetrain: '', disp: '', driver_id: '', vehicle_id: '', heat: '' };
+function readFilterFromLocation(){
+  const p = new URLSearchParams(location.search);
+  ['class_driver', 'drivetrain', 'disp', 'driver_id', 'vehicle_id', 'heat'].forEach(k => {
+    if (p.has(k)) FIL[k] = p.get(k) || '';
+  });
+}
+function syncUrl(){
+  const p = new URLSearchParams();
+  for (const k in FIL) if (FIL[k]) p.set(k, FIL[k]);
+  const qs = p.toString();
+  history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+}
+function buildQuery(){
+  const p = new URLSearchParams();
+  for (const k in FIL) if (FIL[k]) p.set(k, FIL[k]);
+  return p.toString();
+}
+readFilterFromLocation();
+
+/* ---------- data ---------- */
+let settings = { driver_classes: [], dt_classes: [], disp_classes: [], heat_ranking: false };
+let driversList = [];
+let vehiclesList = [];
+let rankingRowsAll = []; // heat=0 (total) snapshot from SSE, unfiltered
+let rankingRowsHeat = null; // heat=N snapshot from REST, unfiltered (null when heat filter inactive)
+
+function currentRows(){
+  return FIL.heat ? (rankingRowsHeat || []) : rankingRowsAll;
+}
+
+/* ---------- chips ---------- */
+function buildChips(containerId, key, labels){
+  const box = document.getElementById(containerId);
+  clear(box);
+  labels.forEach(v => {
+    const btn = h('button', { class: 'chip' + (FIL[key] === v ? ' on' : ''), type: 'button' }, v);
+    btn.addEventListener('click', () => {
+      FIL[key] = (FIL[key] === v) ? '' : v;
+      box.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x.textContent === FIL[key]));
+      syncUrl();
+      drawRk();
+    });
+    box.appendChild(btn);
+  });
+}
+
+function populateSelect(sel, items, valueKey, textFn, currentVal){
+  clear(sel);
+  sel.appendChild(h('option', { value: '' }, sel === document.getElementById('f-person') ? 'すべての走者' : 'すべての車両'));
+  items.forEach(it => {
+    const opt = h('option', { value: String(it[valueKey]) }, textFn(it));
+    sel.appendChild(opt);
+  });
+  sel.value = currentVal || '';
+  sel.classList.toggle('on', !!sel.value);
+}
+
+function populateHeatSelect(){
+  const sel = document.getElementById('f-heat');
+  clear(sel);
+  sel.appendChild(h('option', { value: '' }, '総合 (全ヒートのベスト)'));
+  for (let i = 1; i <= 30; i++){
+    sel.appendChild(h('option', { value: String(i) }, 'ヒート ' + i));
+  }
+  sel.value = FIL.heat || '';
+}
+
+async function loadStaticData(){
+  try {
+    const [s, d, v] = await Promise.all([apiGet('/api/settings'), apiGet('/api/drivers'), apiGet('/api/vehicles')]);
+    settings = s;
+    driversList = d.drivers || [];
+    vehiclesList = v.vehicles || [];
+  } catch (e) {
+    toast('設定の取得に失敗しました');
+    return;
+  }
+  buildChips('f-driver', 'class_driver', (settings.driver_classes || []).map(c => c.label));
+  buildChips('f-disp', 'disp', settings.disp_classes || []);
+  buildChips('f-dt', 'drivetrain', (settings.dt_classes || []).map(c => c.label));
+  populateSelect(document.getElementById('f-person'), driversList, 'id', it => it.name, FIL.driver_id);
+  populateSelect(document.getElementById('f-veh'), vehiclesList, 'id', it => `#${it.number} ${it.name}`, FIL.vehicle_id);
+  document.getElementById('f-person').addEventListener('change', e => {
+    FIL.driver_id = e.target.value; e.target.classList.toggle('on', !!e.target.value); syncUrl(); drawRk();
+  });
+  document.getElementById('f-veh').addEventListener('change', e => {
+    FIL.vehicle_id = e.target.value; e.target.classList.toggle('on', !!e.target.value); syncUrl(); drawRk();
+  });
+  if (settings.heat_ranking){
+    document.getElementById('f-heat-row').style.display = 'flex';
+    populateHeatSelect();
+    document.getElementById('f-heat').addEventListener('change', async e => {
+      FIL.heat = e.target.value; e.target.classList.toggle('on', !!e.target.value);
+      syncUrl();
+      await refreshHeatRanking();
+      drawRk();
+    });
+    if (FIL.heat) await refreshHeatRanking();
+  }
+  drawRk();
+}
+
+async function refreshHeatRanking(){
+  if (!FIL.heat) { rankingRowsHeat = null; return; }
+  try {
+    const data = await apiGet('/api/ranking?heat=' + encodeURIComponent(FIL.heat));
+    rankingRowsHeat = data.rows || [];
+  } catch (e) {
+    toast('ヒート別ランキングの取得に失敗しました');
+  }
+}
+
+/* ---------- render ---------- */
+function drawRk(){
+  const tb = document.getElementById('rk-body');
+  clear(tb);
+  const rows = currentRows().filter(r =>
+    (!FIL.class_driver || r.driver_class === FIL.class_driver) &&
+    (!FIL.disp || r.vehicle.disp_class === FIL.disp) &&
+    (!FIL.drivetrain || r.vehicle.dt_class === FIL.drivetrain) &&
+    (!FIL.driver_id || String(r.driver.id) === FIL.driver_id) &&
+    (!FIL.vehicle_id || String(r.vehicle.id) === FIL.vehicle_id)
+  );
+  const labelParts = [];
+  if (FIL.class_driver) labelParts.push(FIL.class_driver);
+  if (FIL.disp) labelParts.push(FIL.disp);
+  if (FIL.drivetrain) labelParts.push(FIL.drivetrain);
+  if (FIL.driver_id){ const dr = driversList.find(x => String(x.id) === FIL.driver_id); if (dr) labelParts.push(dr.name); }
+  if (FIL.vehicle_id){ const vh = vehiclesList.find(x => String(x.id) === FIL.vehicle_id); if (vh) labelParts.push('#' + vh.number); }
+  if (FIL.heat) labelParts.push('ヒート' + FIL.heat);
+  document.getElementById('rk-label').textContent = labelParts.length ? labelParts.join(' × ') : '総合';
+
+  if (!rows.length){
+    tb.appendChild(h('tr', {}, h('td', { colspan: '4', style: 'text-align:center;color:var(--dim);padding:20px' }, '該当エントリーなし')));
+    return;
+  }
+  let pos = 0;
+  rows.forEach(r => {
+    const isDead = !!r.invalid;
+    const p = isDead ? '—' : String(++pos);
+    const tr = h('tr', { class: 'row' + (isDead ? ' dead' : '') },
+      h('td', { class: 'pos t' }, p),
+      h('td', { class: 'av' }, h('div', { class: 'avatar sm' }, (r.driver.name || '?').slice(0, 1))),
+      h('td', { class: 'nm' },
+        h('b', {}, r.driver.name + ' ', h('span', { style: 'font-weight:400;color:var(--dim)' }, r.driver_class || '')),
+        h('span', {}, `#${r.vehicle.number} ${r.vehicle.name} ・ ${r.vehicle.disp_class} / ${r.vehicle.dt_class}`)
+      ),
+      h('td', { class: 'r' },
+        h('span', { class: 'best' }, r.best_ms !== null && r.best_ms !== undefined ? fmt3(r.best_ms) : '—'),
+        h('br'),
+        h('span', { class: 'sub' }, `2nd ${r.second_ms !== null && r.second_ms !== undefined ? fmt3(r.second_ms) : '—'} ・ ${r.runs}本`)
+      )
+    );
+    tr.addEventListener('click', () => openDrilldown(r));
+    tb.appendChild(tr);
+  });
+}
+
+/* ---------- drilldown modal ---------- */
+async function openDrilldown(r){
+  document.getElementById('md-title').textContent = `${r.driver.name} × #${r.vehicle.number} ${r.vehicle.name}`;
+  document.getElementById('md-sub').textContent = `${r.driver_class || ''} ・ ${r.vehicle.disp_class} / ${r.vehicle.dt_class} ・ ${r.runs}本走行`;
+  const tbody = document.getElementById('md-runs');
+  clear(tbody);
+  tbody.appendChild(h('tr', {}, h('td', { colspan: '5', style: 'text-align:center;color:var(--dim)' }, '読み込み中…')));
+  document.getElementById('modal').classList.add('on');
+  try {
+    const qs = buildQuery();
+    const data = await apiGet(`/api/combinations/${r.driver.id}/${r.vehicle.id}/logs` + (qs ? '?' + qs : ''));
+    clear(tbody);
+    (data.runs || []).forEach(run => {
+      const isDead = !!run.invalid;
+      const finalCell = isDead ? '—' : fmt3(run.final_ms);
+      const tr = h('tr', { class: isDead ? 'dead' : '' },
+        h('td', {}, String(run.heat)),
+        h('td', {}, fmt3(run.raw_ms)),
+        h('td', {}, run.is_mc ? 'MC' : String(run.pt_count)),
+        h('td', {}, run.rank_in_filter === 1 && !isDead ? h('b', {}, finalCell) : finalCell),
+        h('td', {}, run.rank_in_filter !== null && run.rank_in_filter !== undefined ? String(run.rank_in_filter) : '—')
+      );
+      tbody.appendChild(tr);
+    });
+    if (!(data.runs || []).length){
+      tbody.appendChild(h('tr', {}, h('td', { colspan: '5', style: 'text-align:center;color:var(--dim)' }, '走行記録なし')));
+    }
+  } catch (e) {
+    clear(tbody);
+    tbody.appendChild(h('tr', {}, h('td', { colspan: '5', style: 'text-align:center;color:var(--red)' }, '読み込みに失敗しました')));
+  }
+}
+document.getElementById('modal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('on'); });
+document.getElementById('modal').querySelector('.modal').addEventListener('click', e => e.stopPropagation());
+
+/* ---------- SSE ---------- */
+const es = new EventSource('/api/stream?topics=ranking,time');
+es.addEventListener('time', e => {
+  const d = JSON.parse(e.data);
+  offset = d.server_ms - Date.now();
+});
+es.addEventListener('ranking', e => {
+  const d = JSON.parse(e.data);
+  rankingRowsAll = d.rows || [];
+  if (FIL.heat) { refreshHeatRanking().then(drawRk); } else { drawRk(); }
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible'){
+    if (FIL.heat) { refreshHeatRanking().then(drawRk); } else { drawRk(); }
+  }
+});
+
+loadStaticData();
+</script>
+</body>
+</html>

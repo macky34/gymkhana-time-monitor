@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>タイムモニター | イベント セットアップ</title>
+<style>
+  :root{
+    --bg:#14171c; --panel:#1d232c; --panel2:#242b36; --line:#313a47;
+    --tx:#e9edf3; --mut:#8b95a5; --dim:#5b6472;
+    --go:#3ad07f; --amber:#ffb224; --red:#ff5d5d; --blue:#5aa2ff;
+    --mono:"SFMono-Regular","Cascadia Mono","Consolas","Roboto Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:#0b0d10;color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+       display:flex;justify-content:center;padding:16px 0;min-height:100vh}
+  .phone{width:392px;max-width:100%;background:var(--bg);border:1px solid #262d38;border-radius:22px;
+         overflow:hidden;display:flex;flex-direction:column;height:820px;max-height:96vh;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
+  header{padding:10px 14px 8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px;flex:none}
+  header .ev{font-size:13px;font-weight:700;letter-spacing:.02em}
+  header .setup{margin-left:auto;font-size:10px;color:var(--amber);font-family:var(--mono);letter-spacing:.1em}
+  main{flex:1;overflow-y:auto;overscroll-behavior:contain}
+  .screen{padding:12px 12px 20px}
+  .sec{font-size:10.5px;color:var(--mut);letter-spacing:.14em;margin:16px 2px 7px;font-weight:600}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  .t{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:8px;
+       padding:7px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--go);border-color:var(--go);color:#08130c;font-weight:700}
+  .toast{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);background:#2b3a2f;border:1px solid var(--go);
+         color:var(--go);font-size:12px;padding:9px 18px;border-radius:99px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:40;white-space:nowrap}
+  .toast.on{opacity:1}
+  .note{font-size:10px;color:var(--dim);margin-top:8px;line-height:1.6}
+  .welcome{text-align:center;padding:24px 8px 4px}
+  .welcome h2{font-size:17px;margin-bottom:4px}
+  .welcome p{font-size:11.5px;color:var(--mut)}
+  .fld{margin-bottom:13px}
+  .fld label{display:block;font-size:11px;color:var(--mut);margin-bottom:5px}
+  .fld input,.fld select{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:9px;
+        color:var(--tx);padding:10px 12px;font-size:14px;font-family:inherit}
+  .fldrow{display:flex;gap:10px}
+  .fldrow .fld{flex:1}
+  .fldrow .fld.sm{flex:0 0 110px}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg button{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);
+              padding:9px 4px;font-size:12px;cursor:pointer;font-family:inherit;min-width:64px}
+  .seg button.on{border-color:var(--go);color:var(--go);background:#22302a}
+  .hint{font-size:10.5px;color:var(--dim);margin-top:4px;line-height:1.5}
+  .setrow{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
+  .setrow:last-child{border:none}
+  .setrow .ml{margin-left:auto;display:flex;gap:6px;align-items:center}
+  .setrow select,.setrow input{background:var(--panel2);border:1px solid var(--line);border-radius:7px;color:var(--tx);
+       padding:6px 8px;font-size:12px;font-family:var(--mono);width:90px;text-align:right}
+  .setrow select{font-family:inherit;text-align:left;width:auto}
+  .dcrow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .dcrow input{background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--tx);
+       padding:9px 10px;font-size:13px;font-family:inherit}
+  .dcrow .lbl{flex:1}
+  .dcrow .cc{flex:0 0 110px;font-family:var(--mono);text-align:right}
+  .dcrow button{width:30px;height:30px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);
+       color:var(--dim);font-size:13px;cursor:pointer;flex:none;font-family:inherit}
+  .dcrow button:hover{color:var(--red);border-color:#5a3038}
+  .err{text-align:center;padding:40px 16px;color:var(--mut);font-size:13px;line-height:1.8}
+  @media(min-width:900px){
+    body{padding:20px;align-items:flex-start}
+    .phone{width:min(760px,97vw);height:94vh;max-height:none;border-radius:14px}
+    header .ev{font-size:15px}
+    .screen{padding:20px 28px 32px;max-width:620px;margin:0 auto}
+    .toast{bottom:auto;top:70px}
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header>
+    <span class="ev">タイムモニター</span>
+    <span class="setup t">SETUP</span>
+  </header>
+
+  <main id="main">
+  <section class="screen" id="sc-setup">
+
+    <div id="no-token" class="err" style="display:none">
+      セットアップトークンがURLにありません。<br>
+      サーバー起動ログに出力された <span class="t">Setup URL</span> からアクセスしてください。
+    </div>
+
+    <div id="setup-form">
+      <div class="welcome">
+        <div style="font-size:32px">🛠</div>
+        <h2>イベント作成</h2>
+        <p>イベント設定と最初の運営者を登録します。値は後から運営画面で変更できます。</p>
+      </div>
+
+      <div class="sec">EVENT — イベント</div>
+      <div class="fld"><label>イベント名</label><input id="su-event-name" placeholder="例: 〇〇大学 第12回ジムカーナ"></div>
+
+      <div class="sec">RULES — 計測・ルール</div>
+      <div class="card">
+        <div class="setrow">計測モード <span class="ml"><select id="su-timing"><option value="sensor" selected>センサー</option><option value="manual">手計測</option></select></span></div>
+        <div class="setrow">PTペナルティ <span class="ml"><select id="su-pt-mode"><option value="add" selected>加算</option><option value="invalidate">無効</option></select> <input id="su-pt-sec" value="5.000"> 秒</span></div>
+        <div class="setrow">参加登録 <span class="ml"><select id="su-reg-mode"><option value="public" selected>公開</option><option value="staff">運営のみ</option></select></span></div>
+        <div class="setrow">キュー自己投入 <span class="ml"><select id="su-self-entry"><option value="1" selected>許可</option><option value="0">運営のみ</option></select></span></div>
+        <div class="setrow">ヒートランキング <span class="ml"><select id="su-heat"><option value="0" selected>なし(自由走行)</option><option value="1">あり</option></select></span></div>
+        <div class="setrow">コースタイム上限 <span class="ml"><input id="su-max-time" value="180"> 秒</span></div>
+        <div class="setrow">センサーロックアウト <span class="ml"><input id="su-lockout" value="800"> ms</span></div>
+      </div>
+
+      <div class="sec">COEFFICIENTS — 換算係数</div>
+      <div class="card">
+        <div class="setrow">ターボ係数 (ガソリン) <span class="ml"><input id="su-coef-tg" value="1.7"></span></div>
+        <div class="setrow">ターボ係数 (ディーゼル) <span class="ml"><input id="su-coef-td" value="1.5"></span></div>
+        <div class="setrow">ロータリー係数 <span class="ml"><input id="su-coef-ro" value="1.7"></span></div>
+        <div class="setrow">スーパーチャージャー係数 <span class="ml"><input id="su-coef-sc" value="1.7"></span></div>
+      </div>
+      <p class="note">ロータリー係数はJAF公認規則を大会前に要再確認 (税制の×1.5と混同しやすい)。</p>
+
+      <div class="sec">CLASSES — 排気量クラス (換算cc昇順)</div>
+      <div id="su-disp-list"></div>
+      <button type="button" class="btn" style="width:100%" id="su-disp-add">＋ クラスを追加</button>
+      <p class="note">上限cc空欄 = 無制限の受け皿クラス (最後に1つ置く)。EVクラスはEV車両の登録時に自動で出現します。</p>
+
+      <div class="sec">CLASSES — 区分</div>
+      <div class="fld"><label>ドライバー区分 (カンマ区切り)</label><input id="su-driver-classes" value="現役, 学内OB, 社会人"></div>
+      <div class="fld"><label>駆動方式 (カンマ区切り)</label><input id="su-dt-classes" value="2WD, 4WD"></div>
+
+      <div class="sec">ADMIN — 最初の運営者</div>
+      <div class="fld"><label>名前</label><input id="su-admin-name" placeholder="例: 山田 太郎"></div>
+      <div class="fld"><label>区分</label><select id="su-admin-class"></select></div>
+
+      <button type="button" class="btn primary" style="width:100%;padding:13px;font-size:15px;margin-top:6px" id="su-submit">イベントを作成する</button>
+      <p class="note">作成と同時にこの端末が運営者としてログイン状態になり、運営画面へ移動します。セットアップURLは即失効します。</p>
+    </div>
+
+  </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+</div>
+<script>
+'use strict';
+const SETUP_MODE = {{.SetupMode}};
+const TOKEN = new URLSearchParams(location.search).get('t') || '';
+
+/* ---------- tiny DOM builder ---------- */
+function h(tag, attrs, ...children){
+  const e = document.createElement(tag);
+  if (attrs) for (const k in attrs){
+    if (k === 'class') e.className = attrs[k];
+    else if (k === 'style') e.setAttribute('style', attrs[k]);
+    else if (k.indexOf('on') === 0 && typeof attrs[k] === 'function') e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const c of children.flat(Infinity)){
+    if (c === null || c === undefined) continue;
+    e.appendChild((typeof c === 'string' || typeof c === 'number') ? document.createTextNode(String(c)) : c);
+  }
+  return e;
+}
+function clear(el){ while (el.firstChild) el.removeChild(el.firstChild); }
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toast._tm);
+  toast._tm = setTimeout(() => t.classList.remove('on'), 2200);
+}
+
+/* ---------- displacement class editor ---------- */
+const DEF_DISP = [
+  { label: '~660cc', max_cc: 660 },
+  { label: '~1600cc', max_cc: 1600 },
+  { label: '無制限', max_cc: null }
+];
+function addDispRow(label, maxCC){
+  const list = document.getElementById('su-disp-list');
+  const lbl = h('input', { class: 'lbl', placeholder: 'クラス名', value: label || '' });
+  const cc = h('input', { class: 'cc t', placeholder: '上限cc (空=無制限)', inputmode: 'numeric', value: (maxCC === null || maxCC === undefined) ? '' : String(maxCC) });
+  const del = h('button', { type: 'button', title: '削除' }, '✕');
+  const row = h('div', { class: 'dcrow' }, lbl, cc, del);
+  del.addEventListener('click', () => row.remove());
+  list.appendChild(row);
+}
+function readDispClasses(){
+  const rows = document.querySelectorAll('#su-disp-list .dcrow');
+  const out = [];
+  for (const r of rows){
+    const label = r.querySelector('.lbl').value.trim();
+    const ccStr = r.querySelector('.cc').value.trim();
+    if (!label) continue;
+    out.push({ label, max_cc: ccStr === '' ? null : (parseInt(ccStr, 10) || 0) });
+  }
+  return out;
+}
+
+/* ---------- driver class list -> admin class select sync ---------- */
+function parseClassList(id){
+  return document.getElementById(id).value.split(/[,、，]/).map(s => s.trim()).filter(Boolean);
+}
+function syncAdminClassSelect(){
+  const sel = document.getElementById('su-admin-class');
+  const keep = sel.value;
+  clear(sel);
+  const list = parseClassList('su-driver-classes');
+  list.forEach(c => sel.appendChild(h('option', { value: c }, c)));
+  if (list.includes(keep)) sel.value = keep;
+}
+
+/* ---------- submit ---------- */
+async function submitSetup(){
+  const eventName = document.getElementById('su-event-name').value.trim();
+  if (!eventName){ toast('イベント名を入力してください'); return; }
+  const adminName = document.getElementById('su-admin-name').value.trim();
+  if (!adminName){ toast('運営者の名前を入力してください'); return; }
+  const driverClasses = parseClassList('su-driver-classes');
+  const dtClassesList = parseClassList('su-dt-classes');
+  if (!driverClasses.length){ toast('ドライバー区分を1つ以上入力してください'); return; }
+  if (!dtClassesList.length){ toast('駆動方式を1つ以上入力してください'); return; }
+  const dispClasses = readDispClasses();
+  if (!dispClasses.length){ toast('排気量クラスを1つ以上設定してください'); return; }
+  const adminClass = document.getElementById('su-admin-class').value;
+  if (!adminClass || !driverClasses.includes(adminClass)){ toast('運営者の区分を選択してください'); return; }
+  const numOf = (id, fb) => { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? fb : v; };
+  const ptSec = numOf('su-pt-sec', 5);
+
+  const body = {
+    token: TOKEN,
+    event_name: eventName,
+    event: {
+      timing_mode: document.getElementById('su-timing').value,
+      pt_mode: document.getElementById('su-pt-mode').value,
+      pt_penalty_ms: Math.round(ptSec * 1000),
+      heat_ranking: document.getElementById('su-heat').value === '1',
+      registration_mode: document.getElementById('su-reg-mode').value,
+      queue_self_entry: document.getElementById('su-self-entry').value === '1',
+      max_course_time_sec: Math.round(numOf('su-max-time', 180)),
+      sensor_lockout_ms: Math.round(numOf('su-lockout', 800))
+    },
+    coefficients: {
+      turbo_gasoline: numOf('su-coef-tg', 1.7),
+      turbo_diesel: numOf('su-coef-td', 1.5),
+      rotary: numOf('su-coef-ro', 1.7),
+      supercharger: numOf('su-coef-sc', 1.7)
+    },
+    displacement_classes: dispClasses,
+    classes: { driver: driverClasses, drivetrain: dtClassesList },
+    admin: { name: adminName, driver_class: adminClass }
+  };
+
+  const btn = document.getElementById('su-submit');
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/setup', {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    let data = null;
+    try { data = await res.json(); } catch (e) {}
+    if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+    toast('イベントを作成しました');
+    location.href = '/admin';
+  } catch (err) {
+    toast(err.message || '作成に失敗しました');
+    btn.disabled = false;
+  }
+}
+
+/* ---------- init ---------- */
+if (!TOKEN){
+  document.getElementById('no-token').style.display = 'block';
+  document.getElementById('setup-form').style.display = 'none';
+} else {
+  DEF_DISP.forEach(c => addDispRow(c.label, c.max_cc));
+  document.getElementById('su-disp-add').addEventListener('click', () => addDispRow('', ''));
+  document.getElementById('su-driver-classes').addEventListener('input', syncAdminClassSelect);
+  syncAdminClassSelect();
+  document.getElementById('su-submit').addEventListener('click', submitSetup);
+}
+</script>
+</body>
+</html>

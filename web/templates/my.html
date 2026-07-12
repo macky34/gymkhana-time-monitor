@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{.EventName}} | マイページ</title>
+<link rel="stylesheet" href="/static/cropper.min.css">
+<style>
+  :root{
+    --bg:#14171c; --panel:#1d232c; --panel2:#242b36; --line:#313a47;
+    --tx:#e9edf3; --mut:#8b95a5; --dim:#5b6472;
+    --go:#3ad07f; --amber:#ffb224; --red:#ff5d5d; --blue:#5aa2ff;
+    --mono:"SFMono-Regular","Cascadia Mono","Consolas","Roboto Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:#0b0d10;color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+       display:flex;justify-content:center;padding:16px 0;min-height:100vh}
+  .phone{width:392px;max-width:100%;background:var(--bg);border:1px solid #262d38;border-radius:22px;
+         overflow:hidden;display:flex;flex-direction:column;height:820px;max-height:96vh;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
+  header{padding:10px 14px 8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px;flex:none}
+  header .ev{font-size:13px;font-weight:700;letter-spacing:.02em}
+  header .live{margin-left:auto;font-size:10px;color:var(--go);font-family:var(--mono);display:flex;align-items:center;gap:5px}
+  header .live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--go);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  main{flex:1;overflow-y:auto;overscroll-behavior:contain}
+  .screen{display:none;padding:12px 12px 20px}
+  .screen.on{display:block}
+  nav{flex:none;display:flex;border-top:1px solid var(--line);background:#161a20}
+  nav a{flex:1;background:none;border:none;color:var(--dim);font-size:10.5px;padding:9px 0 11px;cursor:pointer;text-decoration:none;
+             display:flex;flex-direction:column;gap:3px;align-items:center;font-family:inherit}
+  nav a .ic{font-size:16px;line-height:1}
+  nav a.on{color:var(--tx)}
+  nav a.on .ic{color:var(--amber)}
+  .sec{font-size:10.5px;color:var(--mut);letter-spacing:.14em;margin:16px 2px 7px;font-weight:600}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  .t{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:8px;
+       padding:7px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--go);border-color:var(--go);color:#08130c;font-weight:700}
+  .btn.danger{color:var(--red);border-color:#5a3038}
+  .badge{font-size:9.5px;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
+  .badge.main{border-color:var(--amber);color:var(--amber)}
+  .avatar{width:38px;height:38px;border-radius:50%;background:var(--panel2);display:flex;align-items:center;justify-content:center;
+          font-size:15px;font-weight:700;flex:none;border:1px solid var(--line);overflow:hidden}
+  .avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+  .avatar.sm{width:28px;height:28px;font-size:11px}
+  .toast{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:#2b3a2f;border:1px solid var(--go);
+         color:var(--go);font-size:12px;padding:9px 18px;border-radius:99px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:40;white-space:nowrap}
+  .toast.on{opacity:1}
+  .note{font-size:10px;color:var(--dim);margin-top:8px;line-height:1.6}
+  .welcome{text-align:center;padding:28px 8px 8px}
+  .welcome h2{font-size:17px;margin-bottom:4px}
+  .welcome p{font-size:11.5px;color:var(--mut)}
+  @media(min-width:900px){
+    body{padding:20px;align-items:flex-start}
+    .phone{width:min(1180px,97vw);height:94vh;max-height:none;border-radius:14px}
+    .phone{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto 1fr;
+           grid-template-areas:"header header" "nav main"}
+    header{grid-area:header}
+    main{grid-area:main}
+    nav{grid-area:nav;width:176px;flex-direction:column;justify-content:flex-start;
+        border-top:none;border-right:1px solid var(--line);padding:10px 0;gap:2px}
+    nav a{flex:0 0 auto;width:100%;flex-direction:row;justify-content:flex-start;
+               gap:11px;font-size:13px;padding:12px 22px;border-left:2px solid transparent}
+    nav a.on{border-left-color:var(--amber);background:rgba(255,178,36,.06)}
+    nav a .ic{font-size:15px}
+    header .ev{font-size:15px}
+    .screen{padding:20px 28px 32px}
+    #sc-my{max-width:620px;margin:0 auto}
+    .avatar{width:46px;height:46px;font-size:18px}
+    .avatar.sm{width:30px;height:30px;font-size:12px}
+    .toast{bottom:auto;top:70px}
+  }
+  /* ---- my-specific ---- */
+  .plist{list-style:none}
+  .plist li{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);font-size:13px}
+  .plist li:last-child{border:none}
+  .plist .ml{margin-left:auto;display:flex;gap:5px;align-items:center}
+  .myq{padding:14px;text-align:center}
+  .myq .pos{font-size:13px;color:var(--mut)}
+  .myq .pos b{color:var(--tx);font-size:20px;font-family:var(--mono)}
+  .selfgo{width:100%;border:none;border-radius:12px;background:linear-gradient(160deg,#2ec973,#1fa35c);
+          color:#07130c;font-size:16px;font-weight:800;padding:14px;cursor:pointer;font-family:inherit;margin-top:10px}
+  .selfgo:active{transform:scale(.98)}
+  .selfgo.plain{background:var(--panel2);color:var(--tx);border:1px solid var(--line);font-weight:600}
+  .vcard{display:flex;align-items:center;gap:10px;padding:12px;font-size:13px;cursor:pointer;
+         background:var(--panel);border:1px solid var(--line);border-radius:12px;transition:border-color .15s,background .15s}
+  .vcard .ml{margin-left:auto;display:flex;align-items:center}
+  .vcard.sel{border-color:var(--amber);background:#262316;box-shadow:0 0 0 1px var(--amber) inset}
+  .vdel{width:26px;height:26px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);
+        color:var(--dim);font-size:12px;cursor:pointer;margin-left:8px;flex:none;font-family:inherit}
+  .vdel:hover{color:var(--red);border-color:#5a3038}
+  .vcard.sel .vdel{display:none}
+  .vcard:not(.sel):hover{border-color:var(--dim)}
+  .runs{width:100%;border-collapse:collapse;font-size:12px}
+  .runs th{font-size:9px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
+  .runs td{padding:8px 6px;border-bottom:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .runs td:first-child{color:var(--mut)}
+  .runs tr.dead td{color:var(--dim);text-decoration:line-through}
+  .fld{margin-bottom:13px}
+  .fld label{display:block;font-size:11px;color:var(--mut);margin-bottom:5px}
+  .fld input,.fld select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;
+        color:var(--tx);padding:10px 12px;font-size:14px;font-family:inherit}
+  .fldrow{display:flex;gap:10px}
+  .fldrow .fld{flex:1}
+  .fldrow .fld.sm{flex:0 0 96px}
+  .seg{display:flex;gap:6px;flex-wrap:wrap}
+  .seg button{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--mut);
+              padding:9px 4px;font-size:12px;cursor:pointer;font-family:inherit;min-width:64px}
+  .seg button.on{border-color:var(--go);color:var(--go);background:#22302a}
+  .hint{font-size:10.5px;color:var(--dim);margin-top:4px;line-height:1.5}
+  .modal-bg{position:absolute;inset:0;background:rgba(5,7,10,.7);display:none;align-items:flex-end;z-index:30}
+  .modal-bg.on{display:flex}
+  .modal{background:var(--panel);border-top:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;
+         max-height:86%;overflow-y:auto;padding:16px 16px 24px;animation:up .22s ease-out}
+  @keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+  .modal h3{font-size:15px}
+  .modal .sub{font-size:11px;color:var(--mut);margin:2px 0 12px}
+  .qr{width:180px;height:180px;margin:12px auto;background:#fff;border-radius:8px;padding:10px}
+  .qr img{width:100%;height:100%;image-rendering:pixelated}
+  .cropwrap{max-height:300px;min-height:180px;overflow:hidden;margin:0 0 14px;background:#000;border-radius:8px}
+  .cropwrap img{max-width:100%;display:block}
+  @media(min-width:900px){
+    .modal-bg{align-items:center;justify-content:center}
+    .modal{width:460px;border-radius:18px;border:1px solid var(--line)}
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header>
+    <span class="ev">{{.EventName}}</span>
+    <span class="live t">LIVE</span>
+  </header>
+
+  <main id="main">
+  <section class="screen on" id="sc-my">
+{{if .Authed}}
+    <div class="sec">MY PAGE</div>
+    <div class="card">
+      <ul class="plist">
+        <li><div class="avatar" id="my-avatar">?</div>
+          <div><b style="font-size:14px" id="my-name"></b><br><span style="font-size:10.5px;color:var(--mut)" id="my-class"></span></div>
+          <span class="ml"><button type="button" class="btn" id="btn-edit">編集</button><button type="button" class="btn" id="btn-qr">ログインQR</button></span></li>
+      </ul>
+    </div>
+    <div class="sec">QUEUE — 出走キュー</div>
+    <div class="card myq" id="my-queue"><div class="pos">読み込み中…</div></div>
+    <div class="sec">MY VEHICLES — 紐づけ車両 (メインを1台選択)</div>
+    <ul id="my-veh" style="list-style:none;display:flex;flex-direction:column;gap:8px"></ul>
+    <button type="button" class="btn" style="width:100%;margin-top:8px" id="veh-add-btn">＋ 車両を追加</button>
+    <div class="sec">MY RUNS — 走行履歴</div>
+    <div class="card" style="padding:4px 10px">
+      <table class="runs">
+        <thead><tr><th>HEAT</th><th>RAW</th><th>PT</th><th>FINAL</th></tr></thead>
+        <tbody id="my-runs"></tbody>
+      </table>
+    </div>
+{{else}}
+    <div class="welcome">
+      <div style="font-size:32px">🔑</div>
+      <h2>ログインが必要です</h2>
+      <p>マイページを使うには、登録時に発行されたログインURL (QRコード) からアクセスしてください。</p>
+      <p style="margin-top:10px">初めての方は参加登録からどうぞ。</p>
+      <a class="btn primary" href="/register" style="display:inline-block;margin-top:16px;text-decoration:none">参加登録へ</a>
+    </div>
+{{end}}
+  </section>
+  </main>
+
+  <nav id="nav">
+    <a href="/"><span class="ic">⏱</span>Monitor</a>
+    <a href="/ranking"><span class="ic">🏆</span>Ranking</a>
+    <a href="/my" class="on"><span class="ic">👤</span>My</a>
+    {{if .IsAdmin}}<a href="/admin"><span class="ic">🛠</span>運営</a>{{end}}
+  </nav>
+
+  <div class="modal-bg" id="editmodal">
+    <div class="modal">
+      <h3>プロフィール編集</h3>
+      <p class="sub">名前・区分・アイコンを変更できます</p>
+      <div class="fld"><label>ドライバー名</label><input id="ed-name"></div>
+      <div class="fld"><label>区分</label><div class="seg" id="ed-class-seg"></div></div>
+      <div class="fld"><label>アイコン</label>
+        <div class="card" style="padding:12px;display:flex;align-items:center;gap:12px;background:var(--panel2)">
+          <div class="avatar" id="ed-avatar-preview">?</div>
+          <button type="button" class="btn" id="ed-icon-btn">写真を選んで切り抜き</button>
+          <input type="file" accept="image/*" id="ed-icon-file" style="display:none">
+        </div>
+      </div>
+      <button type="button" class="btn primary" style="width:100%" id="ed-save">保存</button>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="cropmodal">
+    <div class="modal">
+      <h3 style="text-align:center;margin-bottom:10px">アイコンを切り抜き</h3>
+      <div class="cropwrap"><img id="crop-img" alt=""></div>
+      <button type="button" class="btn primary" style="width:100%" id="crop-apply">適用してアップロード</button>
+      <button type="button" class="btn" style="width:100%;margin-top:8px" id="crop-cancel">キャンセル</button>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="qrmodal">
+    <div class="modal" style="text-align:center">
+      <h3>ログインQR</h3>
+      <p class="sub">このQRを読み込むと、この端末以外でもログインできます</p>
+      <div class="qr"><img id="qr-img" alt="ログインQRコード"></div>
+      <p class="note" style="text-align:left">スクリーンショット保存推奨。QRは他人に見せないでください (あなたのアカウントにログインされます)。紛失時は運営がトークン再発行で対応します。</p>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="vehmodal">
+    <div class="modal">
+      <h3>車両を追加</h3>
+      <p class="sub">新規登録するか、既存の車両に相乗りできます</p>
+      <div class="seg" id="vm-mode" style="margin-bottom:14px">
+        <button type="button" class="on" data-m="new">新規登録</button><button type="button" data-m="join">既存に相乗り</button>
+      </div>
+      <div id="vm-new">
+        <div class="fldrow">
+          <div class="fld sm"><label>号車番号</label><input class="t" id="vm-num" style="text-align:center" inputmode="numeric"></div>
+          <div class="fld"><label>車両名</label><input id="vm-name" placeholder="例: スイフト"></div>
+        </div>
+        <div class="hint" id="vm-numwarn" style="display:none;color:var(--amber)">この番号は既に使用されています (登録は可能です)</div>
+        <div class="fld"><label>エンジン方式</label>
+          <div class="seg" id="vm-eng">
+            <button type="button" class="on" data-e="gasoline">ガソリン</button>
+            <button type="button" data-e="diesel">ディーゼル</button>
+            <button type="button" data-e="rotary">ロータリー</button>
+            <button type="button" data-e="ev">EV</button>
+          </div>
+        </div>
+        <div id="vm-ice">
+          <div class="fld"><label>排気量 (実cc)</label><input class="t" id="vm-cc" value="1500" inputmode="numeric"></div>
+          <div class="fld"><label>過給機</label>
+            <div class="seg" id="vm-fi"><button type="button" class="on" data-fi="0">NA</button><button type="button" data-fi="1">ターボ / SC</button></div>
+            <div class="hint" id="vm-conv"></div>
+          </div>
+        </div>
+        <div class="fld"><label>駆動方式</label>
+          <div class="seg" id="vm-dt"></div>
+        </div>
+      </div>
+      <div id="vm-join" style="display:none">
+        <div class="fld"><label>相乗りする車両</label>
+          <select id="vm-sel"></select>
+        </div>
+        <div class="hint">本人操作のみで即成立します。</div>
+      </div>
+      <button type="button" class="btn primary" style="width:100%;margin-top:6px" id="vm-submit">追加する</button>
+      <p class="note">※諸元の事後修正は運営にご連絡ください (相乗りで共有される車両のため)。</p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+<script src="/static/cropper.min.js"></script>
+<script>
+'use strict';
+const AUTHED = {{.Authed}};
+const MY_ID = {{.MyID}};
+
+/* ---------- tiny DOM builder (no innerHTML anywhere) ---------- */
+function h(tag, attrs, ...children){
+  const e = document.createElement(tag);
+  if (attrs) for (const k in attrs){
+    if (k === 'class') e.className = attrs[k];
+    else if (k === 'style') e.setAttribute('style', attrs[k]);
+    else if (k.indexOf('on') === 0 && typeof attrs[k] === 'function') e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const c of children.flat(Infinity)){
+    if (c === null || c === undefined) continue;
+    e.appendChild((typeof c === 'string' || typeof c === 'number') ? document.createTextNode(String(c)) : c);
+  }
+  return e;
+}
+function clear(el){ while (el.firstChild) el.removeChild(el.firstChild); }
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toast._tm);
+  toast._tm = setTimeout(() => t.classList.remove('on'), 1800);
+}
+
+let offset = 0;
+function fmt3(ms){
+  if (ms === null || ms === undefined) return '—';
+  const s = Math.floor(ms / 1000), mmm = ((ms % 1000) + 1000) % 1000;
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '.' + String(mmm).padStart(3, '0');
+}
+
+async function api(method, url, body){
+  const opt = { method, credentials: 'same-origin' };
+  if (body !== undefined){
+    opt.headers = { 'Content-Type': 'application/json' };
+    opt.body = JSON.stringify(body);
+  }
+  const res = await fetch(url, opt);
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+  return data;
+}
+const apiGet = url => api('GET', url);
+
+function avatarInto(el, driverId, name, hasIcon){
+  clear(el);
+  if (hasIcon){
+    const img = h('img', { src: '/api/drivers/' + driverId + '/icon', alt: '' });
+    img.addEventListener('error', () => { clear(el); el.textContent = (name || '?').slice(0, 1); });
+    el.appendChild(img);
+  } else {
+    el.textContent = (name || '?').slice(0, 1);
+  }
+}
+
+/* ---------- domain math mirror (preview only) ---------- */
+const DEF_COEF = { turbo_gasoline: 1.7, turbo_diesel: 1.5, rotary: 1.7, supercharger: 1.7 };
+const DEF_DISP = [{ label: '~660cc', max_cc: 660 }, { label: '~1600cc', max_cc: 1600 }, { label: '無制限', max_cc: null }];
+function convertedCC(cc, engine, fi, coef){
+  if (engine === 'ev') return { cc: 0, ok: false };
+  let k = 1;
+  if (engine === 'rotary') k *= coef.rotary;
+  if (fi) k *= (engine === 'diesel' ? coef.turbo_diesel : coef.turbo_gasoline);
+  return { cc: Math.floor(cc * k), ok: true };
+}
+function dispClassOf(cc, ok, classes){
+  if (!ok) return 'EV';
+  for (const c of classes){
+    if (c.max_cc === null || c.max_cc === undefined || cc <= c.max_cc) return c.label;
+  }
+  return classes.length ? classes[classes.length - 1].label : '';
+}
+
+/* ---------- state ---------- */
+let settings = null;      // /api/settings public subset
+let myData = null;        // /api/my
+let allVehicles = [];     // /api/vehicles (for join list)
+let queueItems = [];      // queue SSE
+let onCourseCars = [];    // on_course SSE
+
+function vehicleSpecText(v){
+  let spec;
+  if (v.engine === 'ev'){
+    spec = 'EV';
+  } else {
+    spec = (v.displacement_cc || 0) + 'cc' + (v.engine === 'rotary' ? ' RE' : '') + (v.forced_induction ? ' ターボ' : ' NA');
+    if (v.converted_cc !== null && v.converted_cc !== undefined) spec += ` (換算${v.converted_cc}cc)`;
+  }
+  spec += ' / ' + (v.dt_class || '');
+  if ((v.drivers || []).length > 1) spec += ' ・相乗り';
+  return spec;
+}
+
+/* ---------- profile ---------- */
+function renderProfile(){
+  if (!myData) return;
+  document.getElementById('my-name').textContent = myData.driver.name;
+  const cls = ((settings && settings.driver_classes) || []).find(c => c.id === myData.driver.driver_class_id);
+  document.getElementById('my-class').textContent = cls ? cls.label : '';
+  avatarInto(document.getElementById('my-avatar'), myData.driver.id, myData.driver.name, myData.driver.has_icon);
+}
+
+/* ---------- vehicles ---------- */
+function renderVehicles(){
+  const list = document.getElementById('my-veh');
+  clear(list);
+  if (!myData) return;
+  (myData.vehicles || []).forEach(v => {
+    const isMain = v.id === myData.main_vehicle_id;
+    const ml = h('span', { class: 'ml' },
+      h('span', { class: 'badge main mainmark', style: isMain ? '' : 'visibility:hidden' }, 'メイン'));
+    if (!isMain){
+      const del = h('button', { class: 'vdel', title: '紐づけ解除', type: 'button' }, '✕');
+      del.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (!confirm(`＃${v.number} ${v.name} の紐づけを解除しますか?\n(過去の走行記録・順位はそのまま残ります)`)) return;
+        try {
+          await api('DELETE', '/api/my/vehicles/' + v.id);
+          toast(`＃${v.number} ${v.name} の紐づけを解除`);
+          await reloadMy();
+        } catch (err) { toast(err.message || '解除に失敗しました'); }
+      });
+      ml.appendChild(del);
+    }
+    const li = h('li', { class: 'vcard' + (isMain ? ' sel' : '') },
+      '🚗 ',
+      h('div', {}, h('b', {}, `＃${v.number} ${v.name}`), h('br'),
+        h('span', { style: 'font-size:10px;color:var(--mut)' }, vehicleSpecText(v))),
+      ml
+    );
+    li.addEventListener('click', async () => {
+      if (v.id === myData.main_vehicle_id) return;
+      try {
+        await api('PUT', '/api/my/main-vehicle', { vehicle_id: v.id });
+        toast('メイン車両を変更');
+        await reloadMy();
+      } catch (err) { toast(err.message || '変更に失敗しました'); }
+    });
+    list.appendChild(li);
+  });
+}
+
+/* ---------- runs ---------- */
+function renderRuns(){
+  const tb = document.getElementById('my-runs');
+  clear(tb);
+  if (!myData) return;
+  const runs = (myData.runs || []).slice().sort((a, b) => (b.timestamp_ms || 0) - (a.timestamp_ms || 0));
+  if (!runs.length){
+    tb.appendChild(h('tr', {}, h('td', { colspan: '4', style: 'text-align:center;color:var(--dim);padding:14px;text-decoration:none' }, 'まだ走行がありません')));
+    return;
+  }
+  const multiVeh = (myData.vehicles || []).length > 1;
+  runs.forEach(r => {
+    const dead = !!r.invalid;
+    const veh = (myData.vehicles || []).find(v => v.id === r.vehicle_id);
+    const heatCell = h('td', {}, String(r.heat));
+    if (multiVeh && veh) heatCell.appendChild(h('span', { style: 'font-size:9px;color:var(--dim)' }, ` ＃${veh.number}`));
+    tb.appendChild(h('tr', { class: dead ? 'dead' : '' },
+      heatCell,
+      h('td', {}, fmt3(r.raw_ms)),
+      h('td', {}, r.is_mc ? 'MC' : String(r.pt_count)),
+      h('td', {}, dead ? '—' : h('b', {}, fmt3(r.final_ms)))
+    ));
+  });
+}
+
+/* ---------- queue card state machine ---------- */
+let busyQueue = false;
+async function qAction(fn){
+  if (busyQueue) return;
+  busyQueue = true;
+  try { await fn(); } catch (err) { toast(err.message || '操作に失敗しました'); }
+  busyQueue = false;
+}
+function renderMyQ(){
+  const box = document.getElementById('my-queue');
+  if (!myData){ return; }
+  clear(box);
+  const mode = settings ? settings.timing_mode : 'sensor';
+  const selfEntry = settings ? settings.queue_self_entry !== false : true;
+  const myCar = onCourseCars.find(c => c.driver && c.driver.id === MY_ID);
+
+  if (myCar && !myCar.t_start_us && !myCar.finish){
+    box.appendChild(h('div', { class: 'pos' }, '投入済み — ', h('b', { style: 'font-size:14px' }, 'スタートセンサー通過待ち')));
+    const btn = h('button', { class: 'btn danger', style: 'margin-top:10px', type: 'button' }, '出走取消 (キュー先頭に戻る)');
+    btn.addEventListener('click', () => qAction(async () => {
+      await api('DELETE', '/api/my/queue/launch');
+      toast('出走を取り消しました');
+    }));
+    box.appendChild(btn);
+    box.appendChild(h('div', { class: 'note' }, 'スタートラインを切る前なら取り消せます。計測開始後の操作は運営が行います。'));
+    return;
+  }
+  if (myCar){
+    box.appendChild(h('div', { class: 'pos' }, myCar.finish ? 'ゴール! お疲れさまでした' : '走行中 — がんばれ!'));
+    return;
+  }
+  const idx = queueItems.findIndex(q => q.driver && q.driver.id === MY_ID);
+  if (idx < 0){
+    box.appendChild(h('div', { class: 'pos' }, '現在キューに並んでいません'));
+    if (selfEntry){
+      const mainV = (myData.vehicles || []).find(v => v.id === myData.main_vehicle_id);
+      const btn = h('button', { class: 'selfgo plain', type: 'button' },
+        '出走キューに並ぶ' + (mainV ? ` (＃${mainV.number} ${mainV.name})` : ''));
+      btn.addEventListener('click', () => qAction(async () => {
+        await api('POST', '/api/my/queue', {});
+        toast('キュー末尾に追加');
+      }));
+      box.appendChild(btn);
+      box.appendChild(h('div', { class: 'note' }, 'メイン車両で末尾に追加されます。取り下げは出走前まで可能。'));
+    } else {
+      box.appendChild(h('div', { class: 'note' }, 'キュー投入は運営が行います。スタート地点でお声がけください。'));
+    }
+    return;
+  }
+  if (idx === 0 && mode === 'sensor'){
+    box.appendChild(h('div', { class: 'pos' }, 'あなたの番です'));
+    const go = h('button', { class: 'selfgo', type: 'button' }, '出走 ▶ (スタートラインへ)');
+    go.addEventListener('click', () => qAction(async () => {
+      await api('POST', '/api/my/queue/launch');
+      toast('▶ 投入完了。センサー計測待ち');
+    }));
+    box.appendChild(go);
+    const leave = h('button', { class: 'btn danger', style: 'margin-top:8px', type: 'button' }, '出走中止 (取り下げ)');
+    leave.addEventListener('click', () => qAction(async () => {
+      await api('DELETE', '/api/my/queue');
+      toast('出走中止');
+    }));
+    box.appendChild(leave);
+    box.appendChild(h('div', { class: 'note' }, 'タップでコースに投入。計測開始はスタートセンサー通過の瞬間です。'));
+    return;
+  }
+  box.appendChild(h('div', { class: 'pos' }, '現在 ', h('b', {}, String(idx + 1)), ' 番目'));
+  box.appendChild(h('div', { class: 'note' },
+    idx === 0 ? '手計測モードのため出走操作は運営が行います' : '順番が来るとここに出走ボタンが表示されます (センサーモード時)'));
+  const leave = h('button', { class: 'btn danger', style: 'margin-top:10px', type: 'button' }, '出走中止 (取り下げ)');
+  leave.addEventListener('click', () => qAction(async () => {
+    await api('DELETE', '/api/my/queue');
+    toast('キューから取り下げ');
+  }));
+  box.appendChild(leave);
+}
+
+/* ---------- data loading ---------- */
+async function reloadMy(){
+  myData = await apiGet('/api/my');
+  renderProfile();
+  renderVehicles();
+  renderRuns();
+  renderMyQ();
+}
+async function reloadSettings(){
+  try { settings = await apiGet('/api/settings'); } catch (e) {}
+}
+async function reloadAllVehicles(){
+  try { const d = await apiGet('/api/vehicles'); allVehicles = d.vehicles || []; } catch (e) { allVehicles = []; }
+}
+
+/* ---------- profile edit modal ---------- */
+let edClassId = null;
+let cropper = null;
+function openEdit(){
+  document.getElementById('ed-name').value = myData.driver.name;
+  const seg = document.getElementById('ed-class-seg');
+  clear(seg);
+  edClassId = myData.driver.driver_class_id;
+  ((settings && settings.driver_classes) || []).forEach(c => {
+    const btn = h('button', { type: 'button', class: c.id === edClassId ? 'on' : '' }, c.label);
+    btn.addEventListener('click', () => {
+      seg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      edClassId = c.id;
+    });
+    seg.appendChild(btn);
+  });
+  avatarInto(document.getElementById('ed-avatar-preview'), myData.driver.id, myData.driver.name, myData.driver.has_icon);
+  document.getElementById('editmodal').classList.add('on');
+}
+async function saveEdit(){
+  const name = document.getElementById('ed-name').value.trim();
+  if (!name){ toast('名前を入力してください'); return; }
+  try {
+    await api('PUT', '/api/my/profile', { name, driver_class_id: edClassId });
+    document.getElementById('editmodal').classList.remove('on');
+    toast('プロフィールを更新しました');
+    await reloadMy();
+  } catch (err) { toast(err.message || '更新に失敗しました'); }
+}
+
+/* icon crop & upload */
+function bindCrop(){
+  document.getElementById('ed-icon-btn').addEventListener('click', () => document.getElementById('ed-icon-file').click());
+  document.getElementById('ed-icon-file').addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = document.getElementById('crop-img');
+      img.src = reader.result;
+      document.getElementById('cropmodal').classList.add('on');
+      img.onload = () => {
+        if (cropper) { cropper.destroy(); cropper = null; }
+        cropper = new Cropper(img, { aspectRatio: 1, viewMode: 1, autoCropArea: 1, background: false });
+      };
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  });
+  document.getElementById('crop-cancel').addEventListener('click', () => {
+    if (cropper) { cropper.destroy(); cropper = null; }
+    document.getElementById('cropmodal').classList.remove('on');
+  });
+  document.getElementById('crop-apply').addEventListener('click', async () => {
+    if (!cropper) return;
+    const canvas = cropper.getCroppedCanvas({ width: 128, height: 128 });
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    cropper.destroy(); cropper = null;
+    document.getElementById('cropmodal').classList.remove('on');
+    try {
+      await api('POST', '/api/my/icon', { icon_b64: dataUrl.split(',')[1] });
+      toast('アイコンを更新しました');
+      const pv = document.getElementById('ed-avatar-preview');
+      clear(pv);
+      pv.appendChild(h('img', { src: dataUrl, alt: '' }));
+      await reloadMy();
+    } catch (err) { toast(err.message || 'アップロードに失敗しました'); }
+  });
+}
+
+/* ---------- vehicle add modal ---------- */
+let vmEngine = 'gasoline';
+let vmFI = false;
+let vmDtClassId = null;
+function segBind(containerId, dataAttr, onSelect){
+  const box = document.getElementById(containerId);
+  box.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      box.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      onSelect(btn.dataset[dataAttr], btn);
+    });
+  });
+}
+function vmConvPreview(){
+  const hint = document.getElementById('vm-conv');
+  if (vmEngine === 'ev'){ hint.textContent = 'EVクラス (換算なし)'; return; }
+  const coef = (settings && settings.coefficients) || DEF_COEF;
+  const dispClasses = (settings && settings.displacement_classes) || DEF_DISP;
+  const cc = parseInt(document.getElementById('vm-cc').value, 10) || 0;
+  const r = convertedCC(cc, vmEngine, vmFI, coef);
+  hint.textContent = `換算排気量 ${r.cc}cc → クラス自動判定: ${dispClassOf(r.cc, r.ok, dispClasses)}`;
+}
+async function openVehModal(){
+  await reloadAllVehicles();
+  const sel = document.getElementById('vm-sel');
+  clear(sel);
+  const linked = new Set((myData.vehicles || []).map(v => v.id));
+  allVehicles.filter(v => !linked.has(v.id)).forEach(v => {
+    sel.appendChild(h('option', { value: String(v.id) }, `＃${v.number} ${v.name}`));
+  });
+  if (!sel.options.length) sel.appendChild(h('option', { value: '' }, '相乗りできる車両がありません'));
+  const dtSeg = document.getElementById('vm-dt');
+  clear(dtSeg);
+  vmDtClassId = null;
+  ((settings && settings.dt_classes) || []).forEach((c, i) => {
+    const btn = h('button', { type: 'button', class: i === 0 ? 'on' : '' }, c.label);
+    btn.addEventListener('click', () => {
+      dtSeg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      vmDtClassId = c.id;
+    });
+    dtSeg.appendChild(btn);
+    if (i === 0) vmDtClassId = c.id;
+  });
+  vmConvPreview();
+  document.getElementById('vehmodal').classList.add('on');
+}
+async function vmSubmit(){
+  const isNew = document.querySelector('#vm-mode .on').dataset.m === 'new';
+  let body;
+  if (isNew){
+    const num = parseInt(document.getElementById('vm-num').value, 10);
+    const name = document.getElementById('vm-name').value.trim();
+    if (!num){ toast('号車番号を入力してください'); return; }
+    if (!name){ toast('車両名を入力してください'); return; }
+    body = {
+      number: num, name,
+      engine_type: vmEngine,
+      displacement_cc: vmEngine === 'ev' ? null : (parseInt(document.getElementById('vm-cc').value, 10) || 0),
+      forced_induction: vmEngine === 'ev' ? false : vmFI,
+      drivetrain_class_id: vmDtClassId
+    };
+  } else {
+    const sel = document.getElementById('vm-sel');
+    if (!sel.value){ toast('車両を選択してください'); return; }
+    body = { vehicle_id: Number(sel.value) };
+  }
+  try {
+    await api('POST', '/api/my/vehicles', body);
+    document.getElementById('vehmodal').classList.remove('on');
+    toast(isNew ? '車両を登録して紐づけました' : '相乗りしました');
+    await reloadMy();
+  } catch (err) { toast(err.message || '追加に失敗しました'); }
+}
+
+/* ---------- modal close on backdrop ---------- */
+function bindModalClose(id){
+  const bg = document.getElementById(id);
+  bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('on'); });
+  bg.querySelector('.modal').addEventListener('click', e => e.stopPropagation());
+}
+
+/* ---------- init ---------- */
+async function init(){
+  ['editmodal', 'qrmodal', 'vehmodal', 'cropmodal'].forEach(bindModalClose);
+  document.getElementById('btn-edit').addEventListener('click', openEdit);
+  document.getElementById('ed-save').addEventListener('click', saveEdit);
+  document.getElementById('btn-qr').addEventListener('click', () => {
+    document.getElementById('qr-img').src = '/api/my/qr?ts=' + Date.now();
+    document.getElementById('qrmodal').classList.add('on');
+  });
+  document.getElementById('veh-add-btn').addEventListener('click', openVehModal);
+  document.getElementById('vm-submit').addEventListener('click', vmSubmit);
+  document.querySelectorAll('#vm-mode button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('#vm-mode button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    document.getElementById('vm-new').style.display = b.dataset.m === 'new' ? 'block' : 'none';
+    document.getElementById('vm-join').style.display = b.dataset.m === 'join' ? 'block' : 'none';
+  }));
+  segBind('vm-eng', 'e', (val) => {
+    vmEngine = val;
+    document.getElementById('vm-ice').style.display = (val === 'ev') ? 'none' : 'block';
+    vmConvPreview();
+  });
+  segBind('vm-fi', 'fi', (val) => { vmFI = val === '1'; vmConvPreview(); });
+  document.getElementById('vm-cc').addEventListener('input', vmConvPreview);
+  document.getElementById('vm-num').addEventListener('input', () => {
+    const warn = document.getElementById('vm-numwarn');
+    const num = parseInt(document.getElementById('vm-num').value, 10);
+    warn.style.display = (!!num && allVehicles.some(v => v.number === num)) ? 'block' : 'none';
+  });
+  bindCrop();
+
+  await reloadSettings();
+  try {
+    await reloadMy();
+  } catch (err) {
+    toast('データの取得に失敗しました。再読み込みしてください');
+    return;
+  }
+
+  /* SSE: queue,on_course,time */
+  const es = new EventSource('/api/stream?topics=queue,on_course,time');
+  es.addEventListener('time', e => {
+    const d = JSON.parse(e.data);
+    offset = d.server_ms - Date.now();
+  });
+  es.addEventListener('queue', e => {
+    const d = JSON.parse(e.data);
+    queueItems = d.items || [];
+    renderMyQ();
+  });
+  let hadMyCar = false;
+  es.addEventListener('on_course', e => {
+    const d = JSON.parse(e.data);
+    onCourseCars = d.cars || [];
+    const hasMyCar = onCourseCars.some(c => c.driver && c.driver.id === MY_ID);
+    renderMyQ();
+    if (hadMyCar && !hasMyCar){
+      /* my run just finished/cancelled -> refresh runs & queue state */
+      reloadMy().catch(() => {});
+    }
+    hadMyCar = hasMyCar;
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible'){
+      reloadSettings().then(renderMyQ);
+      reloadMy().catch(() => {});
+    }
+  });
+}
+
+if (AUTHED) init();
+</script>
+</body>
+</html>

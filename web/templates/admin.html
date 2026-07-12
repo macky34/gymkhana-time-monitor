@@ -1,0 +1,1552 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{.EventName}} | 運営</title>
+<style>
+  :root{
+    --bg:#14171c; --panel:#1d232c; --panel2:#242b36; --line:#313a47;
+    --tx:#e9edf3; --mut:#8b95a5; --dim:#5b6472;
+    --go:#3ad07f; --amber:#ffb224; --red:#ff5d5d; --blue:#5aa2ff;
+    --mono:"SFMono-Regular","Cascadia Mono","Consolas","Roboto Mono",ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{background:#0b0d10;color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+       display:flex;justify-content:center;padding:16px 0;min-height:100vh}
+  .phone{width:392px;max-width:100%;background:var(--bg);border:1px solid #262d38;border-radius:22px;
+         overflow:hidden;display:flex;flex-direction:column;height:820px;max-height:96vh;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
+  header{padding:10px 14px 8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px;flex:none}
+  header .ev{font-size:13px;font-weight:700;letter-spacing:.02em}
+  header .live{margin-left:auto;font-size:10px;color:var(--go);font-family:var(--mono);display:flex;align-items:center;gap:5px}
+  header .live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--go);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  main{flex:1;overflow-y:auto;overscroll-behavior:contain}
+  .screen{display:none;padding:12px 12px 20px}
+  .screen.on{display:block}
+  nav{flex:none;display:flex;border-top:1px solid var(--line);background:#161a20}
+  nav a{flex:1;background:none;border:none;color:var(--dim);font-size:10.5px;padding:9px 0 11px;cursor:pointer;text-decoration:none;
+             display:flex;flex-direction:column;gap:3px;align-items:center;font-family:inherit}
+  nav a .ic{font-size:16px;line-height:1}
+  nav a.on{color:var(--tx)}
+  nav a.on .ic{color:var(--amber)}
+  .sec{font-size:10.5px;color:var(--mut);letter-spacing:.14em;margin:16px 2px 7px;font-weight:600}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
+  .t{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:8px;
+       padding:7px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--go);border-color:var(--go);color:#08130c;font-weight:700}
+  .btn.danger{color:var(--red);border-color:#5a3038}
+  .badge{font-size:9.5px;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
+  .avatar{width:38px;height:38px;border-radius:50%;background:var(--panel2);display:flex;align-items:center;justify-content:center;
+          font-size:15px;font-weight:700;flex:none;border:1px solid var(--line);overflow:hidden}
+  .avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+  .avatar.sm{width:28px;height:28px;font-size:11px}
+  .avatar.xs{width:22px;height:22px;font-size:9.5px;display:inline-flex;vertical-align:-6px;margin-right:5px}
+  .toast{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:#2b3a2f;border:1px solid var(--go);
+         color:var(--go);font-size:12px;padding:9px 18px;border-radius:99px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:40;white-space:nowrap}
+  .toast.on{opacity:1}
+  .note{font-size:10px;color:var(--dim);margin-top:8px;line-height:1.6}
+  .welcome{text-align:center;padding:28px 8px 8px}
+  .welcome h2{font-size:17px;margin-bottom:4px}
+  .welcome p{font-size:11.5px;color:var(--mut)}
+  .grid2{display:block}
+  @media(min-width:900px){
+    body{padding:20px;align-items:flex-start}
+    .phone{width:min(1180px,97vw);height:94vh;max-height:none;border-radius:14px}
+    .phone{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto 1fr;
+           grid-template-areas:"header header" "nav main"}
+    header{grid-area:header}
+    main{grid-area:main}
+    nav{grid-area:nav;width:176px;flex-direction:column;justify-content:flex-start;
+        border-top:none;border-right:1px solid var(--line);padding:10px 0;gap:2px}
+    nav a{flex:0 0 auto;width:100%;flex-direction:row;justify-content:flex-start;
+               gap:11px;font-size:13px;padding:12px 22px;border-left:2px solid transparent}
+    nav a.on{border-left-color:var(--amber);background:rgba(255,178,36,.06)}
+    nav a .ic{font-size:15px}
+    header .ev{font-size:15px}
+    .screen{padding:20px 28px 32px}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+    .avatar{width:46px;height:46px;font-size:18px}
+    .avatar.sm{width:30px;height:30px;font-size:12px}
+    .toast{bottom:auto;top:70px}
+  }
+  /* ---- admin-specific ---- */
+  .atabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin:-12px -12px 12px}
+  .atabs button{flex:1;background:none;border:none;color:var(--dim);font-size:11.5px;padding:11px 0;cursor:pointer;
+                border-bottom:2px solid transparent;font-family:inherit}
+  .atabs button.on{color:var(--tx);border-bottom-color:var(--amber);font-weight:600}
+  .apane{display:none}
+  .apane.on{display:block}
+  .modebar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .modebar .lb{font-size:10.5px;color:var(--mut);flex:none}
+  .seg{display:flex;gap:6px}
+  .seg button{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);
+              padding:9px 4px;font-size:12px;cursor:pointer;font-family:inherit}
+  .seg button.on{border-color:var(--go);color:var(--go);background:#22302a}
+  .seg.warn button.on{border-color:var(--amber);color:var(--amber);background:#2c2718}
+  .gobtn{width:100%;border:none;border-radius:14px;background:linear-gradient(160deg,#2ec973,#1fa35c);
+         color:#07130c;font-size:19px;font-weight:800;padding:20px 12px 22px;cursor:pointer;position:relative;
+         overflow:hidden;font-family:inherit;letter-spacing:.05em}
+  .gobtn small{display:block;font-size:10.5px;font-weight:600;opacity:.75;margin-top:3px;letter-spacing:0}
+  .gobtn .fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:rgba(255,255,255,.30)}
+  .gobtn.holding .fill{width:100%;transition:width .5s linear}
+  .gobtn:active{transform:scale(.99)}
+  .gobtn:disabled{filter:grayscale(.7);opacity:.6}
+  .gobtn.manual{background:linear-gradient(160deg,#ffc23d,#e69a12);color:#241a03}
+  .gobtn.goal{background:linear-gradient(160deg,#4a90e2,#2f6cb8);color:#0a1420;font-size:17px;padding:16px 12px 18px}
+  .oc-admin{padding:11px 12px;margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .oc-admin .tm{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:19px;font-weight:700;color:var(--go)}
+  .oc-admin.armed .tm{color:var(--dim);font-size:14px}
+  .oc-admin.over .tm{color:var(--red);animation:pulse 1s infinite}
+  .oc-admin.flash .tm{color:var(--amber)}
+  .oc-admin .nm{font-size:13px;font-weight:600}
+  .oc-admin .nm span{display:block;font-size:10px;color:var(--mut);font-weight:400}
+  .oc-admin .acts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .empty-course{border:1px dashed var(--line);border-radius:14px;padding:18px;text-align:center;color:var(--dim);font-size:12px;margin-top:9px}
+  .mini{font-size:10.5px;padding:6px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);
+        color:var(--mut);cursor:pointer;font-family:inherit;white-space:nowrap}
+  .mini.on{border-color:#77771f;color:var(--amber);background:#2c2a18}
+  .mini.red{color:var(--red)}
+  .mini.go{color:var(--go);border-color:#2b5a3f;font-weight:700}
+  .mini.undo{color:var(--blue);border-color:#2b4463}
+  .mini.adm{color:var(--dim);border-style:dashed}
+  .mini.adm.on{color:#ffd9d9;background:#3a2226;border-color:var(--red);border-style:solid;font-weight:700}
+  .q{list-style:none}
+  .q li{display:flex;align-items:center;gap:9px;padding:10px 10px;border-bottom:1px solid var(--line);font-size:12.5px}
+  .q li:last-child{border:none}
+  .q .pos{font-family:var(--mono);color:var(--dim);font-size:11px;width:18px;flex:none}
+  .q .nm{min-width:0}
+  .q .nm b{font-weight:600;display:block}
+  .q .nm span{font-size:10px;color:var(--mut)}
+  .q .acts{margin-left:auto;display:flex;gap:5px}
+  .lg{width:100%;border-collapse:collapse;font-size:11.5px}
+  .lg th{font-size:9px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);letter-spacing:.08em}
+  .lg td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .lg .tm{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
+  .lg .src{font-size:12px}
+  .lg .acts{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}
+  .lg tr.deleted td{opacity:.4}
+  .orphan{background:#2e2415;border:1px solid #5c4a1e;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11.5px}
+  .orphan b{color:var(--amber);font-size:12px}
+  .orphan p{color:var(--mut);margin:3px 0 8px}
+  .ulist{list-style:none}
+  .ulist li{display:flex;align-items:center;gap:7px;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px}
+  .ulist li:last-child{border:none}
+  .ulist .nm{min-width:0;flex:1}
+  .ulist .nm b{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ulist .nm span{font-size:9.5px;color:var(--mut)}
+  .plist{list-style:none}
+  .plist li{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);font-size:13px}
+  .plist li:last-child{border:none}
+  .plist .ml{margin-left:auto;display:flex;gap:5px;align-items:center}
+  .setrow{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
+  .setrow:last-child{border:none}
+  .setrow .ml{margin-left:auto;display:flex;gap:6px;align-items:center}
+  .setrow select,.setrow input{background:var(--panel2);border:1px solid var(--line);border-radius:7px;color:var(--tx);
+       padding:6px 8px;font-size:12px;font-family:var(--mono);width:90px;text-align:right}
+  .setrow select{font-family:inherit;text-align:left;width:auto}
+  .setrow input.wide{width:170px;font-family:inherit;text-align:left}
+  .sensor{display:flex;gap:8px}
+  .sensor .s{flex:1;padding:11px 12px}
+  .sensor .s .id{font-size:10px;color:var(--mut);letter-spacing:.1em}
+  .sensor .s .st{font-size:13px;font-weight:700;margin:4px 0 6px;display:flex;align-items:center;gap:6px}
+  .dot{width:8px;height:8px;border-radius:50%}
+  .dot.ok{background:var(--go)} .dot.warn{background:var(--amber)} .dot.err{background:var(--red)}
+  .sensor .kv{font-size:10px;color:var(--dim);font-family:var(--mono);line-height:1.7}
+  .fld{margin-bottom:13px}
+  .fld label{display:block;font-size:11px;color:var(--mut);margin-bottom:5px}
+  .fld input,.fld select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;
+        color:var(--tx);padding:10px 12px;font-size:14px;font-family:inherit}
+  .fldrow{display:flex;gap:10px}
+  .fldrow .fld{flex:1}
+  .fldrow .fld.sm{flex:0 0 96px}
+  .hint{font-size:10.5px;color:var(--dim);margin-top:4px;line-height:1.5}
+  .modal-bg{position:absolute;inset:0;background:rgba(5,7,10,.7);display:none;align-items:flex-end;z-index:30}
+  .modal-bg.on{display:flex}
+  .modal{background:var(--panel);border-top:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;
+         max-height:86%;overflow-y:auto;padding:16px 16px 24px;animation:up .22s ease-out}
+  @keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
+  .modal h3{font-size:15px}
+  .modal .sub{font-size:11px;color:var(--mut);margin:2px 0 12px}
+  .qr{width:170px;height:170px;margin:12px auto;background:#fff;border-radius:8px;padding:10px}
+  .qr img{width:100%;height:100%;image-rendering:pixelated}
+  .tokenurl{font-family:var(--mono);font-size:10.5px;background:var(--panel2);border:1px solid var(--line);
+            border-radius:8px;padding:9px;word-break:break-all;color:var(--blue)}
+  .tokenurl.copyable{cursor:pointer;position:relative}
+  .tokenurl.copyable:active{border-color:var(--go)}
+  .tokenurl .cp{display:block;font-family:inherit;font-size:9px;color:var(--dim);margin-top:5px;letter-spacing:.05em}
+  .tokenurl.copied{border-color:var(--go)}
+  .tokenurl.copied .cp{color:var(--go)}
+  @media(min-width:900px){
+    .modal-bg{align-items:center;justify-content:center}
+    .modal{width:520px;border-radius:18px;border:1px solid var(--line)}
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header>
+    <span class="ev">{{.EventName}}</span>
+    <span class="live t">LIVE</span>
+  </header>
+
+  <main id="main">
+  <section class="screen on" id="sc-admin">
+{{if .IsAdmin}}
+    <div class="atabs">
+      <button type="button" class="on" data-p="a-run">出走</button>
+      <button type="button" data-p="a-log">ログ</button>
+      <button type="button" data-p="a-usr">ユーザ</button>
+      <button type="button" data-p="a-veh">車両</button>
+      <button type="button" data-p="a-set">設定</button>
+    </div>
+
+    <!-- 出走管理 -->
+    <div class="apane on" id="a-run">
+      <div class="grid2">
+        <div>
+          <div class="modebar">
+            <span class="lb">計測モード</span>
+            <div class="seg warn" id="modeseg" style="flex:1">
+              <button type="button" data-m="sensor">センサー</button><button type="button" data-m="manual">手計測</button>
+            </div>
+          </div>
+          <button type="button" class="gobtn" id="gobtn"><span class="fill"></span><span id="go-label"></span><small id="go-hint"></small></button>
+          <button type="button" class="gobtn goal" id="goalbtn" style="display:none;margin-top:8px"><span id="goal-label"></span><small>タップの瞬間がゴール打刻 (走行中の先頭車)</small></button>
+          <div class="sec">ON COURSE</div>
+          <div id="adm-course"></div>
+        </div>
+        <div>
+          <div class="sec" style="margin-top:0">WAITING — 出走キュー (↑↓で並替)</div>
+          <div class="card"><ul class="q" id="adm-q"></ul></div>
+          <div class="sec">キューに追加</div>
+          <div class="card" style="padding:12px;display:flex;flex-direction:column;gap:8px">
+            <select id="qa-driver"><option value="">ドライバーを選択…</option></select>
+            <select id="qa-vehicle"><option value="">車両を選択…</option></select>
+            <button type="button" class="btn" id="qa-add">追加</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ログ -->
+    <div class="apane" id="a-log">
+      <div class="orphan" id="orphan-band" style="display:none">
+        <b id="orphan-title">⚠ 警告</b>
+        <div id="orphan-items"></div>
+      </div>
+      <div class="card" style="padding:4px 8px">
+        <table class="lg">
+          <thead><tr><th>#</th><th>走者</th><th>TIME</th><th>SRC</th></tr></thead>
+          <tbody id="log-body"></tbody>
+        </table>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
+        <button type="button" class="btn" id="log-prev">← 前</button>
+        <span class="note" style="margin:0" id="log-pageinfo"></span>
+        <button type="button" class="btn" id="log-next">次 →</button>
+        <button type="button" class="btn" style="margin-left:auto" id="log-add">＋ 手動ログ追加</button>
+      </div>
+    </div>
+
+    <!-- ユーザ管理 -->
+    <div class="apane" id="a-usr">
+      <button type="button" class="btn primary" style="width:100%;margin-bottom:12px" id="usr-new">＋ ユーザを運営登録</button>
+      <div class="card">
+        <ul class="ulist" id="usr-list"></ul>
+      </div>
+      <p class="note">右端の[運営]ボタン = 権限の有効/無効 (ハイライト=有効、タップで切替)。紛失時の再発行は[再発行]ボタン(確認モーダル)から。本人の再表示はマイページで自足。</p>
+    </div>
+
+    <!-- 車両管理 -->
+    <div class="apane" id="a-veh">
+      <button type="button" class="btn primary" style="width:100%;margin-bottom:12px" id="veh-new">＋ 車両を追加</button>
+      <div class="card">
+        <ul class="plist" id="veh-list"></ul>
+      </div>
+      <p class="note">換算排気量とクラスは諸元からの導出値。諸元を編集すれば順位・CSVも自動で追従。</p>
+    </div>
+
+    <!-- 設定 -->
+    <div class="apane" id="a-set">
+      <div class="grid2">
+        <div>
+          <div class="sec">SENSORS</div>
+          <div class="sensor" id="sensor-panel"></div>
+          <div class="sec">EXPORT</div>
+          <div class="card" style="padding:12px;display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" class="btn" id="csv-ranking">CSV: ランキング</button>
+            <button type="button" class="btn" id="csv-combination">CSV: ドライバー・車両別</button>
+            <button type="button" class="btn" id="csv-logs">CSV: 全ログ</button>
+          </div>
+          <button type="button" class="btn danger" style="width:100%;margin-top:14px" id="btn-reg-toggle">🔒 参加受付を終了する</button>
+        </div>
+        <div>
+          <div class="sec">EVENT SETTINGS</div>
+          <div class="card">
+            <div class="setrow">イベント名 <span class="ml"><input class="wide" id="set-event-name"></span></div>
+            <div class="setrow">PTペナルティ <span class="ml"><select id="set-pt-mode"><option value="add">加算</option><option value="invalidate">無効</option></select> <input id="set-pt-sec"> 秒</span></div>
+            <div class="setrow">参加登録 <span class="ml"><select id="set-reg-mode"><option value="public">公開</option><option value="staff">運営のみ</option></select></span></div>
+            <div class="setrow">キュー自己投入 <span class="ml"><select id="set-self-entry"><option value="1">許可</option><option value="0">運営のみ</option></select></span></div>
+            <div class="setrow">ヒートランキング <span class="ml"><select id="set-heat-ranking"><option value="0">なし(自由走行)</option><option value="1">あり</option></select></span></div>
+            <div class="setrow">コースタイム上限 <span class="ml"><input id="set-max-time"> 秒</span></div>
+            <div class="setrow">センサーロックアウト <span class="ml"><input id="set-lockout"> ms</span></div>
+            <div class="setrow">ロータリー係数 <span class="ml"><input id="set-coef-rotary"></span></div>
+            <div class="setrow">ターボ係数(ガソリン) <span class="ml"><input id="set-coef-tg"></span></div>
+            <div class="setrow">ターボ係数(ディーゼル) <span class="ml"><input id="set-coef-td"></span></div>
+            <div class="setrow">SC係数 <span class="ml"><input id="set-coef-sc"></span></div>
+          </div>
+          <button type="button" class="btn primary" style="width:100%;margin-top:10px" id="set-save">設定を保存</button>
+          <p class="note">係数・PT設定の変更は全順位・CSVに即時再計算で反映されます。</p>
+        </div>
+      </div>
+    </div>
+{{else}}
+    <div class="welcome">
+      <div style="font-size:32px">⛔</div>
+      <h2>運営権限が必要です</h2>
+      <p>このページは運営メンバーのみ利用できます。</p>
+      <p style="margin-top:10px">権限が必要な場合は運営責任者に連絡してください。</p>
+      <a class="btn" href="/" style="display:inline-block;margin-top:16px;text-decoration:none">モニターへ戻る</a>
+    </div>
+{{end}}
+  </section>
+  </main>
+
+  <nav id="nav">
+    <a href="/"><span class="ic">⏱</span>Monitor</a>
+    <a href="/ranking"><span class="ic">🏆</span>Ranking</a>
+    <a href="/my"><span class="ic">👤</span>My</a>
+    {{if .IsAdmin}}<a href="/admin" class="on"><span class="ic">🛠</span>運営</a>{{end}}
+  </nav>
+
+  <!-- ログ編集 / 手動追加 -->
+  <div class="modal-bg" id="logmodal">
+    <div class="modal">
+      <h3 id="lm-title">ログ編集</h3>
+      <p class="sub" id="lm-sub"></p>
+      <div class="fld"><label>走者</label><select id="lm-driver"></select></div>
+      <div class="fld"><label>車両</label><select id="lm-vehicle"></select></div>
+      <div class="fldrow">
+        <div class="fld"><label>タイム (m:ss.mmm)</label><input class="t" id="lm-raw" placeholder="1:23.456"></div>
+        <div class="fld sm"><label>PT回数</label><input class="t" id="lm-pt" style="text-align:center" inputmode="numeric"></div>
+      </div>
+      <div class="fld"><label>ミスコース</label>
+        <div class="seg" id="lm-mc"><button type="button" class="on" data-v="0">通常</button><button type="button" data-v="1">MC</button></div>
+      </div>
+      <div class="fld" id="lm-ts-fld" style="display:none"><label>記録時刻 (省略時 = 現在時刻)</label><input type="datetime-local" id="lm-ts" step="1"></div>
+      <button type="button" class="btn primary" style="width:100%" id="lm-save">保存</button>
+    </div>
+  </div>
+
+  <!-- 未割当ログの割当 -->
+  <div class="modal-bg" id="assignmodal">
+    <div class="modal">
+      <h3>走者を割り当てる</h3>
+      <p class="sub" id="as-sub"></p>
+      <div class="fld"><label>走者</label><select id="as-driver"></select></div>
+      <div class="fld"><label>車両</label><select id="as-vehicle"></select></div>
+      <button type="button" class="btn primary" style="width:100%" id="as-save">割り当てる</button>
+    </div>
+  </div>
+
+  <!-- ユーザ新規 (運営登録) -->
+  <div class="modal-bg" id="newusermodal">
+    <div class="modal">
+      <div id="nu-form">
+        <h3>ユーザを運営登録</h3>
+        <p class="sub">名前と区分のみで作成します (車両は本人がマイページで追加)</p>
+        <div class="fld"><label>名前</label><input id="nu-name"></div>
+        <div class="fld"><label>区分</label><div class="seg" id="nu-class-seg"></div></div>
+        <button type="button" class="btn primary" style="width:100%" id="nu-save">作成する</button>
+      </div>
+      <div id="nu-done" style="display:none;text-align:center">
+        <h3 id="nu-done-name"></h3>
+        <p class="sub">作成しました。ログインURLを本人に渡してください</p>
+        <div class="tokenurl copyable" id="nu-url" title="タップでコピー"><span></span><span class="cp">📋 タップでコピー</span></div>
+        <p class="note" style="text-align:left">QRコードが必要な場合は、この後 [再発行] からQR付きで再発行できます (このURLは失効します)。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- リネーム -->
+  <div class="modal-bg" id="renamemodal">
+    <div class="modal">
+      <h3>ユーザ編集</h3>
+      <p class="sub">名前と区分を変更できます</p>
+      <div class="fld"><label>名前</label><input id="rn-name"></div>
+      <div class="fld"><label>区分</label><div class="seg" id="rn-class-seg"></div></div>
+      <button type="button" class="btn primary" style="width:100%" id="rn-save">保存</button>
+    </div>
+  </div>
+
+  <!-- トークン再発行 -->
+  <div class="modal-bg" id="qrmodal">
+    <div class="modal" style="text-align:center">
+      <h3 id="qm-title"></h3>
+      <p class="sub">トークン再発行 — 旧URLは無効化されます</p>
+      <div id="qm-confirm">
+        <p class="note" style="text-align:left">実行すると本人の既存ブックマーク・QRは使えなくなります。実行後に表示される新QR/URLを本人に渡してください。本人自身の再表示はマイページの「ログインQR」から可能なため、この操作は紛失・漏洩時のみ。</p>
+        <button type="button" class="btn danger" style="width:100%;margin-top:14px" id="qm-reissue">⚠ 再発行を実行 (旧URL無効化)</button>
+      </div>
+      <div id="qm-result" style="display:none">
+        <div class="qr"><img id="qm-qr" alt="新しいログインQR"></div>
+        <div class="tokenurl copyable" id="qm-url" title="タップでコピー"><span></span><span class="cp">📋 タップでコピー</span></div>
+        <p class="note" style="text-align:left">上の新QR/URLを本人に渡してください。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 車両 追加/編集 -->
+  <div class="modal-bg" id="vehmodal">
+    <div class="modal">
+      <h3 id="vm-title">車両を追加</h3>
+      <p class="sub">諸元の変更は順位・クラスへ即時反映されます</p>
+      <div class="fldrow">
+        <div class="fld sm"><label>号車番号</label><input class="t" id="vm-num" style="text-align:center" inputmode="numeric"></div>
+        <div class="fld"><label>車両名</label><input id="vm-name" placeholder="例: スイフト"></div>
+      </div>
+      <div class="hint" id="vm-numwarn" style="display:none;color:var(--amber)">この番号は既に使用されています (登録は可能です)</div>
+      <div class="fld"><label>エンジン方式</label>
+        <div class="seg" id="vm-eng">
+          <button type="button" class="on" data-e="gasoline">ガソリン</button>
+          <button type="button" data-e="diesel">ディーゼル</button>
+          <button type="button" data-e="rotary">ロータリー</button>
+          <button type="button" data-e="ev">EV</button>
+        </div>
+      </div>
+      <div id="vm-ice">
+        <div class="fld"><label>排気量 (実cc)</label><input class="t" id="vm-cc" inputmode="numeric"></div>
+        <div class="fld"><label>過給機</label>
+          <div class="seg" id="vm-fi"><button type="button" class="on" data-fi="0">NA</button><button type="button" data-fi="1">ターボ / SC</button></div>
+          <div class="hint" id="vm-conv"></div>
+        </div>
+      </div>
+      <div class="fld"><label>駆動方式</label><div class="seg" id="vm-dt"></div></div>
+      <button type="button" class="btn primary" style="width:100%" id="vm-save">保存</button>
+    </div>
+  </div>
+
+  <!-- CSV: ドライバー・車両別 -->
+  <div class="modal-bg" id="combomodal">
+    <div class="modal">
+      <h3>CSV: ドライバー・車両別</h3>
+      <p class="sub">出力する組み合わせを選択してください</p>
+      <div class="fld"><label>走者</label><select id="cm-driver"></select></div>
+      <div class="fld"><label>車両</label><select id="cm-vehicle"></select></div>
+      <button type="button" class="btn primary" style="width:100%" id="cm-dl">ダウンロード</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+<script>
+'use strict';
+const IS_ADMIN = {{.IsAdmin}};
+
+/* ---------- tiny DOM builder (no innerHTML anywhere) ---------- */
+function h(tag, attrs, ...children){
+  const e = document.createElement(tag);
+  if (attrs) for (const k in attrs){
+    if (k === 'class') e.className = attrs[k];
+    else if (k === 'style') e.setAttribute('style', attrs[k]);
+    else if (k.indexOf('on') === 0 && typeof attrs[k] === 'function') e.addEventListener(k.slice(2), attrs[k]);
+    else e.setAttribute(k, attrs[k]);
+  }
+  for (const c of children.flat(Infinity)){
+    if (c === null || c === undefined) continue;
+    e.appendChild((typeof c === 'string' || typeof c === 'number') ? document.createTextNode(String(c)) : c);
+  }
+  return e;
+}
+function clear(el){ while (el.firstChild) el.removeChild(el.firstChild); }
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('on');
+  clearTimeout(toast._tm);
+  toast._tm = setTimeout(() => t.classList.remove('on'), 1800);
+}
+
+let offset = 0, offsetKnown = false;
+function nowMs(){ return Date.now() + offset; }
+function clientMsBody(){ return offsetKnown ? { client_ms: nowMs() } : {}; }
+
+function fmt1(ms){
+  if (ms < 0) ms = 0;
+  const s = ms / 1000;
+  return Math.floor(s / 60) + ':' + (s % 60).toFixed(1).padStart(4, '0');
+}
+function fmt3(ms){
+  if (ms === null || ms === undefined) return '—';
+  const s = Math.floor(ms / 1000), mmm = ((ms % 1000) + 1000) % 1000;
+  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '.' + String(mmm).padStart(3, '0');
+}
+function hhmm(ms){
+  const d = new Date(ms);
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+function hhmmss(ms){
+  const d = new Date(ms);
+  return hhmm(ms) + ':' + String(d.getSeconds()).padStart(2, '0');
+}
+function parseTimeMs(str){
+  const m = String(str).trim().match(/^(?:(\d+):)?(\d{1,2}(?:\.\d{1,3})?)$/);
+  if (!m) return null;
+  const min = m[1] ? parseInt(m[1], 10) : 0;
+  return Math.floor((min * 60 + parseFloat(m[2])) * 1000);
+}
+
+async function api(method, url, body){
+  const opt = { method, credentials: 'same-origin' };
+  if (body !== undefined){
+    opt.headers = { 'Content-Type': 'application/json' };
+    opt.body = JSON.stringify(body);
+  }
+  const res = await fetch(url, opt);
+  let data = null;
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+  return data;
+}
+const apiGet = url => api('GET', url);
+
+function avatarInto(el, driverId, name, hasIcon){
+  clear(el);
+  if (hasIcon){
+    const img = h('img', { src: '/api/drivers/' + driverId + '/icon', alt: '' });
+    img.addEventListener('error', () => { clear(el); el.textContent = (name || '?').slice(0, 1); });
+    el.appendChild(img);
+  } else {
+    el.textContent = (name || '?').slice(0, 1);
+  }
+}
+
+function bindCopyable(el){
+  el.addEventListener('click', async () => {
+    const url = el.querySelector('span').textContent;
+    try { await navigator.clipboard.writeText(url); }
+    catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = url; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); ta.remove();
+    }
+    el.classList.add('copied');
+    el.querySelector('.cp').textContent = '✓ コピーしました';
+    setTimeout(() => {
+      el.classList.remove('copied');
+      el.querySelector('.cp').textContent = '📋 タップでコピー';
+    }, 1600);
+  });
+}
+
+/* ---------- domain math mirror (preview only) ---------- */
+const DEF_COEF = { turbo_gasoline: 1.7, turbo_diesel: 1.5, rotary: 1.7, supercharger: 1.7 };
+const DEF_DISP = [{ label: '~660cc', max_cc: 660 }, { label: '~1600cc', max_cc: 1600 }, { label: '無制限', max_cc: null }];
+function convertedCC(cc, engine, fi, coef){
+  if (engine === 'ev') return { cc: 0, ok: false };
+  let k = 1;
+  if (engine === 'rotary') k *= coef.rotary;
+  if (fi) k *= (engine === 'diesel' ? coef.turbo_diesel : coef.turbo_gasoline);
+  return { cc: Math.floor(cc * k), ok: true };
+}
+function dispClassOf(cc, ok, classes){
+  if (!ok) return 'EV';
+  for (const c of classes){
+    if (c.max_cc === null || c.max_cc === undefined || cc <= c.max_cc) return c.label;
+  }
+  return classes.length ? classes[classes.length - 1].label : '';
+}
+
+/* ---------- state ---------- */
+let S = null;             // admin settings (GET /api/admin/settings)
+let pub = null;           // public settings subset (SSE settings topic / GET /api/settings)
+let users = [];           // GET /api/admin/users
+let driversList = [];     // GET /api/drivers
+let vehiclesList = [];    // GET /api/vehicles
+let waitingQueue = [];    // queue SSE
+let onCourseCars = [];    // on_course SSE
+let sensors = [];         // sensor_status SSE
+let orphanItems = [];     // orphan SSE
+let logsPage = 1;
+let logsData = { logs: [], total: 0, unassigned: [] };
+
+function mode(){ return (S && S.timing_mode) || (pub && pub.timing_mode) || 'sensor'; }
+function maxCourseMs(){ return (((S && S.max_course_time_sec) || (pub && pub.max_course_time_sec) || 180)) * 1000; }
+function driverClasses(){ return (pub && pub.driver_classes) || []; }
+function dtClasses(){ return (pub && pub.dt_classes) || []; }
+
+/* ============================================================
+   出走タブ
+   ============================================================ */
+function renderModeUI(){
+  const m = mode();
+  document.querySelectorAll('#modeseg button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
+  document.getElementById('gobtn').classList.toggle('manual', m === 'manual');
+  document.getElementById('goalbtn').style.display = (m === 'manual') ? 'block' : 'none';
+  renderGoButtons();
+}
+
+function renderGoButtons(){
+  const gb = document.getElementById('gobtn');
+  const m = mode();
+  const next = waitingQueue[0];
+  const nx = next ? `${next.driver.name}(＃${next.vehicle.number})` : 'キュー空';
+  document.getElementById('go-label').textContent = (m === 'manual' ? 'スタート ⏱ ' : '出走 ▶ ') + nx;
+  document.getElementById('go-hint').textContent = m === 'manual'
+    ? 'タップの瞬間が計測開始 (手計測)' : '長押し0.5秒で投入 / タイムはセンサー打刻';
+  gb.disabled = !waitingQueue.length;
+  const running = onCourseCars.filter(c => c.t_start_us && !c.finish);
+  const gbt = document.getElementById('goalbtn');
+  gbt.disabled = !running.length;
+  document.getElementById('goal-label').textContent = 'ゴール 🏁 ' + (running.length ? running[0].driver.name : '走行中なし');
+}
+
+/* on_course admin cards — rebuilt at ~10Hz like the mock */
+function renderCourse(){
+  const admC = document.getElementById('adm-course');
+  clear(admC);
+  if (!onCourseCars.length){
+    admC.appendChild(h('div', { class: 'empty-course' }, 'コース上に車両なし'));
+    return;
+  }
+  const m = mode();
+  onCourseCars.forEach(c => {
+    const armed = !c.t_start_us;
+    const flash = !!c.finish;
+    const el = armed ? 0 : (nowMs() - c.t_start_us / 1000);
+    const over = !armed && !flash && el > maxCourseMs();
+    const mini = (label, cls, fn) => {
+      const b = h('button', { type: 'button', class: 'mini' + (cls ? ' ' + cls : '') }, label);
+      b.addEventListener('click', fn);
+      return b;
+    };
+    const acts = [];
+    if (flash){
+      acts.push(mini('PT+', '', () => coursePT(c, 1)));
+      acts.push(mini('PT−', '', () => coursePT(c, -1)));
+      acts.push(mini('ゴール取消', 'undo', () => courseUndoGoal(c)));
+    } else if (armed){
+      acts.push(mini('スタート取消', 'undo', () => courseUndoStart(c)));
+      acts.push(mini('ミスコース', c.mc_flag ? 'on' : '', () => courseMC(c)));
+      acts.push(mini('走行中止', 'red', () => courseDNF(c)));
+    } else {
+      if (m === 'manual') acts.push(mini('🏁 完走', 'go', () => courseFinish(c)));
+      acts.push(mini('PT+', '', () => coursePT(c, 1)));
+      acts.push(mini('PT−', '', () => coursePT(c, -1)));
+      acts.push(mini('スタート取消', 'undo', () => courseUndoStart(c)));
+      acts.push(mini('ミスコース', c.mc_flag ? 'on' : '', () => courseMC(c)));
+      acts.push(mini('走行中止', 'red', () => courseDNF(c)));
+    }
+    const card = h('div', { class: 'card oc-admin' + (over ? ' over' : '') + (armed ? ' armed' : '') + (flash ? ' flash' : '') },
+      h('div', { class: 'tm' }, armed ? 'センサー待ち' : (flash ? fmt3(c.finish.fin_ms) : fmt1(el))),
+      h('div', { class: 'nm' }, c.driver.name,
+        h('span', {}, `＃${c.vehicle.number} ${c.vehicle.name}` + (c.pt_count ? ` ・PT${c.pt_count}` : '') + (c.mc_flag ? ' ・MC' : ''))),
+      h('div', { class: 'acts' }, acts)
+    );
+    admC.appendChild(card);
+  });
+}
+
+async function coursePT(c, delta){
+  try {
+    const r = await api('PUT', `/api/admin/course/${c.queue_id}/pt`, { delta });
+    toast(`${c.driver.name} PT${delta > 0 ? '+' : '−'} → ${r.pt_count}`);
+  } catch (err) { toast(err.message); }
+}
+async function courseMC(c){
+  try {
+    const r = await api('PUT', `/api/admin/course/${c.queue_id}/mc`, {});
+    toast(`${c.driver.name} ミスコース${r.mc_flag ? '設定' : '解除'}`);
+  } catch (err) { toast(err.message); }
+}
+async function courseFinish(c){
+  try {
+    await api('POST', `/api/admin/course/${c.queue_id}/finish`, clientMsBody());
+    toast(`🏁 ${c.driver.name} ゴール打刻`);
+  } catch (err) { toast(err.message); }
+}
+async function courseUndoGoal(c){
+  try {
+    await api('POST', `/api/admin/course/${c.queue_id}/undo-goal`, {});
+    toast(`↩ ${c.driver.name} ゴール取消 (計測継続)`);
+  } catch (err) { toast(err.message); }
+}
+async function courseUndoStart(c){
+  try {
+    await api('POST', `/api/admin/course/${c.queue_id}/undo-start`, {});
+    toast(`↩ ${c.driver.name} スタート取消 → キュー先頭`);
+  } catch (err) { toast(err.message); }
+}
+async function courseDNF(c){
+  if (!confirm(`${c.driver.name} の走行を中止しますか? (記録は残りません)`)) return;
+  try {
+    await api('DELETE', `/api/admin/course/${c.queue_id}`);
+    toast(`${c.driver.name} 走行中止`);
+  } catch (err) { toast(err.message); }
+}
+
+/* queue list with ↑↓ reorder */
+function renderQueue(){
+  const qEl = document.getElementById('adm-q');
+  clear(qEl);
+  if (!waitingQueue.length){
+    qEl.appendChild(h('li', { style: 'color:var(--dim);font-size:11px' }, '待機なし'));
+    renderGoButtons();
+    return;
+  }
+  waitingQueue.forEach((q, i) => {
+    const acts = h('div', { class: 'acts' });
+    const up = h('button', { type: 'button', class: 'mini', title: '上へ' }, '↑');
+    const down = h('button', { type: 'button', class: 'mini', title: '下へ' }, '↓');
+    up.disabled = i === 0;
+    down.disabled = i === waitingQueue.length - 1;
+    up.addEventListener('click', () => reorder(q, i, -1));
+    down.addEventListener('click', () => reorder(q, i, +1));
+    const cancel = h('button', { type: 'button', class: 'mini red' }, '出走中止');
+    cancel.addEventListener('click', async () => {
+      if (!confirm(`${q.driver.name} をキューから外しますか?`)) return;
+      try { await api('DELETE', '/api/admin/queue/' + q.queue_id); toast(`${q.driver.name} 出走中止`); }
+      catch (err) { toast(err.message); }
+    });
+    acts.appendChild(up); acts.appendChild(down); acts.appendChild(cancel);
+    const av = h('div', { class: 'avatar sm' });
+    avatarInto(av, q.driver.id, q.driver.name, false);
+    qEl.appendChild(h('li', {},
+      h('span', { class: 'pos t' }, String(i + 1)),
+      av,
+      h('div', { class: 'nm' }, h('b', {}, q.driver.name), h('span', {}, `＃${q.vehicle.number} ${q.vehicle.name}`)),
+      acts
+    ));
+  });
+  renderGoButtons();
+}
+async function reorder(q, i, dir){
+  /* display ordinal is 1-based: k = i+1. up -> between k-2 and k-1 => (k-1)-0.5 ; down -> (k+1)+0.5 */
+  const k = i + 1;
+  const position = dir < 0 ? (k - 1) - 0.5 : (k + 1) + 0.5;
+  try { await api('PUT', '/api/admin/queue/' + q.queue_id, { position }); }
+  catch (err) { toast(err.message); }
+}
+
+/* queue add form */
+function renderQueueAddForm(){
+  const dSel = document.getElementById('qa-driver');
+  const keepD = dSel.value;
+  clear(dSel);
+  dSel.appendChild(h('option', { value: '' }, 'ドライバーを選択…'));
+  users.forEach(u => dSel.appendChild(h('option', { value: String(u.id) }, u.name)));
+  dSel.value = keepD;
+  fillQaVehicle();
+}
+function fillQaVehicle(){
+  const dSel = document.getElementById('qa-driver');
+  const vSel = document.getElementById('qa-vehicle');
+  const keepV = vSel.value;
+  clear(vSel);
+  vSel.appendChild(h('option', { value: '' }, '車両を選択…'));
+  const u = users.find(x => String(x.id) === dSel.value);
+  const linkedIds = new Set();
+  if (u){
+    vehiclesList.forEach(v => {
+      if ((v.drivers || []).some(d => d.id === u.id)) linkedIds.add(v.id);
+    });
+  }
+  const linked = vehiclesList.filter(v => linkedIds.has(v.id));
+  const rest = vehiclesList.filter(v => !linkedIds.has(v.id));
+  linked.forEach(v => vSel.appendChild(h('option', { value: String(v.id) }, `＃${v.number} ${v.name}`)));
+  if (linked.length && rest.length){
+    const sepa = h('option', { value: '' }, '— 紐づけ外 —');
+    sepa.disabled = true;
+    vSel.appendChild(sepa);
+  }
+  rest.forEach(v => vSel.appendChild(h('option', { value: String(v.id) }, `＃${v.number} ${v.name}`)));
+  if (u && u.main_vehicle_id && !keepV) vSel.value = String(u.main_vehicle_id);
+  else vSel.value = keepV || vSel.value;
+}
+
+/* go / goal buttons */
+function bindGoButtons(){
+  const gb = document.getElementById('gobtn');
+  let hold = null;
+  gb.addEventListener('pointerdown', () => {
+    if (gb.disabled || !waitingQueue.length) return;
+    if (mode() === 'manual'){ doLaunch(); return; }
+    gb.classList.add('holding');
+    hold = setTimeout(() => {
+      gb.classList.remove('holding');
+      doLaunch();
+    }, 500);
+  });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
+    gb.addEventListener(ev, () => { clearTimeout(hold); gb.classList.remove('holding'); }));
+  document.getElementById('goalbtn').addEventListener('click', async () => {
+    try {
+      await api('POST', '/api/admin/course/finish', clientMsBody());
+      const running = onCourseCars.filter(c => c.t_start_us && !c.finish);
+      toast('🏁 ゴール打刻' + (running.length ? ` (${running[0].driver.name})` : ''));
+    } catch (err) { toast(err.message); }
+  });
+  document.querySelectorAll('#modeseg button').forEach(b => b.addEventListener('click', async () => {
+    if (!S) return;
+    const m = b.dataset.m;
+    if (m === S.timing_mode) return;
+    try {
+      S.timing_mode = m;
+      await api('PUT', '/api/admin/settings', S);
+      toast('計測モード: ' + (m === 'manual' ? '手計測' : 'センサー'));
+      renderModeUI();
+    } catch (err) { toast(err.message); await reloadAdminSettings(); renderModeUI(); }
+  }));
+  document.getElementById('qa-driver').addEventListener('change', fillQaVehicle);
+  document.getElementById('qa-add').addEventListener('click', async () => {
+    const d = document.getElementById('qa-driver').value;
+    const v = document.getElementById('qa-vehicle').value;
+    if (!d || !v){ toast('ドライバーと車両を選択してください'); return; }
+    try {
+      await api('POST', '/api/admin/queue', { driver_id: Number(d), vehicle_id: Number(v) });
+      toast('キューに追加しました');
+      document.getElementById('qa-driver').value = '';
+      fillQaVehicle();
+    } catch (err) { toast(err.message); }
+  });
+}
+async function doLaunch(){
+  const next = waitingQueue[0];
+  try {
+    await api('POST', '/api/admin/course', mode() === 'manual' ? clientMsBody() : {});
+    toast(mode() === 'manual'
+      ? `⏱ ${next ? next.driver.name : ''} 計測開始`
+      : `▶ ${next ? next.driver.name : ''} 投入 (センサー待ち)`);
+  } catch (err) { toast(err.message); }
+}
+
+/* ============================================================
+   ログタブ
+   ============================================================ */
+function logDriverName(l){ return l.driver ? l.driver.name : null; }
+function renderLogs(){
+  const tb = document.getElementById('log-body');
+  clear(tb);
+  if (!logsData.logs.length){
+    tb.appendChild(h('tr', {}, h('td', { colspan: '4', style: 'text-align:center;color:var(--dim);padding:14px' }, 'ログなし')));
+  }
+  logsData.logs.forEach(l => {
+    const deleted = !!l.is_deleted;
+    const invalidView = l.is_mc; /* display-only strike-through for MC */
+    const tr = h('tr', { class: deleted ? 'deleted' : '' });
+    tr.appendChild(h('td', { class: 't', style: 'color:var(--dim)' }, String(l.id)));
+    const who = h('td', {});
+    if (l.driver){
+      const av = h('span', { class: 'avatar xs' });
+      avatarInto(av, l.driver.id, l.driver.name, false);
+      who.appendChild(av);
+      who.appendChild(h('b', {}, l.driver.name));
+      const meta = [];
+      if (l.vehicle) meta.push(`＃${l.vehicle.number}`);
+      if (l.heat !== null && l.heat !== undefined) meta.push('H' + l.heat);
+      let metaText = meta.join(' / ');
+      if (l.edited_at) metaText += (metaText ? ' ・ ' : '') + '編集済 ' + hhmm(l.edited_at);
+      if (deleted) metaText += (metaText ? ' ・ ' : '') + '削除済';
+      who.appendChild(h('br'));
+      who.appendChild(h('span', { style: 'font-size:9.5px;color:var(--mut)' }, metaText));
+    } else {
+      who.appendChild(h('b', { style: 'color:var(--amber)' }, '未割当'));
+      who.appendChild(h('br'));
+      who.appendChild(h('span', { style: 'font-size:9.5px;color:var(--mut)' }, hhmmss(l.timestamp_ms) + (deleted ? ' ・ 削除済' : '')));
+    }
+    if (!deleted){
+      const acts = h('div', { class: 'acts' });
+      const mini = (label, cls, fn) => {
+        const b = h('button', { type: 'button', class: 'mini' + (cls ? ' ' + cls : '') }, label);
+        b.addEventListener('click', fn);
+        return b;
+      };
+      if (l.driver){
+        acts.appendChild(mini('PT+', '', () => logPT(l, 1)));
+        acts.appendChild(mini('PT−', '', () => logPT(l, -1)));
+        acts.appendChild(mini('MC', l.is_mc ? 'on' : '', () => logMC(l)));
+        acts.appendChild(mini('編集', '', () => openLogEdit(l)));
+      } else {
+        acts.appendChild(mini('走者を割り当てる', '', () => openAssign(l)));
+      }
+      acts.appendChild(mini('削除', 'red', () => logDelete(l)));
+      who.appendChild(acts);
+    }
+    tr.appendChild(who);
+    const tmCell = h('td', { class: 'tm', style: invalidView && !deleted ? 'color:var(--dim);text-decoration:line-through' : '' }, fmt3(l.raw_ms));
+    if (l.pt_count && !l.is_mc && S && S.pt_mode === 'add'){
+      tmCell.appendChild(h('br'));
+      tmCell.appendChild(h('span', { style: 'font-size:9px;color:var(--amber);text-decoration:none' },
+        `PT${l.pt_count} +${fmt3(l.pt_count * (S.pt_penalty_ms || 0)).replace(/^0:/, '')}`));
+    } else if (l.pt_count){
+      tmCell.appendChild(h('br'));
+      tmCell.appendChild(h('span', { style: 'font-size:9px;color:var(--amber)' }, `PT${l.pt_count}`));
+    }
+    tr.appendChild(tmCell);
+    tr.appendChild(h('td', { class: 'src', title: l.source === 'manual' ? '手計測' : 'センサー計測' }, l.source === 'manual' ? '✍️' : '📡'));
+    tb.appendChild(tr);
+  });
+  /* pagination */
+  const shown = logsData.logs.length;
+  const pageSize = Math.max(shown, 1);
+  document.getElementById('log-pageinfo').textContent = `p.${logsPage} / 全${logsData.total}件`;
+  document.getElementById('log-prev').disabled = logsPage <= 1;
+  document.getElementById('log-next').disabled = (logsPage - 1) * pageSize + shown >= logsData.total;
+}
+
+function renderOrphan(){
+  const band = document.getElementById('orphan-band');
+  const box = document.getElementById('orphan-items');
+  clear(box);
+  if (!orphanItems.length){ band.style.display = 'none'; return; }
+  band.style.display = 'block';
+  document.getElementById('orphan-title').textContent = `⚠ 警告 ${orphanItems.length}件`;
+  orphanItems.forEach(it => {
+    const p = h('p', {}, hhmmss(it.at_ms) + ' ・ ' + (it.detail || (it.kind === 'orphan_start' ? '孤児スタートトリガー' : '未割当ログ')));
+    box.appendChild(p);
+    if (it.kind === 'unassigned_log' && it.log_id){
+      const btn = h('button', { type: 'button', class: 'mini' }, '走者を割り当てる');
+      btn.addEventListener('click', () => openAssign({ id: it.log_id, timestamp_ms: it.at_ms }));
+      box.appendChild(btn);
+    }
+  });
+}
+
+async function reloadLogs(){
+  try {
+    logsData = await api('GET', '/api/admin/logs?page=' + logsPage);
+    logsData.logs = logsData.logs || [];
+    renderLogs();
+  } catch (err) { toast('ログの取得に失敗: ' + err.message); }
+}
+async function logPT(l, delta){
+  const pt = Math.max(0, (l.pt_count || 0) + delta);
+  if (pt === l.pt_count) return;
+  try {
+    await api('PUT', '/api/admin/logs/' + l.id, {
+      driver_id: l.driver ? l.driver.id : null,
+      vehicle_id: l.vehicle ? l.vehicle.id : null,
+      raw_ms: l.raw_ms, pt_count: pt, is_mc: !!l.is_mc
+    });
+    toast(`#${l.id} PT → ${pt}`);
+    reloadLogs();
+  } catch (err) { toast(err.message); }
+}
+async function logMC(l){
+  try {
+    await api('PUT', '/api/admin/logs/' + l.id, {
+      driver_id: l.driver ? l.driver.id : null,
+      vehicle_id: l.vehicle ? l.vehicle.id : null,
+      raw_ms: l.raw_ms, pt_count: l.pt_count || 0, is_mc: !l.is_mc
+    });
+    toast(`#${l.id} ミスコース${!l.is_mc ? '設定' : '解除'}`);
+    reloadLogs();
+  } catch (err) { toast(err.message); }
+}
+async function logDelete(l){
+  if (!confirm(`ログ #${l.id} を削除しますか? (順位から除外されます)`)) return;
+  try {
+    await api('DELETE', '/api/admin/logs/' + l.id);
+    toast(`#${l.id} 削除しました`);
+    reloadLogs();
+  } catch (err) { toast(err.message); }
+}
+
+/* log edit / manual add modal */
+let lmEditing = null; /* null = add mode */
+function fillDriverSelect(sel, withEmpty, emptyLabel){
+  clear(sel);
+  if (withEmpty) sel.appendChild(h('option', { value: '' }, emptyLabel || '未割当'));
+  driversList.forEach(d => sel.appendChild(h('option', { value: String(d.id) }, d.name)));
+}
+function fillVehicleSelect(sel, withEmpty, emptyLabel){
+  clear(sel);
+  if (withEmpty) sel.appendChild(h('option', { value: '' }, emptyLabel || '未割当'));
+  vehiclesList.forEach(v => sel.appendChild(h('option', { value: String(v.id) }, `＃${v.number} ${v.name}`)));
+}
+function setLmMC(on){
+  document.querySelectorAll('#lm-mc button').forEach(b => b.classList.toggle('on', (b.dataset.v === '1') === on));
+}
+function openLogEdit(l){
+  lmEditing = l;
+  document.getElementById('lm-title').textContent = 'ログ編集';
+  document.getElementById('lm-sub').textContent = `#${l.id} ・ ${hhmmss(l.timestamp_ms)} ・ ${l.source === 'manual' ? '手計測' : 'センサー'}`;
+  fillDriverSelect(document.getElementById('lm-driver'), true);
+  fillVehicleSelect(document.getElementById('lm-vehicle'), true);
+  document.getElementById('lm-driver').value = l.driver ? String(l.driver.id) : '';
+  document.getElementById('lm-vehicle').value = l.vehicle ? String(l.vehicle.id) : '';
+  document.getElementById('lm-raw').value = fmt3(l.raw_ms);
+  document.getElementById('lm-pt').value = String(l.pt_count || 0);
+  setLmMC(!!l.is_mc);
+  document.getElementById('lm-ts-fld').style.display = 'none';
+  document.getElementById('logmodal').classList.add('on');
+}
+function openLogAdd(){
+  lmEditing = null;
+  document.getElementById('lm-title').textContent = '手動ログ追加';
+  document.getElementById('lm-sub').textContent = '時刻を省略すると現在時刻で記録されます (source=manual)';
+  fillDriverSelect(document.getElementById('lm-driver'), false);
+  fillVehicleSelect(document.getElementById('lm-vehicle'), false);
+  document.getElementById('lm-raw').value = '';
+  document.getElementById('lm-pt').value = '0';
+  setLmMC(false);
+  document.getElementById('lm-ts').value = '';
+  document.getElementById('lm-ts-fld').style.display = 'block';
+  document.getElementById('logmodal').classList.add('on');
+}
+async function saveLogModal(){
+  const raw = parseTimeMs(document.getElementById('lm-raw').value);
+  if (raw === null){ toast('タイムは m:ss.mmm 形式で入力してください'); return; }
+  const dv = document.getElementById('lm-driver').value;
+  const vv = document.getElementById('lm-vehicle').value;
+  const pt = Math.max(0, parseInt(document.getElementById('lm-pt').value, 10) || 0);
+  const mc = !!document.querySelector('#lm-mc button.on[data-v="1"]');
+  try {
+    if (lmEditing){
+      await api('PUT', '/api/admin/logs/' + lmEditing.id, {
+        driver_id: dv ? Number(dv) : null,
+        vehicle_id: vv ? Number(vv) : null,
+        raw_ms: raw, pt_count: pt, is_mc: mc
+      });
+      toast(`#${lmEditing.id} を更新しました`);
+    } else {
+      if (!dv || !vv){ toast('走者と車両を選択してください'); return; }
+      const tsv = document.getElementById('lm-ts').value;
+      await api('POST', '/api/admin/logs', {
+        driver_id: Number(dv), vehicle_id: Number(vv),
+        raw_ms: raw, pt_count: pt, is_mc: mc,
+        timestamp_ms: tsv ? new Date(tsv).getTime() : null
+      });
+      toast('手動ログを追加しました');
+    }
+    document.getElementById('logmodal').classList.remove('on');
+    reloadLogs();
+  } catch (err) { toast(err.message); }
+}
+
+/* assign modal */
+let assignTarget = null;
+function openAssign(l){
+  assignTarget = l;
+  document.getElementById('as-sub').textContent = `ログ #${l.id}` + (l.timestamp_ms ? ` ・ ${hhmmss(l.timestamp_ms)}` : '');
+  fillDriverSelect(document.getElementById('as-driver'), false);
+  fillVehicleSelect(document.getElementById('as-vehicle'), false);
+  document.getElementById('assignmodal').classList.add('on');
+}
+async function saveAssign(){
+  const dv = document.getElementById('as-driver').value;
+  const vv = document.getElementById('as-vehicle').value;
+  if (!dv || !vv){ toast('走者と車両を選択してください'); return; }
+  try {
+    await api('PUT', `/api/admin/logs/${assignTarget.id}/assign`, { driver_id: Number(dv), vehicle_id: Number(vv) });
+    toast('割り当てました');
+    document.getElementById('assignmodal').classList.remove('on');
+    reloadLogs();
+  } catch (err) { toast(err.message); }
+}
+
+/* ============================================================
+   ユーザタブ
+   ============================================================ */
+function renderUsers(){
+  const list = document.getElementById('usr-list');
+  clear(list);
+  users.forEach(u => {
+    const av = h('div', { class: 'avatar sm' });
+    avatarInto(av, u.id, u.name, !!u.has_icon);
+    const mainV = vehiclesList.find(v => v.id === u.main_vehicle_id);
+    const sub = (u.driver_class || '') + (mainV ? ` ・ ＃${mainV.number}` : '');
+    const ren = h('button', { type: 'button', class: 'mini', title: 'リネーム' }, '✏️');
+    ren.addEventListener('click', () => openRename(u));
+    const rei = h('button', { type: 'button', class: 'mini', title: 'トークン再発行' }, '再発行');
+    rei.addEventListener('click', () => openReissue(u));
+    const adm = h('button', { type: 'button', class: 'mini adm' + (u.role === 'admin' ? ' on' : ''), title: '運営権限 (タップで切替)' }, '運営');
+    adm.addEventListener('click', () => toggleRole(u));
+    list.appendChild(h('li', {},
+      av,
+      h('div', { class: 'nm' }, h('b', {}, u.name), h('span', {}, sub)),
+      ren, rei, adm
+    ));
+  });
+  if (!users.length){
+    list.appendChild(h('li', { style: 'color:var(--dim)' }, 'ユーザなし'));
+  }
+}
+async function toggleRole(u){
+  const newRole = u.role === 'admin' ? 'user' : 'admin';
+  if (newRole === 'user' && !confirm(`${u.name} の運営権限を解除しますか?`)) return;
+  try {
+    await api('PUT', `/api/admin/users/${u.id}/role`, { role: newRole });
+    toast(`${u.name} の運営権限を${newRole === 'admin' ? '付与' : '解除'}`);
+    await reloadUsers();
+  } catch (err) { toast(err.message); }
+}
+
+let renameTarget = null;
+function openRename(u){
+  renameTarget = u;
+  document.getElementById('rn-name').value = u.name;
+  const seg = document.getElementById('rn-class-seg');
+  clear(seg);
+  let selId = u.driver_class_id || null;
+  driverClasses().forEach(c => {
+    const isOn = selId ? c.id === selId : c.label === u.driver_class;
+    if (isOn) selId = c.id;
+    const btn = h('button', { type: 'button', class: isOn ? 'on' : '' }, c.label);
+    btn.addEventListener('click', () => {
+      seg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      selId = c.id;
+    });
+    seg.appendChild(btn);
+  });
+  document.getElementById('rn-save').onclick = async () => {
+    const name = document.getElementById('rn-name').value.trim();
+    if (!name){ toast('名前を入力してください'); return; }
+    try {
+      await api('PUT', '/api/admin/users/' + u.id, { name, driver_class_id: selId });
+      toast('更新しました');
+      document.getElementById('renamemodal').classList.remove('on');
+      await reloadUsers();
+    } catch (err) { toast(err.message); }
+  };
+  document.getElementById('renamemodal').classList.add('on');
+}
+
+let reissueTarget = null;
+function openReissue(u){
+  reissueTarget = u;
+  document.getElementById('qm-title').textContent = u.name;
+  document.getElementById('qm-confirm').style.display = 'block';
+  document.getElementById('qm-result').style.display = 'none';
+  document.getElementById('qrmodal').classList.add('on');
+}
+async function doReissue(){
+  try {
+    const r = await api('POST', `/api/admin/users/${reissueTarget.id}/reissue`, {});
+    document.getElementById('qm-confirm').style.display = 'none';
+    document.getElementById('qm-result').style.display = 'block';
+    document.getElementById('qm-url').querySelector('span').textContent = r.login_url || '';
+    if (r.qr_png_b64) document.getElementById('qm-qr').src = 'data:image/png;base64,' + r.qr_png_b64;
+    toast('再発行しました。新QRを本人に渡してください');
+  } catch (err) { toast(err.message); }
+}
+
+function openNewUser(){
+  document.getElementById('nu-form').style.display = 'block';
+  document.getElementById('nu-done').style.display = 'none';
+  document.getElementById('nu-name').value = '';
+  const seg = document.getElementById('nu-class-seg');
+  clear(seg);
+  let selId = null;
+  driverClasses().forEach((c, i) => {
+    const btn = h('button', { type: 'button', class: i === 0 ? 'on' : '' }, c.label);
+    btn.addEventListener('click', () => {
+      seg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      selId = c.id;
+    });
+    seg.appendChild(btn);
+    if (i === 0) selId = c.id;
+  });
+  document.getElementById('nu-save').onclick = async () => {
+    const name = document.getElementById('nu-name').value.trim();
+    if (!name){ toast('名前を入力してください'); return; }
+    try {
+      const r = await api('POST', '/api/admin/users', { name, driver_class_id: selId });
+      document.getElementById('nu-form').style.display = 'none';
+      document.getElementById('nu-done').style.display = 'block';
+      document.getElementById('nu-done-name').textContent = name;
+      document.getElementById('nu-url').querySelector('span').textContent = r.login_url || '';
+      await reloadUsers();
+    } catch (err) { toast(err.message); }
+  };
+  document.getElementById('newusermodal').classList.add('on');
+}
+
+/* ============================================================
+   車両タブ
+   ============================================================ */
+function vehSpecLine(v){
+  let s;
+  if (v.engine === 'ev'){
+    s = `EV / ${v.dt_class || ''} ・ EVクラス`;
+  } else {
+    s = `${v.displacement_cc || 0}cc ${v.engine === 'rotary' ? 'RE' + (v.forced_induction ? '+TB' : '') : (v.forced_induction ? 'TB' : 'NA')} / ${v.dt_class || ''}`;
+    s += ` ・ 換算${v.converted_cc} → ${v.disp_class}`;
+  }
+  const names = (v.drivers || []).map(d => d.name).join(', ');
+  if (names) s += ' ・ ' + names;
+  return s;
+}
+function renderVehiclesTab(){
+  const list = document.getElementById('veh-list');
+  clear(list);
+  vehiclesList.forEach(v => {
+    const edit = h('button', { type: 'button', class: 'mini' }, '編集');
+    edit.addEventListener('click', () => openVehModal(v));
+    const del = h('button', { type: 'button', class: 'mini red' }, '削除');
+    del.addEventListener('click', async () => {
+      if (!confirm(`＃${v.number} ${v.name} を削除しますか?\n(過去の走行ログは残ります)`)) return;
+      try {
+        await api('DELETE', '/api/admin/vehicles/' + v.id);
+        toast('削除しました');
+        await reloadVehicles();
+      } catch (err) { toast(err.message); }
+    });
+    list.appendChild(h('li', {},
+      '🚗 ',
+      h('div', {}, h('b', {}, `＃${v.number} ${v.name}`), h('br'),
+        h('span', { style: 'font-size:10px;color:var(--mut)' }, vehSpecLine(v))),
+      h('span', { class: 'ml' }, edit, del)
+    ));
+  });
+  if (!vehiclesList.length){
+    list.appendChild(h('li', { style: 'color:var(--dim)' }, '車両なし'));
+  }
+}
+
+/* vehicle add/edit modal */
+let vmEditing = null;
+let vmEngine = 'gasoline';
+let vmFI = false;
+let vmDtClassId = null;
+function segBind(containerId, dataAttr, onSelect){
+  const box = document.getElementById(containerId);
+  box.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      box.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      onSelect(btn.dataset[dataAttr], btn);
+    });
+  });
+}
+function setSeg(containerId, dataAttr, value){
+  document.querySelectorAll('#' + containerId + ' button').forEach(b =>
+    b.classList.toggle('on', b.dataset[dataAttr] === value));
+}
+function vmConvPreview(){
+  const hint = document.getElementById('vm-conv');
+  if (vmEngine === 'ev'){ hint.textContent = 'EVクラス (換算なし)'; return; }
+  const coef = (S && S.coefficients) || DEF_COEF;
+  const cls = (S && S.displacement_classes) || DEF_DISP;
+  const cc = parseInt(document.getElementById('vm-cc').value, 10) || 0;
+  const r = convertedCC(cc, vmEngine, vmFI, coef);
+  hint.textContent = `換算排気量 ${r.cc}cc → クラス自動判定: ${dispClassOf(r.cc, r.ok, cls)}`;
+}
+function openVehModal(v){
+  vmEditing = v || null;
+  document.getElementById('vm-title').textContent = v ? `＃${v.number} ${v.name} を編集` : '車両を追加';
+  document.getElementById('vm-num').value = v ? String(v.number) : '';
+  document.getElementById('vm-name').value = v ? v.name : '';
+  vmEngine = v ? v.engine : 'gasoline';
+  vmFI = v ? !!v.forced_induction : false;
+  setSeg('vm-eng', 'e', vmEngine);
+  setSeg('vm-fi', 'fi', vmFI ? '1' : '0');
+  document.getElementById('vm-cc').value = v && v.displacement_cc ? String(v.displacement_cc) : '';
+  document.getElementById('vm-ice').style.display = vmEngine === 'ev' ? 'none' : 'block';
+  const dtSeg = document.getElementById('vm-dt');
+  clear(dtSeg);
+  vmDtClassId = null;
+  const targetLabel = v ? v.dt_class : null;
+  dtClasses().forEach((c, i) => {
+    const isOn = targetLabel ? c.label === targetLabel : i === 0;
+    const btn = h('button', { type: 'button', class: isOn ? 'on' : '' }, c.label);
+    btn.addEventListener('click', () => {
+      dtSeg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      vmDtClassId = c.id;
+    });
+    dtSeg.appendChild(btn);
+    if (isOn) vmDtClassId = c.id;
+  });
+  vmConvPreview();
+  document.getElementById('vehmodal').classList.add('on');
+}
+async function saveVehModal(){
+  const num = parseInt(document.getElementById('vm-num').value, 10);
+  const name = document.getElementById('vm-name').value.trim();
+  if (!num){ toast('号車番号を入力してください'); return; }
+  if (!name){ toast('車両名を入力してください'); return; }
+  const body = {
+    number: num, name,
+    engine_type: vmEngine,
+    displacement_cc: vmEngine === 'ev' ? null : (parseInt(document.getElementById('vm-cc').value, 10) || 0),
+    forced_induction: vmEngine === 'ev' ? false : vmFI,
+    drivetrain_class_id: vmDtClassId
+  };
+  try {
+    if (vmEditing) await api('PUT', '/api/admin/vehicles/' + vmEditing.id, body);
+    else await api('POST', '/api/admin/vehicles', body);
+    toast(vmEditing ? '更新しました' : '追加しました');
+    document.getElementById('vehmodal').classList.remove('on');
+    await reloadVehicles();
+  } catch (err) { toast(err.message); }
+}
+
+/* ============================================================
+   設定タブ
+   ============================================================ */
+function renderSensors(){
+  const panel = document.getElementById('sensor-panel');
+  clear(panel);
+  if (!sensors.length){
+    panel.appendChild(h('div', { class: 'card s', style: 'padding:11px 12px;color:var(--dim);font-size:11px' }, 'センサー未接続 (データなし)'));
+    return;
+  }
+  sensors.forEach(sn => {
+    const age = Math.max(0, Math.round((nowMs() - sn.last_seen_ms) / 1000));
+    let dotCls = 'ok', stText = '正常';
+    if (age > 15){ dotCls = 'err'; stText = '無応答'; }
+    else if ((sn.loss_rate || 0) >= 0.01){ dotCls = 'warn'; stText = 'ロス増'; }
+    const off = sn.ntp_offset_ms || 0;
+    panel.appendChild(h('div', { class: 'card s' },
+      h('div', { class: 'id' }, String(sn.sensor_id || '').toUpperCase()),
+      h('div', { class: 'st' }, h('span', { class: 'dot ' + dotCls }), stText),
+      h('div', { class: 'kv' },
+        `last ${age}s ago`, h('br'),
+        `loss ${((sn.loss_rate || 0) * 100).toFixed(1)}% / ntp ${off >= 0 ? '+' : '−'}${Math.abs(off).toFixed(1)}ms`)
+    ));
+  });
+}
+
+function fillSettingsForm(){
+  if (!S) return;
+  document.getElementById('set-event-name').value = S.event_name || '';
+  document.getElementById('set-pt-mode').value = S.pt_mode || 'add';
+  document.getElementById('set-pt-sec').value = ((S.pt_penalty_ms || 0) / 1000).toFixed(3);
+  document.getElementById('set-reg-mode').value = S.registration_mode || 'public';
+  document.getElementById('set-self-entry').value = S.queue_self_entry ? '1' : '0';
+  document.getElementById('set-heat-ranking').value = S.heat_ranking ? '1' : '0';
+  document.getElementById('set-max-time').value = String(S.max_course_time_sec || 180);
+  document.getElementById('set-lockout').value = String(S.sensor_lockout_ms || 800);
+  const c = S.coefficients || DEF_COEF;
+  document.getElementById('set-coef-rotary').value = String(c.rotary);
+  document.getElementById('set-coef-tg').value = String(c.turbo_gasoline);
+  document.getElementById('set-coef-td').value = String(c.turbo_diesel);
+  document.getElementById('set-coef-sc').value = String(c.supercharger);
+  renderRegToggle();
+}
+function renderRegToggle(){
+  const btn = document.getElementById('btn-reg-toggle');
+  if (!S) return;
+  btn.textContent = S.registration_open ? '🔒 参加受付を終了する' : '🔓 参加受付を再開する';
+}
+async function saveSettings(){
+  if (!S) return;
+  const num = (id, fallback) => { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? fallback : v; };
+  const body = Object.assign({}, S, {
+    event_name: document.getElementById('set-event-name').value.trim() || S.event_name,
+    pt_mode: document.getElementById('set-pt-mode').value,
+    pt_penalty_ms: Math.round(num('set-pt-sec', (S.pt_penalty_ms || 0) / 1000) * 1000),
+    registration_mode: document.getElementById('set-reg-mode').value,
+    queue_self_entry: document.getElementById('set-self-entry').value === '1',
+    heat_ranking: document.getElementById('set-heat-ranking').value === '1',
+    max_course_time_sec: Math.round(num('set-max-time', S.max_course_time_sec)),
+    sensor_lockout_ms: Math.round(num('set-lockout', S.sensor_lockout_ms)),
+    coefficients: {
+      rotary: num('set-coef-rotary', DEF_COEF.rotary),
+      turbo_gasoline: num('set-coef-tg', DEF_COEF.turbo_gasoline),
+      turbo_diesel: num('set-coef-td', DEF_COEF.turbo_diesel),
+      supercharger: num('set-coef-sc', DEF_COEF.supercharger)
+    }
+  });
+  try {
+    await api('PUT', '/api/admin/settings', body);
+    S = body;
+    toast('設定を保存しました');
+    renderModeUI();
+  } catch (err) { toast(err.message); }
+}
+async function toggleRegistration(){
+  if (!S) return;
+  const next = !S.registration_open;
+  if (!next && !confirm('参加受付を終了しますか? (新規登録ができなくなります)')) return;
+  try {
+    await api('PUT', '/api/admin/registration', { open: next });
+    S.registration_open = next;
+    renderRegToggle();
+    toast(next ? '受付を再開しました' : '受付を終了しました');
+  } catch (err) { toast(err.message); }
+}
+function bindExports(){
+  document.getElementById('csv-ranking').addEventListener('click', () => { location.href = '/api/admin/export?type=ranking'; });
+  document.getElementById('csv-logs').addEventListener('click', () => { location.href = '/api/admin/export?type=logs'; });
+  document.getElementById('csv-combination').addEventListener('click', () => {
+    fillDriverSelect(document.getElementById('cm-driver'), false);
+    fillVehicleSelect(document.getElementById('cm-vehicle'), false);
+    document.getElementById('combomodal').classList.add('on');
+  });
+  document.getElementById('cm-dl').addEventListener('click', () => {
+    const d = document.getElementById('cm-driver').value;
+    const v = document.getElementById('cm-vehicle').value;
+    if (!d || !v){ toast('走者と車両を選択してください'); return; }
+    location.href = `/api/admin/export?type=combination&driver_id=${encodeURIComponent(d)}&vehicle_id=${encodeURIComponent(v)}`;
+    document.getElementById('combomodal').classList.remove('on');
+  });
+}
+
+/* ============================================================
+   data loading / SSE / init
+   ============================================================ */
+async function reloadAdminSettings(){
+  try { S = await apiGet('/api/admin/settings'); } catch (err) { toast('設定の取得に失敗: ' + err.message); }
+}
+async function reloadUsers(){
+  try {
+    const r = await apiGet('/api/admin/users');
+    users = r.users || r.drivers || [];
+    renderUsers();
+    renderQueueAddForm();
+  } catch (err) { toast('ユーザ取得に失敗: ' + err.message); }
+}
+async function reloadVehicles(){
+  try {
+    const r = await apiGet('/api/vehicles');
+    vehiclesList = r.vehicles || [];
+    renderVehiclesTab();
+    renderUsers();
+    renderQueueAddForm();
+  } catch (err) {}
+}
+async function reloadDrivers(){
+  try {
+    const r = await apiGet('/api/drivers');
+    driversList = r.drivers || [];
+  } catch (err) {}
+}
+
+function bindModalClose(id){
+  const bg = document.getElementById(id);
+  bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('on'); });
+  bg.querySelector('.modal').addEventListener('click', e => e.stopPropagation());
+}
+
+let rankingReloadTimer = null;
+function onRankingChanged(){
+  clearTimeout(rankingReloadTimer);
+  rankingReloadTimer = setTimeout(() => {
+    reloadLogs();
+    reloadVehicles();
+  }, 400);
+}
+
+async function init(){
+  /* tabs */
+  document.querySelectorAll('.atabs button').forEach(b => b.addEventListener('click', () => {
+    document.querySelectorAll('.atabs button').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    document.querySelectorAll('.apane').forEach(p => p.classList.remove('on'));
+    document.getElementById(b.dataset.p).classList.add('on');
+    if (b.dataset.p === 'a-set'){ reloadAdminSettings().then(fillSettingsForm); }
+    if (b.dataset.p === 'a-log'){ reloadLogs(); }
+  }));
+  ['logmodal', 'assignmodal', 'newusermodal', 'renamemodal', 'qrmodal', 'vehmodal', 'combomodal'].forEach(bindModalClose);
+  bindGoButtons();
+  bindExports();
+  segBind('vm-eng', 'e', (val) => {
+    vmEngine = val;
+    document.getElementById('vm-ice').style.display = (val === 'ev') ? 'none' : 'block';
+    vmConvPreview();
+  });
+  segBind('vm-fi', 'fi', (val) => { vmFI = val === '1'; vmConvPreview(); });
+  segBind('lm-mc', 'v', () => {});
+  document.getElementById('vm-cc').addEventListener('input', vmConvPreview);
+  document.getElementById('vm-num').addEventListener('input', () => {
+    const warn = document.getElementById('vm-numwarn');
+    const num = parseInt(document.getElementById('vm-num').value, 10);
+    const dup = !!num && vehiclesList.some(v => v.number === num && (!vmEditing || v.id !== vmEditing.id));
+    warn.style.display = dup ? 'block' : 'none';
+  });
+  document.getElementById('vm-save').addEventListener('click', saveVehModal);
+  document.getElementById('veh-new').addEventListener('click', () => openVehModal(null));
+  document.getElementById('usr-new').addEventListener('click', openNewUser);
+  document.getElementById('qm-reissue').addEventListener('click', doReissue);
+  bindCopyable(document.getElementById('qm-url'));
+  bindCopyable(document.getElementById('nu-url'));
+  document.getElementById('lm-save').addEventListener('click', saveLogModal);
+  document.getElementById('as-save').addEventListener('click', saveAssign);
+  document.getElementById('log-add').addEventListener('click', openLogAdd);
+  document.getElementById('log-prev').addEventListener('click', () => { if (logsPage > 1){ logsPage--; reloadLogs(); } });
+  document.getElementById('log-next').addEventListener('click', () => { logsPage++; reloadLogs(); });
+  document.getElementById('set-save').addEventListener('click', saveSettings);
+  document.getElementById('btn-reg-toggle').addEventListener('click', toggleRegistration);
+
+  await Promise.all([reloadAdminSettings(), reloadUsers(), reloadVehicles(), reloadDrivers()]);
+  fillSettingsForm();
+  renderModeUI();
+  reloadLogs();
+  renderSensors();
+
+  /* SSE — all topics */
+  const es = new EventSource('/api/stream?topics=ranking,on_course,queue,sensor_status,orphan,settings,time');
+  es.addEventListener('time', e => {
+    const d = JSON.parse(e.data);
+    offset = d.server_ms - Date.now();
+    offsetKnown = true;
+  });
+  es.addEventListener('on_course', e => {
+    onCourseCars = JSON.parse(e.data).cars || [];
+    renderCourse();
+    renderGoButtons();
+  });
+  es.addEventListener('queue', e => {
+    waitingQueue = JSON.parse(e.data).items || [];
+    renderQueue();
+  });
+  es.addEventListener('ranking', onRankingChanged);
+  es.addEventListener('sensor_status', e => {
+    sensors = JSON.parse(e.data).sensors || [];
+    renderSensors();
+  });
+  es.addEventListener('orphan', e => {
+    orphanItems = JSON.parse(e.data).items || [];
+    renderOrphan();
+  });
+  es.addEventListener('settings', e => {
+    pub = JSON.parse(e.data);
+    if (S){
+      S.timing_mode = pub.timing_mode;
+      S.registration_open = pub.registration_open;
+      S.registration_mode = pub.registration_mode;
+      S.heat_ranking = pub.heat_ranking;
+      S.pt_mode = pub.pt_mode;
+      S.pt_penalty_ms = pub.pt_penalty_ms;
+      S.queue_self_entry = pub.queue_self_entry;
+      S.max_course_time_sec = pub.max_course_time_sec;
+    }
+    renderModeUI();
+    renderRegToggle();
+  });
+
+  /* running clocks at ~10Hz + sensor age at 1Hz */
+  let lastTick = 0, lastSensorTick = 0;
+  function tick(ts){
+    if (ts - lastTick >= 100){
+      lastTick = ts;
+      renderCourse();
+    }
+    if (ts - lastSensorTick >= 1000){
+      lastSensorTick = ts;
+      renderSensors();
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible'){
+      renderCourse(); renderQueue(); renderSensors(); renderOrphan();
+      reloadLogs();
+    }
+  });
+}
+
+if (IS_ADMIN) init();
+</script>
+</body>
+</html>
