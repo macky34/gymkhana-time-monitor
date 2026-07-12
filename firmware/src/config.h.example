@@ -1,0 +1,25 @@
+// Copy to config.h and fill in per device. config.h is gitignored so each
+// physical sensor (start / goal) keeps its own build-time identity.
+#pragma once
+
+// Which sensor this board is: "start" or "goal".
+#define SENSOR_ID "start"
+
+// Venue WiFi (the RPi's hotspot / LAN).
+#define WIFI_SSID "timemon-lan"
+#define WIFI_PASS "changeme"
+
+// RPi address on the LAN: UDP trigger/heartbeat target + SNTP + config host.
+#define RPI_HOST "192.168.50.1"
+#define RPI_UDP_PORT 9999
+#define RPI_HTTP_PORT 8080 // for GET /api/internal/sensor-config
+
+// GPIO the photoelectric sensor's open-collector output is wired to
+// (10k pull-up to 3.3V). Falling edge = beam broken.
+#define SENSOR_GPIO 27
+
+// Status LED (solid = time-synced & ready, blinking = not yet synced).
+#define STATUS_LED_GPIO 2
+
+// Fallback debounce lockout if the server config fetch fails (ms).
+#define DEFAULT_LOCKOUT_MS 800
