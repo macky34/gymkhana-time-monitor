@@ -21,6 +21,7 @@ import (
 	"timemon/internal/snapshot"
 	"timemon/internal/sse"
 	"timemon/internal/store"
+	"timemon/internal/timing"
 )
 
 // Server holds all shared dependencies for the web layer.
@@ -160,7 +161,39 @@ func (s *Server) Routes() *http.ServeMux {
 	mux.HandleFunc("POST /api/admin/queue", s.withCSRFGuard(s.withAdmin(s.handleAdminQueueAdd)))
 	mux.HandleFunc("PUT /api/admin/queue/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminQueueReorder)))
 	mux.HandleFunc("DELETE /api/admin/queue/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminQueueCancel)))
-	// TODO(W4): admin management endpoints - /api/admin/drivers, /api/admin/vehicles, /api/admin/settings, /api/admin/logs, etc.
+	// ---- Admin: user management (W4) ----
+	mux.HandleFunc("GET /api/admin/users", s.withAdmin(s.handleAdminUsersList))
+	mux.HandleFunc("POST /api/admin/users", s.withCSRFGuard(s.withAdmin(s.handleAdminUserCreate)))
+	mux.HandleFunc("PUT /api/admin/users/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminUserUpdate)))
+	mux.HandleFunc("POST /api/admin/users/{id}/reissue", s.withCSRFGuard(s.withAdmin(s.handleAdminUserReissue)))
+	mux.HandleFunc("PUT /api/admin/users/{id}/role", s.withCSRFGuard(s.withAdmin(s.handleAdminUserRole)))
+	// ---- Admin: vehicle management (W4) ----
+	mux.HandleFunc("POST /api/admin/vehicles", s.withCSRFGuard(s.withAdmin(s.handleAdminVehicleCreate)))
+	mux.HandleFunc("PUT /api/admin/vehicles/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminVehicleUpdate)))
+	mux.HandleFunc("DELETE /api/admin/vehicles/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminVehicleDelete)))
+	// ---- Admin: settings (W4) ----
+	mux.HandleFunc("GET /api/admin/settings", s.withAdmin(s.handleAdminSettingsGet))
+	mux.HandleFunc("PUT /api/admin/settings", s.withCSRFGuard(s.withAdmin(s.handleAdminSettingsUpdate)))
+	mux.HandleFunc("PUT /api/admin/registration", s.withCSRFGuard(s.withAdmin(s.handleAdminRegistrationSet)))
+	// ---- Admin: log management (W4) ----
+	mux.HandleFunc("GET /api/admin/logs", s.withAdmin(s.handleAdminLogsList))
+	mux.HandleFunc("POST /api/admin/logs", s.withCSRFGuard(s.withAdmin(s.handleAdminLogCreate)))
+	mux.HandleFunc("PUT /api/admin/logs/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminLogUpdate)))
+	mux.HandleFunc("DELETE /api/admin/logs/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminLogDelete)))
+	mux.HandleFunc("PUT /api/admin/logs/{id}/assign", s.withCSRFGuard(s.withAdmin(s.handleAdminLogAssign)))
+	// ---- Admin: CSV export (W4) ----
+	mux.HandleFunc("GET /api/admin/export", s.withAdmin(s.handleAdminExport))
+	// ---- Admin: sensors (W4) ----
+	mux.HandleFunc("GET /api/admin/sensors", s.withAdmin(s.handleAdminSensors))
+
+	// ---- Internal (LAN only): ESP32 fetches its debounce lockout at boot ----
+	mux.Handle("GET /api/internal/sensor-config", timing.SensorConfigHandler(func() int {
+		set, ok, err := s.Store.GetSettings()
+		if err != nil || !ok {
+			return 800 // defaults.json fallback
+		}
+		return set.SensorLockoutMS
+	}))
 
 	return mux
 }
