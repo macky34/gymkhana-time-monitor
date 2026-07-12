@@ -32,6 +32,7 @@ type Server struct {
 	BaseURL string
 
 	limiter *rateLimiter
+	course  *courseManager
 
 	setupMu    sync.Mutex
 	setupToken string
@@ -66,6 +67,8 @@ func NewServer(st *store.Store, hub *sse.Hub, snap *snapshot.Builder, baseURL st
 		BaseURL: baseURL,
 		limiter: newRateLimiter(10, 10*time.Second),
 	}
+	s.course = newCourseManager(s)
+	snap.SetFinishProvider(s.course.finishProvider)
 
 	_, ok, err := st.GetSettings()
 	if err != nil {
@@ -139,8 +142,23 @@ func (s *Server) Routes() *http.ServeMux {
 	mux.HandleFunc("PUT /api/my/main-vehicle", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleSetMainVehicle))))
 	mux.HandleFunc("POST /api/my/queue", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyQueueAdd))))
 	mux.HandleFunc("DELETE /api/my/queue", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyQueueCancel))))
-	// TODO(W3): POST /api/my/queue/launch - self-launch onto the course from the head of the queue.
-	// TODO(W3): course control endpoints - sensor arm/lockout, live PT/MC entry, on-course timer control.
+	mux.HandleFunc("POST /api/my/queue/launch", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyLaunch))))
+	mux.HandleFunc("DELETE /api/my/queue/launch", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyLaunchUndo))))
+
+	// ---- Admin: course control (W3) ----
+	mux.HandleFunc("POST /api/admin/course", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseLaunch)))
+	mux.HandleFunc("POST /api/admin/course/finish", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseFinishOldest)))
+	mux.HandleFunc("POST /api/admin/course/{id}/finish", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseFinishByID)))
+	mux.HandleFunc("DELETE /api/admin/course/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseCancel)))
+	mux.HandleFunc("POST /api/admin/course/{id}/undo-start", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseUndoStart)))
+	mux.HandleFunc("POST /api/admin/course/{id}/undo-goal", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseUndoGoal)))
+	mux.HandleFunc("PUT /api/admin/course/{id}/pt", s.withCSRFGuard(s.withAdmin(s.handleAdminCoursePT)))
+	mux.HandleFunc("PUT /api/admin/course/{id}/mc", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseMC)))
+
+	// ---- Admin: queue management (W3) ----
+	mux.HandleFunc("POST /api/admin/queue", s.withCSRFGuard(s.withAdmin(s.handleAdminQueueAdd)))
+	mux.HandleFunc("PUT /api/admin/queue/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminQueueReorder)))
+	mux.HandleFunc("DELETE /api/admin/queue/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminQueueCancel)))
 	// TODO(W4): admin management endpoints - /api/admin/drivers, /api/admin/vehicles, /api/admin/settings, /api/admin/logs, etc.
 
 	return mux

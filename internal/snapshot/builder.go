@@ -11,14 +11,28 @@ import (
 	"timemon/internal/store"
 )
 
+// FinishProvider reports the in-flight finish for a queue row (a car that
+// has crossed the line but is still inside the confirmation grace window).
+// ok is false when the row has no pending finish. The web layer's course
+// manager supplies one via Builder.SetFinishProvider so OnCourse snapshots
+// can render the "finish" object without snapshot depending on package web.
+type FinishProvider func(queueID int64) (finMS int, untilMS int64, ok bool)
+
 // Builder generates topic snapshots from a *store.Store.
 type Builder struct {
-	s *store.Store
+	s        *store.Store
+	finishFn FinishProvider
 }
 
 // New creates a Builder reading from s.
 func New(s *store.Store) *Builder {
 	return &Builder{s: s}
+}
+
+// SetFinishProvider registers the callback OnCourse uses to embed pending
+// finish info. Passing nil (the default) makes every car's "finish" null.
+func (b *Builder) SetFinishProvider(fn FinishProvider) {
+	b.finishFn = fn
 }
 
 // refDriver is the minimal driver reference embedded in every snapshot.

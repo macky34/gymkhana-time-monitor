@@ -319,6 +319,46 @@ type PageData struct {
 - 不正JSON・未知typeは黙って捨てる (ログのみ)。
 - 開発用シミュレータ: `tools/sensor-sim.py` (start/goal打刻・ハートビート送出)。
 
+## 4.6 ウェーブ2のパッケージ境界 (D=web基盤 / E=SSE+スナップショット)
+
+ファイル所有権: **D** = `internal/web/**`, `embed.go`(リポジトリ直下), go.modへの `github.com/skip2/go-qrcode` 追加 / **E** = `internal/sse/**`, `internal/snapshot/**`。相互のパッケージは編集禁止 (Dは下記凍結APIに対してコーディングし、統合コンパイルはPMが実施)。
+
+```go
+// リポジトリ直下 embed.go (D所有)
+package embedded // import "timemon"
+//go:embed web/templates web/static defaults.json
+var FS embed.FS          // web/templates/*.html, web/static/*, defaults.json
+func Templates() fs.FS   // = fs.Sub(FS,"web/templates")
+func Static() fs.FS      // = fs.Sub(FS,"web/static")
+func DefaultsJSON() []byte
+
+// internal/sse (E所有) — トピック非依存の配信ハブ
+package sse
+const (TopicRanking="ranking"; TopicOnCourse="on_course"; TopicQueue="queue";
+       TopicSensorStatus="sensor_status"; TopicOrphan="orphan"; TopicSettings="settings"; TopicTime="time")
+func NewHub() *Hub
+func (h *Hub) Publish(topic string, data []byte)        // 最新スナップショット差し替え+全購読者へ即送信
+func (h *Hub) Snapshot(topic string) ([]byte, bool)
+func (h *Hub) Handler(isAdmin func(*http.Request) bool) http.Handler
+    // GET /api/stream?topics=… 本体。gzip必須(2段フラッシュ)、接続時に現在値送出、
+    // orphanトピックはisAdmin(r)==trueの接続のみ、送信ブロックするクライアントは即切断
+func (h *Hub) Run(ctx context.Context)                  // 25〜30s毎に time を自動Publish (server_ms)
+
+// internal/snapshot (E所有) — store+domainからトピックJSON/公開APIレスポンスを生成
+package snapshot
+func New(s *store.Store) *Builder
+func (b *Builder) Ranking() ([]byte, error)      // CONTRACTS §3 ranking形状 (§4.3順ソート済み全行)
+func (b *Builder) Queue() ([]byte, error)        // {"items":[...]}
+func (b *Builder) OnCourse() ([]byte, error)     // {"cars":[...]} finishフィールドはW3で拡張(現状null固定)
+func (b *Builder) Settings() ([]byte, error)     // 公開サブセット+導出disp_classes(EV含む)+class_defs
+func (b *Builder) Recent(limit int) ([]byte, error) // {"items":[...]} heat番号はdomain.HeatNumbersで付与
+func (b *Builder) CombinationLogs(driverID, vehicleID int64, q url.Values) ([]byte, error) // フィルタ内順位含む
+func (b *Builder) PublishAll(h *sse.Hub) error   // ranking/queue/on_course/settings を再生成してPublish
+func (b *Builder) PublishRanking(h *sse.Hub) error // 同様に単一トピック版: PublishQueue/PublishOnCourse/PublishSettings
+```
+
+Dの `internal/web` は `Server` 構造体 (store/hub/builder/テンプレートを保持)、`NewServer(...)` 、全ルート登録、認証・RL・Sec-Fetch-Siteミドルウェア、ページ配信、setup/register/my/icon/qr APIを持つ。course/admin系ルートはW3/W4で追加するため、`server.go` のルート登録は「1ルート1行」で書き、後続ウェーブが行追加しやすくすること。
+
 ## 5. ウェーブ計画
 
 | ウェーブ | タスク | 依存 |

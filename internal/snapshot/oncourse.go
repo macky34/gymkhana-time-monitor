@@ -6,6 +6,13 @@ type onCourseResponse struct {
 	Cars []onCourseCar `json:"cars"`
 }
 
+// onCourseFinish is the finish object embedded in an on-course car while its
+// finish is inside the confirmation grace window (W3 timing).
+type onCourseFinish struct {
+	FinMS   int   `json:"fin_ms"`
+	UntilMS int64 `json:"until_ms"`
+}
+
 type onCourseCar struct {
 	QueueID  int64           `json:"queue_id"`
 	Driver   refDriver       `json:"driver"`
@@ -13,13 +20,28 @@ type onCourseCar struct {
 	TStartUS *int64          `json:"t_start_us"`
 	PTCount  int             `json:"pt_count"`
 	MCFlag   bool            `json:"mc_flag"`
-	Finish   interface{}     `json:"finish"`
+	Finish   *onCourseFinish `json:"finish"`
+}
+
+// finishFor resolves the finish field for one car: the FinishProvider's
+// answer when one is registered (SetFinishProvider) and reports an in-flight
+// finish, or nil (JSON null) otherwise.
+func (b *Builder) finishFor(queueID int64) *onCourseFinish {
+	if b.finishFn == nil {
+		return nil
+	}
+	finMS, untilMS, ok := b.finishFn(queueID)
+	if !ok {
+		return nil
+	}
+	return &onCourseFinish{FinMS: finMS, UntilMS: untilMS}
 }
 
 // OnCourse builds the snapshot of cars currently running, ordered by queue
-// id (the same order store.ListQueue("on_course") returns). finish is
-// always null here; it is reserved for the timing extension planned for
-// workstream W3.
+// id (the same order store.ListQueue("on_course") returns). A car whose
+// finish is still inside the confirmation grace window carries a non-null
+// "finish" object (via the registered FinishProvider); all others report
+// null.
 func (b *Builder) OnCourse() ([]byte, error) {
 	rows, err := b.s.ListQueue("on_course")
 	if err != nil {
@@ -53,7 +75,7 @@ func (b *Builder) OnCourse() ([]byte, error) {
 			TStartUS: r.TStartUS,
 			PTCount:  r.PTCount,
 			MCFlag:   r.MCFlag,
-			Finish:   nil,
+			Finish:   b.finishFor(r.ID),
 		})
 	}
 	return json.Marshal(onCourseResponse{Cars: cars})
