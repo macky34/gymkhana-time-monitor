@@ -120,8 +120,12 @@
   .mini.adm{color:var(--dim);border-style:dashed}
   .mini.adm.on{color:#ffd9d9;background:#3a2226;border-color:var(--red);border-style:solid;font-weight:700}
   .q{list-style:none}
-  .q li{display:flex;align-items:center;gap:9px;padding:10px 10px;border-bottom:1px solid var(--line);font-size:12.5px}
+  .q li{display:flex;align-items:center;gap:9px;padding:10px 10px;border-bottom:1px solid var(--line);font-size:12.5px;background:var(--bg)}
   .q li:last-child{border:none}
+  .q li.dragging{opacity:.9;background:var(--panel2);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
+  .q li.drop-target{border-top:2px solid var(--go)}
+  .q .grip{color:var(--dim);font-size:15px;cursor:grab;flex:none;padding:0 2px;touch-action:none;user-select:none}
+  .q li.dragging .grip{cursor:grabbing}
   .q .pos{font-family:var(--mono);color:var(--dim);font-size:11px;width:18px;flex:none}
   .q .nm{min-width:0}
   .q .nm b{font-weight:600;display:block}
@@ -225,7 +229,7 @@
           <div id="adm-course"></div>
         </div>
         <div>
-          <div class="sec" style="margin-top:0">WAITING — 出走キュー (↑↓で並替)</div>
+          <div class="sec" style="margin-top:0">WAITING — 出走キュー (ドラッグで並替)</div>
           <div class="card"><ul class="q" id="adm-q"></ul></div>
           <div class="sec">キューに追加</div>
           <div class="card" style="padding:12px">
@@ -697,9 +701,11 @@ async function courseDNF(c){
   } catch (err) { toast(err.message); }
 }
 
-/* queue list with ↑↓ reorder */
+/* queue list with drag-to-reorder (pointer events: works with touch + mouse) */
+let qDragging = false; // suppress SSE re-render mid-drag so it doesn't yank the row
 function renderQueue(){
   const qEl = document.getElementById('adm-q');
+  if (qDragging) return; // a drag is in flight; leave the live DOM alone
   clear(qEl);
   if (!waitingQueue.length){
     qEl.appendChild(h('li', { style: 'color:var(--dim);font-size:11px' }, '待機なし'));
@@ -707,37 +713,91 @@ function renderQueue(){
     return;
   }
   waitingQueue.forEach((q, i) => {
-    const acts = h('div', { class: 'acts' });
-    const up = h('button', { type: 'button', class: 'mini', title: '上へ' }, '↑');
-    const down = h('button', { type: 'button', class: 'mini', title: '下へ' }, '↓');
-    up.disabled = i === 0;
-    down.disabled = i === waitingQueue.length - 1;
-    up.addEventListener('click', () => reorder(q, i, -1));
-    down.addEventListener('click', () => reorder(q, i, +1));
+    const grip = h('span', { class: 'grip', title: 'ドラッグで並替' }, '≡');
     const cancel = h('button', { type: 'button', class: 'mini red' }, '出走中止');
     cancel.addEventListener('click', async () => {
       if (!confirm(`${q.driver.name} をキューから外しますか?`)) return;
       try { await api('DELETE', '/api/admin/queue/' + q.queue_id); toast(`${q.driver.name} 出走中止`); }
       catch (err) { toast(err.message); }
     });
-    acts.appendChild(up); acts.appendChild(down); acts.appendChild(cancel);
+    const acts = h('div', { class: 'acts' }, cancel);
     const av = h('div', { class: 'avatar sm' });
     avatarInto(av, q.driver.id, q.driver.name, false);
-    qEl.appendChild(h('li', {},
+    const li = h('li', { 'data-qid': String(q.queue_id) },
+      grip,
       h('span', { class: 'pos t' }, String(i + 1)),
       av,
       h('div', { class: 'nm' }, h('b', {}, q.driver.name), h('span', {}, `＃${q.vehicle.number} ${q.vehicle.name}`)),
       acts
-    ));
+    );
+    grip.addEventListener('pointerdown', ev => beginQueueDrag(ev, li));
+    qEl.appendChild(li);
   });
   renderGoButtons();
 }
-async function reorder(q, i, dir){
-  /* display ordinal is 1-based: k = i+1. up -> between k-2 and k-1 => (k-1)-0.5 ; down -> (k+1)+0.5 */
-  const k = i + 1;
-  const position = dir < 0 ? (k - 1) - 0.5 : (k + 1) + 0.5;
-  try { await api('PUT', '/api/admin/queue/' + q.queue_id, { position }); }
-  catch (err) { toast(err.message); }
+// Pointer-events drag: reorders the DOM live for feedback, then on release
+// commits the new slot by PUTting a position midway between the real neighbour
+// positions (from the queue snapshot). Renumbering, if positions converge, is
+// the server's job.
+function beginQueueDrag(ev, li){
+  ev.preventDefault();
+  const qEl = document.getElementById('adm-q');
+  const grip = ev.currentTarget;
+  qDragging = true;
+  li.classList.add('dragging');
+  try { grip.setPointerCapture(ev.pointerId); } catch (e) {}
+
+  const onMove = e => {
+    const after = queueRowAfterY(qEl, e.clientY, li);
+    if (after === null) qEl.appendChild(li);
+    else if (after !== li) qEl.insertBefore(li, after);
+    renumberQueuePositions(qEl);
+  };
+  const onUp = async () => {
+    grip.removeEventListener('pointermove', onMove);
+    grip.removeEventListener('pointerup', onUp);
+    grip.removeEventListener('pointercancel', onUp);
+    li.classList.remove('dragging');
+    const order = [...qEl.querySelectorAll('li[data-qid]')].map(el => Number(el.dataset.qid));
+    const qid = Number(li.dataset.qid);
+    const idx = order.indexOf(qid);
+    qDragging = false;
+    const position = targetPosition(order, idx, qid);
+    if (position === null){ renderQueue(); return; } // no movement
+    try { await api('PUT', '/api/admin/queue/' + qid, { position }); }
+    catch (err) { toast(err.message); renderQueue(); }
+  };
+  grip.addEventListener('pointermove', onMove);
+  grip.addEventListener('pointerup', onUp);
+  grip.addEventListener('pointercancel', onUp);
+}
+// Returns the <li> that the dragged row should be inserted before given the
+// pointer's Y, or null to append at the end. Skips the dragged row itself.
+function queueRowAfterY(qEl, y, dragging){
+  const rows = [...qEl.querySelectorAll('li[data-qid]')].filter(el => el !== dragging);
+  for (const el of rows){
+    const r = el.getBoundingClientRect();
+    if (y < r.top + r.height / 2) return el;
+  }
+  return null;
+}
+function renumberQueuePositions(qEl){
+  [...qEl.querySelectorAll('li[data-qid] .pos')].forEach((el, i) => { el.textContent = String(i + 1); });
+}
+// Position to send so the row lands at display index idx: midpoint of the real
+// neighbour positions, or neighbour±1 at the ends. null if it did not move.
+function targetPosition(order, idx, qid){
+  const posOf = id => { const q = waitingQueue.find(x => x.queue_id === id); return q ? q.position : null; };
+  const origIdx = waitingQueue.findIndex(x => x.queue_id === qid);
+  if (idx === origIdx) return null;
+  const prevId = idx > 0 ? order[idx - 1] : null;
+  const nextId = idx < order.length - 1 ? order[idx + 1] : null;
+  const prev = prevId === null ? null : posOf(prevId);
+  const next = nextId === null ? null : posOf(nextId);
+  if (prev === null && next === null) return 1.0;
+  if (prev === null) return next - 1.0;
+  if (next === null) return prev + 1.0;
+  return (prev + next) / 2;
 }
 
 /* queue add form — the driver and vehicle selects cross-suggest each other:

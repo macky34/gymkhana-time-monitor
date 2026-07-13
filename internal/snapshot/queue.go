@@ -7,9 +7,10 @@ type queueResponse struct {
 }
 
 type queueItem struct {
-	QueueID int64           `json:"queue_id"`
-	Driver  refDriver       `json:"driver"`
-	Vehicle refVehicleBasic `json:"vehicle"`
+	QueueID  int64           `json:"queue_id"`
+	Driver   refDriver       `json:"driver"`
+	Vehicle  refVehicleBasic `json:"vehicle"`
+	Position float64         `json:"position"` // admin drag-reorder computes midpoints from this
 }
 
 // Queue builds the waiting-line snapshot, ordered by queue position (the
@@ -41,9 +42,10 @@ func (b *Builder) Queue() ([]byte, error) {
 			continue
 		}
 		items = append(items, queueItem{
-			QueueID: r.ID,
-			Driver:  refDriver{ID: drv.ID, Name: drv.Name},
-			Vehicle: refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name},
+			QueueID:  r.ID,
+			Driver:   refDriver{ID: drv.ID, Name: drv.Name},
+			Vehicle:  refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name},
+			Position: r.Position,
 		})
 	}
 	return json.Marshal(queueResponse{Items: items})
