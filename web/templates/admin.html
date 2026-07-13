@@ -81,6 +81,12 @@
   .apane.on{display:block}
   .modebar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
   .modebar .lb{font-size:10.5px;color:var(--mut);flex:none}
+  /* queue-add filter-style rows (shared visual language with ranking filter) */
+  .frow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .frow .ax{font-size:10px;color:var(--dim);width:64px;flex:none;letter-spacing:.03em}
+  .fsel{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);
+        padding:8px 9px;font-size:12.5px;font-family:inherit}
+  .fsel.on{border-color:var(--go);color:var(--go)}
   .seg{display:flex;gap:6px}
   .seg button{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);
               padding:9px 4px;font-size:12px;cursor:pointer;font-family:inherit}
@@ -222,10 +228,12 @@
           <div class="sec" style="margin-top:0">WAITING — 出走キュー (↑↓で並替)</div>
           <div class="card"><ul class="q" id="adm-q"></ul></div>
           <div class="sec">キューに追加</div>
-          <div class="card" style="padding:12px;display:flex;flex-direction:column;gap:8px">
-            <select id="qa-driver"><option value="">ドライバーを選択…</option></select>
-            <select id="qa-vehicle"><option value="">車両を選択…</option></select>
-            <button type="button" class="btn" id="qa-add">追加</button>
+          <div class="card" style="padding:12px">
+            <div class="frow"><span class="ax">ドライバー</span>
+              <select class="fsel" id="qa-driver"><option value="">ドライバーを選択…</option></select></div>
+            <div class="frow"><span class="ax">車両</span>
+              <select class="fsel" id="qa-vehicle"><option value="">車両を選択…</option></select></div>
+            <button type="button" class="btn primary" id="qa-add" style="width:100%;margin-top:4px">追加</button>
           </div>
         </div>
       </div>
@@ -742,7 +750,9 @@ function renderQueueAddForm(){
   dSel.value = keepD;
   fillQaVehicle();
 }
-function fillQaVehicle(){
+// resetToMain=true (driver just changed): jump the vehicle to the new
+// driver's main. false (background SSE refresh): keep the current pick.
+function fillQaVehicle(resetToMain){
   const dSel = document.getElementById('qa-driver');
   const vSel = document.getElementById('qa-vehicle');
   const keepV = vSel.value;
@@ -764,8 +774,17 @@ function fillQaVehicle(){
     vSel.appendChild(sepa);
   }
   rest.forEach(v => vSel.appendChild(h('option', { value: String(v.id) }, `＃${v.number} ${v.name}`)));
-  if (u && u.main_vehicle_id && !keepV) vSel.value = String(u.main_vehicle_id);
-  else vSel.value = keepV || vSel.value;
+  // On a driver change, auto-select their main vehicle; on refresh, preserve.
+  if (resetToMain) vSel.value = (u && u.main_vehicle_id) ? String(u.main_vehicle_id) : '';
+  else vSel.value = keepV;
+  markQaSelects();
+}
+// Highlight selects that hold a value, matching the ranking filter's .on state.
+function markQaSelects(){
+  const dSel = document.getElementById('qa-driver');
+  const vSel = document.getElementById('qa-vehicle');
+  dSel.classList.toggle('on', !!dSel.value);
+  vSel.classList.toggle('on', !!vSel.value);
 }
 
 /* go / goal buttons */
@@ -801,7 +820,8 @@ function bindGoButtons(){
       renderModeUI();
     } catch (err) { toast(err.message); await reloadAdminSettings(); renderModeUI(); }
   }));
-  document.getElementById('qa-driver').addEventListener('change', fillQaVehicle);
+  document.getElementById('qa-driver').addEventListener('change', () => fillQaVehicle(true));
+  document.getElementById('qa-vehicle').addEventListener('change', markQaSelects);
   document.getElementById('qa-add').addEventListener('click', async () => {
     const d = document.getElementById('qa-driver').value;
     const v = document.getElementById('qa-vehicle').value;
@@ -810,7 +830,7 @@ function bindGoButtons(){
       await api('POST', '/api/admin/queue', { driver_id: Number(d), vehicle_id: Number(v) });
       toast('キューに追加しました');
       document.getElementById('qa-driver').value = '';
-      fillQaVehicle();
+      fillQaVehicle(true);
     } catch (err) { toast(err.message); }
   });
 }

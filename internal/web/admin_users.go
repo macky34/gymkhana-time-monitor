@@ -26,12 +26,13 @@ func (s *Server) adminDriverClassLabels() (map[int64]string, error) {
 }
 
 type adminUserOut struct {
-	ID          int64  `json:"id"`
-	Name        string `json:"name"`
-	DriverClass string `json:"driver_class"`
-	Role        string `json:"role"`
-	Number      any    `json:"number"`
-	LoginURL    string `json:"login_url"`
+	ID            int64  `json:"id"`
+	Name          string `json:"name"`
+	DriverClass   string `json:"driver_class"`
+	Role          string `json:"role"`
+	Number        any    `json:"number"`
+	MainVehicleID *int64 `json:"main_vehicle_id"`
+	LoginURL      string `json:"login_url"`
 }
 
 // handleAdminUsersList implements GET /api/admin/users.
@@ -56,12 +57,13 @@ func (s *Server) handleAdminUsersList(w http.ResponseWriter, r *http.Request, ad
 			}
 		}
 		out = append(out, adminUserOut{
-			ID:          d.ID,
-			Name:        d.Name,
-			DriverClass: labels[d.DriverClassID],
-			Role:        d.Role,
-			Number:      number,
-			LoginURL:    s.BaseURL + "/a/" + d.Token,
+			ID:            d.ID,
+			Name:          d.Name,
+			DriverClass:   labels[d.DriverClassID],
+			Role:          d.Role,
+			Number:        number,
+			MainVehicleID: d.MainVehicleID,
+			LoginURL:      s.BaseURL + "/a/" + d.Token,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"users": out})
