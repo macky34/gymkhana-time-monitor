@@ -740,18 +740,39 @@ async function reorder(q, i, dir){
   catch (err) { toast(err.message); }
 }
 
-/* queue add form */
+/* queue add form — the driver and vehicle selects cross-suggest each other:
+   linked options are grouped first in both dropdowns, picking a driver jumps
+   to their main vehicle, and picking a vehicle with a single linked driver
+   (a 1:1 pairing) auto-selects that driver. */
 function renderQueueAddForm(){
+  fillQaDriver();
+  fillQaVehicle(false);
+  markQaSelects();
+}
+// Build the driver <option>s. When a vehicle is selected, its linked drivers
+// are surfaced first (suggestion); the current selection is preserved.
+function fillQaDriver(){
   const dSel = document.getElementById('qa-driver');
+  const vSel = document.getElementById('qa-vehicle');
   const keepD = dSel.value;
   clear(dSel);
   dSel.appendChild(h('option', { value: '' }, 'ドライバーを選択…'));
-  users.forEach(u => dSel.appendChild(h('option', { value: String(u.id) }, u.name)));
+  const veh = vehiclesList.find(v => String(v.id) === vSel.value);
+  const linkedIds = new Set(veh ? (veh.drivers || []).map(d => d.id) : []);
+  const linked = users.filter(u => linkedIds.has(u.id));
+  const rest = users.filter(u => !linkedIds.has(u.id));
+  linked.forEach(u => dSel.appendChild(h('option', { value: String(u.id) }, u.name)));
+  if (linked.length && rest.length){
+    const sepa = h('option', { value: '' }, '— 紐づけ外 —');
+    sepa.disabled = true;
+    dSel.appendChild(sepa);
+  }
+  rest.forEach(u => dSel.appendChild(h('option', { value: String(u.id) }, u.name)));
   dSel.value = keepD;
-  fillQaVehicle();
 }
-// resetToMain=true (driver just changed): jump the vehicle to the new
-// driver's main. false (background SSE refresh): keep the current pick.
+// Build the vehicle <option>s. When a driver is selected, their linked
+// vehicles are surfaced first. resetToMain=true (driver just changed) jumps
+// to that driver's main vehicle; false (refresh) preserves the current pick.
 function fillQaVehicle(resetToMain){
   const dSel = document.getElementById('qa-driver');
   const vSel = document.getElementById('qa-vehicle');
@@ -777,6 +798,20 @@ function fillQaVehicle(resetToMain){
   // On a driver change, auto-select their main vehicle; on refresh, preserve.
   if (resetToMain) vSel.value = (u && u.main_vehicle_id) ? String(u.main_vehicle_id) : '';
   else vSel.value = keepV;
+}
+// Vehicle changed: surface its linked drivers first and, when exactly one
+// driver is linked (1:1), auto-select that driver. Does not disturb the just-
+// chosen vehicle (no reset-to-main back-trigger).
+function onQaVehicleChange(){
+  const dSel = document.getElementById('qa-driver');
+  const vSel = document.getElementById('qa-vehicle');
+  const veh = vehiclesList.find(v => String(v.id) === vSel.value);
+  const linkedDrivers = veh ? (veh.drivers || []) : [];
+  const curLinked = linkedDrivers.some(d => String(d.id) === dSel.value);
+  if (linkedDrivers.length === 1 && !curLinked) {
+    dSel.value = String(linkedDrivers[0].id);
+  }
+  fillQaDriver(); // regroup driver suggestions (linked first), keeps selection
   markQaSelects();
 }
 // Highlight selects that hold a value, matching the ranking filter's .on state.
@@ -820,8 +855,8 @@ function bindGoButtons(){
       renderModeUI();
     } catch (err) { toast(err.message); await reloadAdminSettings(); renderModeUI(); }
   }));
-  document.getElementById('qa-driver').addEventListener('change', () => fillQaVehicle(true));
-  document.getElementById('qa-vehicle').addEventListener('change', markQaSelects);
+  document.getElementById('qa-driver').addEventListener('change', () => { fillQaVehicle(true); markQaSelects(); });
+  document.getElementById('qa-vehicle').addEventListener('change', onQaVehicleChange);
   document.getElementById('qa-add').addEventListener('click', async () => {
     const d = document.getElementById('qa-driver').value;
     const v = document.getElementById('qa-vehicle').value;
@@ -830,7 +865,8 @@ function bindGoButtons(){
       await api('POST', '/api/admin/queue', { driver_id: Number(d), vehicle_id: Number(v) });
       toast('キューに追加しました');
       document.getElementById('qa-driver').value = '';
-      fillQaVehicle(true);
+      document.getElementById('qa-vehicle').value = '';
+      renderQueueAddForm();
     } catch (err) { toast(err.message); }
   });
 }
