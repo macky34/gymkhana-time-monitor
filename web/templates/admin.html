@@ -746,7 +746,7 @@ async function reorder(q, i, dir){
    (a 1:1 pairing) auto-selects that driver. */
 function renderQueueAddForm(){
   fillQaDriver();
-  fillQaVehicle(false);
+  fillQaVehicle();
   markQaSelects();
 }
 // Build the driver <option>s. When a vehicle is selected, its linked drivers
@@ -771,9 +771,10 @@ function fillQaDriver(){
   dSel.value = keepD;
 }
 // Build the vehicle <option>s. When a driver is selected, their linked
-// vehicles are surfaced first. resetToMain=true (driver just changed) jumps
-// to that driver's main vehicle; false (refresh) preserves the current pick.
-function fillQaVehicle(resetToMain){
+// vehicles are surfaced first. The current selection is always preserved —
+// auto-fill only ever happens from the change handlers below, and only into
+// an empty field.
+function fillQaVehicle(){
   const dSel = document.getElementById('qa-driver');
   const vSel = document.getElementById('qa-vehicle');
   const keepV = vSel.value;
@@ -795,21 +796,33 @@ function fillQaVehicle(resetToMain){
     vSel.appendChild(sepa);
   }
   rest.forEach(v => vSel.appendChild(h('option', { value: String(v.id) }, `＃${v.number} ${v.name}`)));
-  // On a driver change, auto-select their main vehicle; on refresh, preserve.
-  if (resetToMain) vSel.value = (u && u.main_vehicle_id) ? String(u.main_vehicle_id) : '';
-  else vSel.value = keepV;
+  vSel.value = keepV;
 }
-// Vehicle changed: surface its linked drivers first and, when exactly one
-// driver is linked (1:1), auto-select that driver. Does not disturb the just-
-// chosen vehicle (no reset-to-main back-trigger).
+// Driver changed: regroup the vehicle suggestions, and — only if the vehicle
+// field is still empty — auto-fill this driver's main vehicle. If a vehicle
+// is already chosen we leave it alone so the operator can freely build any
+// combination.
+function onQaDriverChange(){
+  const dSel = document.getElementById('qa-driver');
+  const vSel = document.getElementById('qa-vehicle');
+  const wasEmpty = !vSel.value;
+  fillQaVehicle(); // regroup (linked-first), preserves current vehicle
+  if (wasEmpty){
+    const u = users.find(x => String(x.id) === dSel.value);
+    if (u && u.main_vehicle_id) vSel.value = String(u.main_vehicle_id);
+  }
+  markQaSelects();
+}
+// Vehicle changed: regroup the driver suggestions, and — only if the driver
+// field is still empty — auto-fill the sole linked driver when the vehicle is
+// a 1:1 pairing. An already-chosen driver is never overwritten.
 function onQaVehicleChange(){
   const dSel = document.getElementById('qa-driver');
   const vSel = document.getElementById('qa-vehicle');
-  const veh = vehiclesList.find(v => String(v.id) === vSel.value);
-  const linkedDrivers = veh ? (veh.drivers || []) : [];
-  const curLinked = linkedDrivers.some(d => String(d.id) === dSel.value);
-  if (linkedDrivers.length === 1 && !curLinked) {
-    dSel.value = String(linkedDrivers[0].id);
+  if (!dSel.value){
+    const veh = vehiclesList.find(v => String(v.id) === vSel.value);
+    const linkedDrivers = veh ? (veh.drivers || []) : [];
+    if (linkedDrivers.length === 1) dSel.value = String(linkedDrivers[0].id);
   }
   fillQaDriver(); // regroup driver suggestions (linked first), keeps selection
   markQaSelects();
@@ -855,7 +868,7 @@ function bindGoButtons(){
       renderModeUI();
     } catch (err) { toast(err.message); await reloadAdminSettings(); renderModeUI(); }
   }));
-  document.getElementById('qa-driver').addEventListener('change', () => { fillQaVehicle(true); markQaSelects(); });
+  document.getElementById('qa-driver').addEventListener('change', onQaDriverChange);
   document.getElementById('qa-vehicle').addEventListener('change', onQaVehicleChange);
   document.getElementById('qa-add').addEventListener('click', async () => {
     const d = document.getElementById('qa-driver').value;
