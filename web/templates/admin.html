@@ -761,11 +761,21 @@ function fillQaDriver(){
   const linkedIds = new Set(veh ? (veh.drivers || []).map(d => d.id) : []);
   const linked = users.filter(u => linkedIds.has(u.id));
   const rest = users.filter(u => !linkedIds.has(u.id));
-  linked.forEach(u => dSel.appendChild(h('option', { value: String(u.id) }, u.name)));
-  if (linked.length && rest.length){
-    const sepa = h('option', { value: '' }, '— 紐づけ外 —');
-    sepa.disabled = true;
-    dSel.appendChild(sepa);
+  // Mark the driver(s) whose main vehicle this is, so the operator can tell
+  // the primary driver apart from 相乗り (shared) entries in the top group.
+  const label = u => (veh && u.main_vehicle_id === veh.id) ? `${u.name}（メイン）` : u.name;
+  if (linked.length){
+    // A vehicle is selected: surface its drivers (main + 相乗り) as a labelled
+    // group at the top so they are one tap away even when we don't auto-fill.
+    const hdr = h('option', { value: '' }, '— この車両のドライバー —');
+    hdr.disabled = true;
+    dSel.appendChild(hdr);
+    linked.forEach(u => dSel.appendChild(h('option', { value: String(u.id) }, label(u))));
+    if (rest.length){
+      const sepa = h('option', { value: '' }, '— その他 —');
+      sepa.disabled = true;
+      dSel.appendChild(sepa);
+    }
   }
   rest.forEach(u => dSel.appendChild(h('option', { value: String(u.id) }, u.name)));
   dSel.value = keepD;
@@ -821,8 +831,13 @@ function onQaVehicleChange(){
   const vSel = document.getElementById('qa-vehicle');
   if (!dSel.value){
     const veh = vehiclesList.find(v => String(v.id) === vSel.value);
-    const linkedDrivers = veh ? (veh.drivers || []) : [];
-    if (linkedDrivers.length === 1) dSel.value = String(linkedDrivers[0].id);
+    if (veh){
+      // Auto-fill only when exactly one driver has this vehicle as their main
+      // (a 1:1 vehicle↔main-driver pairing). Shared vehicles with several
+      // linked drivers but one main still resolve to that main driver.
+      const mains = users.filter(u => u.main_vehicle_id === veh.id);
+      if (mains.length === 1) dSel.value = String(mains[0].id);
+    }
   }
   fillQaDriver(); // regroup driver suggestions (linked first), keeps selection
   markQaSelects();
