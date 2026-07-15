@@ -43,7 +43,7 @@ func seedFixture(t *testing.T) fixture {
 	}
 	t.Cleanup(func() { s.Close() })
 
-	settings := store.SettingsRow{
+	settings := store.EventRow{
 		EventName:        "テスト大会",
 		TimingMode:       "sensor",
 		PTMode:           "add",
@@ -124,7 +124,17 @@ func seedFixture(t *testing.T) fixture {
 		t.Fatalf("AddEntry EV: %v", err)
 	}
 
+	activeEvent, ok, err := s.GetActiveEvent()
+	if err != nil {
+		t.Fatalf("GetActiveEvent: %v", err)
+	}
+	if !ok {
+		t.Fatalf("GetActiveEvent: no active event after SeedEvent")
+	}
+	eventID := activeEvent.ID
+
 	logFast1, err := s.InsertLog(store.LogRow{
+		EventID:  eventID,
 		DriverID: &driverActive, VehicleID: &vehicleICE,
 		RawMS: 84310, PTCount: 0, IsMC: false,
 		TimestampMS: 1720000000000, Source: "sensor",
@@ -133,6 +143,7 @@ func seedFixture(t *testing.T) fixture {
 		t.Fatalf("InsertLog logFast1: %v", err)
 	}
 	logFast2, err := s.InsertLog(store.LogRow{
+		EventID:  eventID,
 		DriverID: &driverActive, VehicleID: &vehicleICE,
 		RawMS: 83456, PTCount: 0, IsMC: false,
 		TimestampMS: 1720000100000, Source: "sensor",
@@ -141,6 +152,7 @@ func seedFixture(t *testing.T) fixture {
 		t.Fatalf("InsertLog logFast2: %v", err)
 	}
 	logEVRun, err := s.InsertLog(store.LogRow{
+		EventID:  eventID,
 		DriverID: &driverAlumni, VehicleID: &vehicleEV,
 		RawMS: 90000, PTCount: 0, IsMC: false,
 		TimestampMS: 1720000200000, Source: "sensor",
@@ -149,6 +161,7 @@ func seedFixture(t *testing.T) fixture {
 		t.Fatalf("InsertLog logEVRun: %v", err)
 	}
 	logMC, err := s.InsertLog(store.LogRow{
+		EventID:  eventID,
 		DriverID: &driverActive, VehicleID: &vehicleICE,
 		RawMS: 81000, PTCount: 0, IsMC: true,
 		TimestampMS: 1720000300000, Source: "sensor",

@@ -1,6 +1,11 @@
 package snapshot
 
-import "timemon/internal/sse"
+import (
+	"encoding/json"
+	"sync/atomic"
+
+	"timemon/internal/sse"
+)
 
 // PublishRanking regenerates the ranking snapshot and pushes it to h.
 func (b *Builder) PublishRanking(h *sse.Hub) error {
@@ -39,6 +44,25 @@ func (b *Builder) PublishSettings(h *sse.Hub) error {
 		return err
 	}
 	h.Publish(sse.TopicSettings, data)
+	return nil
+}
+
+// PublishDirectory increments the "directory" revision counter and pushes
+// the new value to h. Unlike the other Publish* methods, this snapshot does
+// not describe any store content: {"rev": N} is a bare change counter that
+// lets subscribers (the admin page) notice that a driver/vehicle/link
+// mutation happened somewhere and refetch the actual lists via the existing
+// REST APIs. The counter resets to 0 on process restart, which is fine —
+// subscribers only care about the value changing, never its absolute value.
+func (b *Builder) PublishDirectory(h *sse.Hub) error {
+	rev := atomic.AddInt64(&b.dirRev, 1)
+	data, err := json.Marshal(struct {
+		Rev int64 `json:"rev"`
+	}{Rev: rev})
+	if err != nil {
+		return err
+	}
+	h.Publish(sse.TopicDirectory, data)
 	return nil
 }
 

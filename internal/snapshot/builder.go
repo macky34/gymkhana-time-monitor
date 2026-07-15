@@ -22,6 +22,12 @@ type FinishProvider func(queueID int64) (finMS int, untilMS int64, ok bool)
 type Builder struct {
 	s        *store.Store
 	finishFn FinishProvider
+
+	// dirRev is the monotonically increasing revision counter behind the
+	// "directory" SSE topic (see PublishDirectory in publish.go). It carries
+	// no data read from the store; accessed via sync/atomic since publishes
+	// can race across concurrent HTTP handlers.
+	dirRev int64
 }
 
 // New creates a Builder reading from s.
@@ -37,17 +43,19 @@ func (b *Builder) SetFinishProvider(fn FinishProvider) {
 
 // refDriver is the minimal driver reference embedded in every snapshot.
 type refDriver struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	HasIcon bool   `json:"has_icon"`
 }
 
 // refVehicleBasic is the minimal vehicle reference embedded in snapshots
 // that do not need engine/class detail (queue, on_course, recent,
 // combination logs). Ranking uses the richer rankVehicle instead.
 type refVehicleBasic struct {
-	ID     int64  `json:"id"`
-	Number int    `json:"number"`
-	Name   string `json:"name"`
+	ID      int64  `json:"id"`
+	Number  int    `json:"number"`
+	Name    string `json:"name"`
+	HasIcon bool   `json:"has_icon"`
 }
 
 func indexDrivers(drivers []store.Driver) map[int64]store.Driver {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"timemon/internal/domain"
+	"timemon/internal/store"
 )
 
 type rankingResponse struct {
@@ -31,42 +32,38 @@ type rankVehicle struct {
 	ConvertedCC *int   `json:"converted_cc"`
 	DispClass   string `json:"disp_class"`
 	DTClass     string `json:"dt_class"`
+	HasIcon     bool   `json:"has_icon"`
 }
 
-// Ranking builds the current standings for every driver/vehicle combination
-// that has at least one run, in exactly the order domain.Rank returns them
-// (its full §4.3 tie-break order).
-func (b *Builder) Ranking() ([]byte, error) {
-	settings, _, err := b.s.GetSettings()
+// buildRanking builds the current standings for ev's event, in exactly the
+// order domain.Rank returns them (its full §4.3 tie-break order).
+func (b *Builder) buildRanking(ev store.EventRow) (rankingResponse, error) {
+	runs, err := b.s.ListRuns(ev.ID)
 	if err != nil {
-		return nil, err
-	}
-	runs, err := b.s.ListRuns()
-	if err != nil {
-		return nil, err
+		return rankingResponse{}, err
 	}
 	drivers, err := b.s.ListDrivers()
 	if err != nil {
-		return nil, err
+		return rankingResponse{}, err
 	}
 	vehicles, err := b.s.ListVehicles()
 	if err != nil {
-		return nil, err
+		return rankingResponse{}, err
 	}
 	driverClasses, err := b.s.ListClassDefs("driver")
 	if err != nil {
-		return nil, err
+		return rankingResponse{}, err
 	}
 	dtClasses, err := b.s.ListClassDefs("drivetrain")
 	if err != nil {
-		return nil, err
+		return rankingResponse{}, err
 	}
 
 	driverByID := indexDrivers(drivers)
 	vehicleByID := indexVehicles(vehicles)
 	driverClassLabel := indexClassLabels(driverClasses)
 	dtClassLabel := indexClassLabels(dtClasses)
-	conv := buildVehicleConv(vehicles, settings.Coef, settings.DispClasses)
+	conv := buildVehicleConv(vehicles, ev.Coef, ev.DispClasses)
 
 	meta := make(map[domain.ComboKey]domain.ComboMeta, len(runs))
 	for _, r := range runs {
@@ -77,7 +74,7 @@ func (b *Builder) Ranking() ([]byte, error) {
 		meta[r.Combo] = domain.ComboMeta{ConvertedCC: c.cc, IsEV: !c.ok}
 	}
 
-	standings := domain.Rank(runs, meta, settings.PTMode, settings.PTPenaltyMS, 0)
+	standings := domain.Rank(runs, meta, ev.PTMode, ev.PTPenaltyMS, 0)
 
 	rows := make([]rankingRow, 0, len(standings))
 	for _, st := range standings {
@@ -96,7 +93,7 @@ func (b *Builder) Ranking() ([]byte, error) {
 			ccPtr = &cc
 		}
 		rows = append(rows, rankingRow{
-			Driver:      refDriver{ID: drv.ID, Name: drv.Name},
+			Driver:      refDriver{ID: drv.ID, Name: drv.Name, HasIcon: drv.HasIcon},
 			DriverClass: driverClassLabel[drv.DriverClassID],
 			Vehicle: rankVehicle{
 				ID:          veh.ID,
@@ -106,6 +103,7 @@ func (b *Builder) Ranking() ([]byte, error) {
 				ConvertedCC: ccPtr,
 				DispClass:   c.dispClass,
 				DTClass:     dtClassLabel[veh.DrivetrainClassID],
+				HasIcon:     veh.HasIcon,
 			},
 			BestMS:    st.BestMS,
 			SecondMS:  st.SecondMS,
@@ -117,5 +115,37 @@ func (b *Builder) Ranking() ([]byte, error) {
 		})
 	}
 
-	return json.Marshal(rankingResponse{Rows: rows})
+	return rankingResponse{Rows: rows}, nil
+}
+
+// Ranking builds the ranking snapshot for the current active event. With no
+// active event, this is an empty list.
+func (b *Builder) Ranking() ([]byte, error) {
+	ev, ok, err := b.s.GetActiveEvent()
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return json.Marshal(rankingResponse{Rows: []rankingRow{}})
+	}
+	resp, err := b.buildRanking(ev)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(resp)
+}
+
+// RankingPayloadFor builds the ranking payload for a specific event id
+// (active or archived/closed) rather than the currently active one — for
+// stage-2 archive APIs. Returns an empty-rows payload if eventID does not
+// exist.
+func (b *Builder) RankingPayloadFor(eventID int64) (any, error) {
+	ev, ok, err := b.s.GetEvent(eventID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return rankingResponse{Rows: []rankingRow{}}, nil
+	}
+	return b.buildRanking(ev)
 }

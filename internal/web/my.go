@@ -12,9 +12,16 @@ import (
 )
 
 // queueStateFor answers "where is this driver in the queue/course right
-// now", for the "queue" field of GET /api/my.
+// now", for the "queue" field of GET /api/mypage. With no active event,
+// there is nowhere the driver could be queued, so this reports "none"
+// without touching the store.
 func (s *Server) queueStateFor(driverID int64) map[string]any {
-	waiting, err := s.Store.ListQueue("waiting")
+	ev, ok, err := s.Store.GetActiveEvent()
+	if err != nil || !ok {
+		return map[string]any{"state": "none"}
+	}
+
+	waiting, err := s.Store.ListQueue(ev.ID, "waiting")
 	if err == nil {
 		for i, q := range waiting {
 			if q.DriverID == driverID {
@@ -23,7 +30,7 @@ func (s *Server) queueStateFor(driverID int64) map[string]any {
 		}
 	}
 
-	onCourse, err := s.Store.ListQueue("on_course")
+	onCourse, err := s.Store.ListQueue(ev.ID, "on_course")
 	if err == nil {
 		for _, q := range onCourse {
 			if q.DriverID == driverID {
@@ -57,20 +64,24 @@ type runOut struct {
 	Source      string `json:"source"`
 }
 
-// buildRunsFor projects every run belonging to driverID into the "runs"
-// array of GET /api/my, newest first. Heat numbers are computed over *all*
-// runs (domain.HeatNumbers needs full context) then filtered down.
+// buildRunsFor projects every run belonging to driverID in the active event
+// into the "runs" array of GET /api/mypage, newest first. Heat numbers are
+// computed over *all* runs (domain.HeatNumbers needs full context) then
+// filtered down. With no active event, this is an empty list.
 func (s *Server) buildRunsFor(driverID int64) ([]runOut, error) {
-	allRuns, err := s.Store.ListRuns()
+	set, ok, err := s.Store.GetActiveEvent()
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return []runOut{}, nil
+	}
+
+	allRuns, err := s.Store.ListRuns(set.ID)
 	if err != nil {
 		return nil, err
 	}
 	heatNums := domain.HeatNumbers(allRuns)
-
-	set, _, err := s.Store.GetSettings()
-	if err != nil {
-		return nil, err
-	}
 
 	out := make([]runOut, 0)
 	for _, run := range allRuns {
@@ -153,6 +164,7 @@ func (s *Server) handleGetMy(w http.ResponseWriter, r *http.Request, d store.Dri
 		"vehicles":        vehiclesOut,
 		"queue":           s.queueStateFor(d.ID),
 		"runs":            runs,
+		"login_url":       s.BaseURL + "/a/" + d.Token,
 	})
 }
 
@@ -169,6 +181,7 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request, d s
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.publishDirectory()
 	s.audit(&d.ID, "my.profile", map[string]any{"name": body.Name, "driver_class_id": body.DriverClassID})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -190,7 +203,129 @@ func (s *Server) handleMyIcon(w http.ResponseWriter, r *http.Request, d store.Dr
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.publishAll()
+	s.publishDirectory()
 	s.audit(&d.ID, "my.icon", map[string]any{})
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handleMyVehicleIcon implements POST /api/mypage/vehicles/{id}/icon: sets the
+// icon of a vehicle the caller is linked to via entries. Vehicles the
+// caller is not linked to are reported as a bare 404, same as an unknown
+// vehicle id (no existence leakage), mirroring handleDeleteMyVehicle's
+// treatment of vehicle ids that are not the caller's.
+func (s *Server) handleMyVehicleIcon(w http.ResponseWriter, r *http.Request, d store.Driver) {
+	id, err := parsePathInt64(r, "id")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	entries, err := s.Store.ListEntriesByDriver(d.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	found := false
+	for _, v := range entries {
+		if v.ID == id {
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+
+	var body struct {
+		IconB64 string `json:"icon_b64"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	jpg, err := iconFromB64(body.IconB64)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid icon")
+		return
+	}
+	if err := s.Store.SetVehicleIcon(id, jpg); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	s.publishAll()
+	s.publishDirectory()
+	s.audit(&d.ID, "my.vehicle.icon", map[string]any{"vehicle_id": id})
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+// handleUpdateMyVehicle implements PUT /api/mypage/vehicles/{id}: lets the
+// caller edit the spec of a vehicle they are linked to via entries (same
+// ownership check, and the same 404-for-not-mine treatment, as
+// handleMyVehicleIcon). Reuses adminVehicleBody (admin_vehicles.go) for the
+// wire shape/EV-nulling so the field names and validation match the admin
+// vehicle-update handler exactly. Vehicle number/name feed the ranking,
+// queue and on-course displays, so publishAll+publishDirectory mirror
+// handleMyVehicleIcon (rather than handleAdminVehicleUpdate's
+// publishRanking-only, since that handler has no icon-touching path).
+func (s *Server) handleUpdateMyVehicle(w http.ResponseWriter, r *http.Request, d store.Driver) {
+	id, err := parsePathInt64(r, "id")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	entries, err := s.Store.ListEntriesByDriver(d.ID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	found := false
+	for _, v := range entries {
+		if v.ID == id {
+			found = true
+			break
+		}
+	}
+	if !found {
+		http.NotFound(w, r)
+		return
+	}
+
+	current, ok, err := s.Store.GetVehicle(id)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	var body adminVehicleBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	// The 号車番号 is assigned/managed by event staff, not the driver — a
+	// participant editing their own vehicle from mypage may change the
+	// spec fields but never the number, regardless of what the request
+	// body contains.
+	body.Number = current.Number
+
+	if err := s.Store.UpdateVehicle(body.toVehicle(id)); err != nil {
+		writeErr(w, err)
+		return
+	}
+
+	s.publishAll()
+	s.publishDirectory()
+	s.audit(&d.ID, "my.vehicle.update", map[string]any{
+		"vehicle_id": id,
+		"name":       body.Name,
+	})
+
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -219,6 +354,7 @@ func (s *Server) handleAddMyVehicle(w http.ResponseWriter, r *http.Request, d st
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.publishDirectory()
 	s.audit(&d.ID, "my.vehicle.add", map[string]any{"vehicle_id": vehicleID})
 
 	resp := map[string]any{"vehicle_id": vehicleID}
@@ -242,6 +378,7 @@ func (s *Server) handleDeleteMyVehicle(w http.ResponseWriter, r *http.Request, d
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.publishDirectory()
 	s.audit(&d.ID, "my.vehicle.del", map[string]any{"vehicle_id": id})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
@@ -276,17 +413,17 @@ func (s *Server) handleSetMainVehicle(w http.ResponseWriter, r *http.Request, d 
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	s.publishDirectory()
 	s.audit(&d.ID, "my.main", map[string]any{"vehicle_id": body.VehicleID})
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (s *Server) handleMyQueueAdd(w http.ResponseWriter, r *http.Request, d store.Driver) {
-	set, ok, err := s.Store.GetSettings()
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
+	set, ok := s.requireActiveEvent(w)
+	if !ok {
 		return
 	}
-	if !ok || !set.QueueSelfEntry {
+	if !set.QueueSelfEntry {
 		writeJSONError(w, http.StatusForbidden, "self entry disabled")
 		return
 	}
@@ -307,7 +444,7 @@ func (s *Server) handleMyQueueAdd(w http.ResponseWriter, r *http.Request, d stor
 		return
 	}
 
-	waiting, err := s.Store.ListQueue("waiting")
+	waiting, err := s.Store.ListQueue(set.ID, "waiting")
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -318,7 +455,7 @@ func (s *Server) handleMyQueueAdd(w http.ResponseWriter, r *http.Request, d stor
 			return
 		}
 	}
-	onCourse, err := s.Store.ListQueue("on_course")
+	onCourse, err := s.Store.ListQueue(set.ID, "on_course")
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -331,7 +468,7 @@ func (s *Server) handleMyQueueAdd(w http.ResponseWriter, r *http.Request, d stor
 	}
 
 	createdBy := d.ID
-	id, err := s.Store.Enqueue(d.ID, vehicleID, &createdBy)
+	id, err := s.Store.Enqueue(set.ID, d.ID, vehicleID, &createdBy)
 	if err != nil {
 		writeJSONError(w, http.StatusConflict, err.Error())
 		return
@@ -344,10 +481,18 @@ func (s *Server) handleMyQueueAdd(w http.ResponseWriter, r *http.Request, d stor
 }
 
 func (s *Server) handleMyQueueCancel(w http.ResponseWriter, r *http.Request, d store.Driver) {
-	waiting, err := s.Store.ListQueue("waiting")
+	ev, ok, err := s.Store.GetActiveEvent()
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+	var waiting []store.QueueRow
+	if ok {
+		waiting, err = s.Store.ListQueue(ev.ID, "waiting")
+		if err != nil {
+			writeJSONError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	var mine *store.QueueRow
 	for i := range waiting {

@@ -23,6 +23,7 @@ type vehicleOut struct {
 	DispClass       string      `json:"disp_class"`
 	DTClass         string      `json:"dt_class"`
 	Drivers         []driverRef `json:"drivers"`
+	HasIcon         bool        `json:"has_icon"`
 }
 
 // loadVehicleContext loads the pieces needed to project a store.Vehicle
@@ -32,13 +33,13 @@ func (s *Server) loadVehicleContext() (domain.Coefficients, []domain.DispClass, 
 	var coef domain.Coefficients
 	var dispClasses []domain.DispClass
 
-	set, ok, err := s.Store.GetSettings()
+	ev, ok, err := s.Store.GetActiveEvent()
 	if err != nil {
 		return coef, dispClasses, nil, err
 	}
 	if ok {
-		coef = set.Coef
-		dispClasses = set.DispClasses
+		coef = ev.Coef
+		dispClasses = ev.DispClasses
 	}
 
 	dtClasses, err := s.Store.ListClassDefs("drivetrain")
@@ -85,6 +86,7 @@ func (s *Server) buildVehicleOut(v store.Vehicle, coef domain.Coefficients, disp
 		DispClass:       dispClass,
 		DTClass:         dtLabel[v.DrivetrainClassID],
 		Drivers:         drefs,
+		HasIcon:         v.HasIcon,
 	}, nil
 }
 
@@ -171,6 +173,35 @@ func (s *Server) handleDriverIcon(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "public, max-age=86400")
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(data)
+}
+
+// handleVehicleIcon implements GET /api/vehicles/{id}/icon with ETag-based
+// conditional GET support, symmetric to handleDriverIcon.
+func (s *Server) handleVehicleIcon(w http.ResponseWriter, r *http.Request) {
+	id, err := parsePathInt64(r, "id")
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	data, ok, err := s.Store.GetVehicleIcon(id)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	etag := etagFor(data)
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write(data)
 }

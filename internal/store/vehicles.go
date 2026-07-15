@@ -8,7 +8,8 @@ import (
 	"timemon/internal/domain"
 )
 
-// Vehicle mirrors a vehicles row. DisplacementCC is nil for EVs.
+// Vehicle mirrors a vehicles row (minus the icon BLOB itself — see
+// GetVehicleIcon/SetVehicleIcon). DisplacementCC is nil for EVs.
 type Vehicle struct {
 	ID                int64
 	Number            int
@@ -17,16 +18,18 @@ type Vehicle struct {
 	DisplacementCC    *int
 	ForcedInduction   bool
 	DrivetrainClassID int64
+	HasIcon           bool
 }
 
-const vehicleSelectCols = `id, number, name, engine_type, displacement_cc, forced_induction, drivetrain_class_id`
+const vehicleSelectCols = `id, number, name, engine_type, displacement_cc, forced_induction, drivetrain_class_id, icon IS NOT NULL`
 
 func scanVehicle(row rowScanner) (Vehicle, error) {
 	var v Vehicle
 	var engine string
 	var dispCC sql.NullInt64
 	var fi int
-	if err := row.Scan(&v.ID, &v.Number, &v.Name, &engine, &dispCC, &fi, &v.DrivetrainClassID); err != nil {
+	var hasIcon int
+	if err := row.Scan(&v.ID, &v.Number, &v.Name, &engine, &dispCC, &fi, &v.DrivetrainClassID, &hasIcon); err != nil {
 		return Vehicle{}, err
 	}
 	v.Engine = domain.EngineType(engine)
@@ -35,6 +38,7 @@ func scanVehicle(row rowScanner) (Vehicle, error) {
 		v.DisplacementCC = &cc
 	}
 	v.ForcedInduction = fi != 0
+	v.HasIcon = hasIcon != 0
 	return v, nil
 }
 
@@ -138,12 +142,33 @@ func (s *Store) NumberInUse(number int, excludeID int64) (bool, error) {
 // than a constraint error, since re-establishing an existing link is not a
 // meaningful failure for callers (registration "join existing vehicle" and
 // POST /api/my/vehicles both treat it as immediate success).
+//
+// Within the same transaction, if driverID currently has no main_vehicle_id
+// (NULL), it is set to vehicleID: a driver's first linked vehicle becomes
+// their main vehicle automatically, so registering one vehicle and then
+// adding more later does not leave main_vehicle_id unset. This never
+// overwrites an already-set main_vehicle_id, so it does not conflict with
+// explicit SetMainVehicle callers (register.go, PUT /api/my/main-vehicle) —
+// it only ever fires the first time a driver gains a vehicle link.
 func (s *Store) AddEntry(driverID, vehicleID int64) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	_, err := s.db.Exec(`INSERT OR IGNORE INTO entries (driver_id, vehicle_id) VALUES (?, ?)`, driverID, vehicleID)
+
+	tx, err := s.db.Begin()
 	if err != nil {
+		return fmt.Errorf("store: add entry: begin: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.Exec(`INSERT OR IGNORE INTO entries (driver_id, vehicle_id) VALUES (?, ?)`, driverID, vehicleID); err != nil {
 		return fmt.Errorf("store: add entry: %w", err)
+	}
+	if _, err := tx.Exec(`UPDATE drivers SET main_vehicle_id = ? WHERE id = ? AND main_vehicle_id IS NULL`, vehicleID, driverID); err != nil {
+		return fmt.Errorf("store: add entry: set main vehicle: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("store: add entry: commit: %w", err)
 	}
 	return nil
 }
@@ -164,7 +189,7 @@ func (s *Store) DeleteEntry(driverID, vehicleID int64) error {
 // ListEntriesByDriver returns the active (non-deleted) vehicles linked to a
 // driver.
 func (s *Store) ListEntriesByDriver(driverID int64) ([]Vehicle, error) {
-	rows, err := s.db.Query(`SELECT v.id, v.number, v.name, v.engine_type, v.displacement_cc, v.forced_induction, v.drivetrain_class_id
+	rows, err := s.db.Query(`SELECT v.id, v.number, v.name, v.engine_type, v.displacement_cc, v.forced_induction, v.drivetrain_class_id, v.icon IS NOT NULL
 		FROM vehicles v
 		JOIN entries e ON e.vehicle_id = v.id
 		WHERE e.driver_id = ? AND v.is_deleted = 0
@@ -213,4 +238,34 @@ func (s *Store) ListDriversByVehicle(vehicleID int64) ([]Driver, error) {
 		return nil, fmt.Errorf("store: list drivers by vehicle: %w", err)
 	}
 	return out, nil
+}
+
+// SetVehicleIcon stores a vehicle's icon JPEG bytes (already validated/
+// re-encoded to 128x128 by the caller).
+func (s *Store) SetVehicleIcon(id int64, jpeg []byte) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	_, err := s.db.Exec(`UPDATE vehicles SET icon = ? WHERE id = ?`, jpeg, id)
+	if err != nil {
+		return fmt.Errorf("store: set vehicle icon: %w", err)
+	}
+	return nil
+}
+
+// GetVehicleIcon returns a vehicle's icon bytes. ok=false covers both "no
+// such vehicle" and "vehicle has no icon" — either way there is nothing to
+// serve.
+func (s *Store) GetVehicleIcon(id int64) ([]byte, bool, error) {
+	var icon []byte
+	err := s.db.QueryRow(`SELECT icon FROM vehicles WHERE id = ?`, id).Scan(&icon)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("store: get vehicle icon: %w", err)
+	}
+	if icon == nil {
+		return nil, false, nil
+	}
+	return icon, true, nil
 }

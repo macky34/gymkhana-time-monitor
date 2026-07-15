@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: gofmt check
+        run: test -z "$(gofmt -l .)"
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race -count=1 ./...
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goarch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${GITHUB_SHA::8}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        env:
+          CGO_ENABLED: 0
+          GOOS: linux
+          GOARCH: ${{ matrix.goarch }}
+        run: |
+          go build -trimpath \
+            -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }}" \
+            -o "timemon-linux-${{ matrix.goarch }}" ./cmd/timemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: timemon-linux-${{ matrix.goarch }}
+          path: timemon-linux-${{ matrix.goarch }}
+          retention-days: 30
+
+  firmware:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            firmware:
+              - 'firmware/**'
+
+      - uses: actions/setup-python@v5
+        if: steps.filter.outputs.firmware == 'true'
+        with:
+          python-version: '3.12'
+
+      - name: Install PlatformIO
+        if: steps.filter.outputs.firmware == 'true'
+        run: pip install platformio
+
+      - name: Prepare config.h
+        if: steps.filter.outputs.firmware == 'true'
+        run: cp firmware/src/config.h.example firmware/src/config.h
+
+      - name: Build firmware (all envs)
+        if: steps.filter.outputs.firmware == 'true'
+        run: |
+          cd firmware
+          pio run
+
+      - uses: actions/upload-artifact@v4
+        if: steps.filter.outputs.firmware == 'true'
+        with:
+          name: firmware-binaries
+          path: firmware/.pio/build/*/firmware.bin
+          retention-days: 30
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten release assets
+        run: |
+          mkdir -p release
+          find artifacts -type f -name 'timemon-linux-*' -exec cp {} release/ \;
+          ls -l release
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: release/*

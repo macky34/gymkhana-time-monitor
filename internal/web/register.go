@@ -10,7 +10,7 @@ import (
 )
 
 // vehicleRegInput is the shape of the "vehicle" object in both
-// POST /api/register and POST /api/my/vehicles: either {"vehicle_id":N} to
+// POST /api/register and POST /api/mypage/vehicles: either {"vehicle_id":N} to
 // join an existing car, or full details to create a new one.
 type vehicleRegInput struct {
 	VehicleID         *int64 `json:"vehicle_id,omitempty"`
@@ -66,12 +66,12 @@ func (s *Server) resolveOrCreateVehicle(in vehicleRegInput) (vehicleID int64, nu
 // handleRegister implements POST /api/register: public/queue self-service
 // sign-up. Gated by settings.RegistrationMode/RegistrationOpen.
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
-	set, ok, err := s.Store.GetSettings()
+	ev, ok, err := s.Store.GetActiveEvent()
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if !ok || set.RegistrationMode == "staff" || !set.RegistrationOpen {
+	if !ok || ev.RegistrationMode == "staff" || !ev.RegistrationOpen {
 		writeJSONError(w, http.StatusForbidden, "registration is closed")
 		return
 	}
@@ -125,6 +125,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.setSessionCookie(w, r, tok)
+	s.publishDirectory()
 	s.audit(&driverID, "register", map[string]any{"vehicle_id": vehicleID})
 
 	resp := map[string]any{"driver_id": driverID}

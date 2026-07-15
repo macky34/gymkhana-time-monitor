@@ -3,6 +3,8 @@ package snapshot
 import "encoding/json"
 
 type settingsResponse struct {
+	EventID          int64      `json:"event_id"`
+	EventStatus      string     `json:"event_status"`
 	EventName        string     `json:"event_name"`
 	TimingMode       string     `json:"timing_mode"`
 	PTMode           string     `json:"pt_mode"`
@@ -25,11 +27,21 @@ type classRef struct {
 // Settings builds the event-configuration snapshot. "EV" is appended to
 // disp_classes whenever at least one registered vehicle has Engine == "ev",
 // regardless of whether that vehicle has logged any runs yet.
+//
+// When no event is currently active, the payload is just {"event": null}
+// (no other fields present) rather than the shape below — there is no
+// event configuration to describe. Otherwise every existing field is kept
+// exactly as before (client compatibility) with two new top-level fields,
+// event_id and event_status, added.
 func (b *Builder) Settings() ([]byte, error) {
-	settings, _, err := b.s.GetSettings()
+	ev, ok, err := b.s.GetActiveEvent()
 	if err != nil {
 		return nil, err
 	}
+	if !ok {
+		return json.Marshal(map[string]any{"event": nil})
+	}
+
 	driverClasses, err := b.s.ListClassDefs("driver")
 	if err != nil {
 		return nil, err
@@ -43,8 +55,8 @@ func (b *Builder) Settings() ([]byte, error) {
 		return nil, err
 	}
 
-	dispClasses := make([]string, 0, len(settings.DispClasses)+1)
-	for _, dc := range settings.DispClasses {
+	dispClasses := make([]string, 0, len(ev.DispClasses)+1)
+	for _, dc := range ev.DispClasses {
 		dispClasses = append(dispClasses, dc.Label)
 	}
 	for _, v := range vehicles {
@@ -64,15 +76,17 @@ func (b *Builder) Settings() ([]byte, error) {
 	}
 
 	return json.Marshal(settingsResponse{
-		EventName:        settings.EventName,
-		TimingMode:       settings.TimingMode,
-		PTMode:           settings.PTMode,
-		PTPenaltyMS:      settings.PTPenaltyMS,
-		HeatRanking:      settings.HeatRanking,
-		RegistrationMode: settings.RegistrationMode,
-		RegistrationOpen: settings.RegistrationOpen,
-		QueueSelfEntry:   settings.QueueSelfEntry,
-		MaxCourseTimeSec: settings.MaxCourseTimeSec,
+		EventID:          ev.ID,
+		EventStatus:      ev.Status,
+		EventName:        ev.EventName,
+		TimingMode:       ev.TimingMode,
+		PTMode:           ev.PTMode,
+		PTPenaltyMS:      ev.PTPenaltyMS,
+		HeatRanking:      ev.HeatRanking,
+		RegistrationMode: ev.RegistrationMode,
+		RegistrationOpen: ev.RegistrationOpen,
+		QueueSelfEntry:   ev.QueueSelfEntry,
+		MaxCourseTimeSec: ev.MaxCourseTimeSec,
 		DispClasses:      dispClasses,
 		DriverClasses:    driverClassRefs,
 		DTClasses:        dtClassRefs,

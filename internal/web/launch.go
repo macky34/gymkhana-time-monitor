@@ -6,23 +6,22 @@ import (
 	"timemon/internal/store"
 )
 
-// handleMyLaunch implements POST /api/my/queue/launch: a participant at the
+// handleMyLaunch implements POST /api/mypage/queue/launch: a participant at the
 // head of the waiting queue launches themselves onto the course. Only
 // available in sensor timing mode - the car enters READY (t_start unset)
 // and the start sensor supplies the actual start time later. Everything
 // else (not at the head, manual timing mode, already on course) is a 409.
 func (s *Server) handleMyLaunch(w http.ResponseWriter, r *http.Request, d store.Driver) {
-	settings, ok, err := s.Store.GetSettings()
-	if err != nil {
-		writeErr(w, err)
+	settings, ok := s.requireActiveEvent(w)
+	if !ok {
 		return
 	}
-	if !ok || settings.TimingMode != "sensor" {
+	if settings.TimingMode != "sensor" {
 		writeJSONError(w, http.StatusConflict, "self launch requires sensor timing mode")
 		return
 	}
 
-	onCourse, err := s.Store.ListQueue("on_course")
+	onCourse, err := s.Store.ListQueue(settings.ID, "on_course")
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -34,7 +33,7 @@ func (s *Server) handleMyLaunch(w http.ResponseWriter, r *http.Request, d store.
 		}
 	}
 
-	waiting, err := s.Store.ListQueue("waiting")
+	waiting, err := s.Store.ListQueue(settings.ID, "waiting")
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -63,16 +62,24 @@ func (s *Server) handleMyLaunch(w http.ResponseWriter, r *http.Request, d store.
 	writeJSON(w, http.StatusOK, map[string]any{"queue_id": row.ID})
 }
 
-// handleMyLaunchUndo implements DELETE /api/my/queue/launch: a participant
+// handleMyLaunchUndo implements DELETE /api/mypage/queue/launch: a participant
 // who launched themselves but has not yet crossed the start line (READY,
 // t_start still unset) returns to the head of the waiting queue. Once the
 // clock is running (t_start set) this is a 409 - only an operator can undo
 // a started run.
 func (s *Server) handleMyLaunchUndo(w http.ResponseWriter, r *http.Request, d store.Driver) {
-	onCourse, err := s.Store.ListQueue("on_course")
+	ev, activeOK, err := s.activeEvent()
 	if err != nil {
 		writeErr(w, err)
 		return
+	}
+	var onCourse []store.QueueRow
+	if activeOK {
+		onCourse, err = s.Store.ListQueue(ev.ID, "on_course")
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
 	}
 
 	var mine *store.QueueRow

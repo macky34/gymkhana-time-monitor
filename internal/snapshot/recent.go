@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"timemon/internal/domain"
+	"timemon/internal/store"
 )
 
 type recentResponse struct {
@@ -24,37 +25,34 @@ type recentItem struct {
 	TimestampMS int64           `json:"timestamp_ms"`
 }
 
-// Recent builds the most recent `limit` logs (timestamp_ms descending),
-// excluding deleted and not-yet-assigned (orphan) entries.
+// buildRecent builds the most recent `limit` logs of ev's event
+// (timestamp_ms descending), excluding deleted and not-yet-assigned
+// (orphan) entries.
 //
-// Note: it fetches store.ListLogs(limit, 0) and filters is_deleted/
+// Note: it fetches store.ListLogs(ev.ID, limit, 0) and filters is_deleted/
 // unassigned rows out of that single page. If deleted or orphan rows are
 // present among the most recent `limit` database rows, the result can
 // contain fewer than `limit` items rather than backfilling from the next
 // page — see the questions section of the implementation report.
-func (b *Builder) Recent(limit int) ([]byte, error) {
-	settings, _, err := b.s.GetSettings()
+func (b *Builder) buildRecent(ev store.EventRow, limit int) (recentResponse, error) {
+	logs, _, err := b.s.ListLogs(ev.ID, limit, 0)
 	if err != nil {
-		return nil, err
-	}
-	logs, _, err := b.s.ListLogs(limit, 0)
-	if err != nil {
-		return nil, err
+		return recentResponse{}, err
 	}
 	drivers, err := b.s.ListDrivers()
 	if err != nil {
-		return nil, err
+		return recentResponse{}, err
 	}
 	vehicles, err := b.s.ListVehicles()
 	if err != nil {
-		return nil, err
+		return recentResponse{}, err
 	}
 	driverByID := indexDrivers(drivers)
 	vehicleByID := indexVehicles(vehicles)
 
-	runs, err := b.s.ListRuns()
+	runs, err := b.s.ListRuns(ev.ID)
 	if err != nil {
-		return nil, err
+		return recentResponse{}, err
 	}
 	heatByLogID := domain.HeatNumbers(runs)
 
@@ -71,12 +69,12 @@ func (b *Builder) Recent(limit int) ([]byte, error) {
 		if !ok {
 			continue
 		}
-		fms, invalid := domain.FinalMS(l.RawMS, l.PTCount, l.IsMC, settings.PTMode, settings.PTPenaltyMS)
+		fms, invalid := domain.FinalMS(l.RawMS, l.PTCount, l.IsMC, ev.PTMode, ev.PTPenaltyMS)
 
 		items = append(items, recentItem{
 			LogID:       l.ID,
-			Driver:      refDriver{ID: drv.ID, Name: drv.Name},
-			Vehicle:     refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name},
+			Driver:      refDriver{ID: drv.ID, Name: drv.Name, HasIcon: drv.HasIcon},
+			Vehicle:     refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name, HasIcon: veh.HasIcon},
 			Heat:        heatByLogID[l.ID],
 			RawMS:       l.RawMS,
 			PTCount:     l.PTCount,
@@ -87,5 +85,37 @@ func (b *Builder) Recent(limit int) ([]byte, error) {
 			TimestampMS: l.TimestampMS,
 		})
 	}
-	return json.Marshal(recentResponse{Items: items})
+	return recentResponse{Items: items}, nil
+}
+
+// Recent builds the "most recent logs" snapshot for the current active
+// event. With no active event, this is an empty list.
+func (b *Builder) Recent(limit int) ([]byte, error) {
+	ev, ok, err := b.s.GetActiveEvent()
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return json.Marshal(recentResponse{Items: []recentItem{}})
+	}
+	resp, err := b.buildRecent(ev, limit)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(resp)
+}
+
+// RecentPayloadFor builds the "most recent logs" payload for a specific
+// event id (active or archived/closed) rather than the currently active
+// one — for stage-2 archive APIs. Returns an empty-items payload if
+// eventID does not exist.
+func (b *Builder) RecentPayloadFor(eventID int64, limit int) (any, error) {
+	ev, ok, err := b.s.GetEvent(eventID)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return recentResponse{Items: []recentItem{}}, nil
+	}
+	return b.buildRecent(ev, limit)
 }

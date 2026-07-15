@@ -8,6 +8,12 @@
       "port": 8080
     },
     {
+      "name": "timemon-dev",
+      "runtimeExecutable": "C:\\Program Files\\Go\\bin\\go.exe",
+      "runtimeArgs": ["run", "./cmd/timemon", "-addr", ":18081", "-udp", ":19998", "-db", "./dev-event.sqlite3"],
+      "port": 18081
+    },
+    {
       "name": "mockup",
       "runtimeExecutable": "python",
       "runtimeArgs": ["-m", "http.server", "8931", "--directory", "plan"],

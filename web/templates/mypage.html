@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>{{.EventName}} | マイページ</title>
 <link rel="stylesheet" href="/static/cropper.min.css">
 <style>
@@ -14,9 +14,9 @@
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   body{background:#0b0d10;color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
-       display:flex;justify-content:center;padding:16px 0;min-height:100vh}
+       display:flex;justify-content:center;padding:0;min-height:100vh}
   .phone{width:392px;max-width:100%;background:var(--bg);border:1px solid #262d38;border-radius:22px;
-         overflow:hidden;display:flex;flex-direction:column;height:820px;max-height:96vh;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
+         overflow:hidden;display:flex;flex-direction:column;height:100vh;height:100dvh;max-height:none;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
   header{padding:10px 14px 8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px;flex:none}
   header .ev{font-size:13px;font-weight:700;letter-spacing:.02em}
   header .live{margin-left:auto;font-size:10px;color:var(--go);font-family:var(--mono);display:flex;align-items:center;gap:5px}
@@ -26,7 +26,7 @@
   .screen{display:none;padding:12px 12px 20px}
   .screen.on{display:block}
   nav{flex:none;display:flex;border-top:1px solid var(--line);background:#161a20}
-  nav a{flex:1;background:none;border:none;color:var(--dim);font-size:10.5px;padding:9px 0 11px;cursor:pointer;text-decoration:none;
+  nav a{flex:1;background:none;border:none;color:var(--dim);font-size:10.5px;padding:9px 0 calc(11px + env(safe-area-inset-bottom));cursor:pointer;text-decoration:none;
              display:flex;flex-direction:column;gap:3px;align-items:center;font-family:inherit}
   nav a .ic{font-size:16px;line-height:1}
   nav a.on{color:var(--tx)}
@@ -73,6 +73,16 @@
     .toast{bottom:auto;top:70px}
   }
   /* ---- my-specific ---- */
+  .evbanner{background:#2c2718;border-bottom:1px solid #77771f;color:var(--amber);font-size:11.5px;
+            padding:9px 12px;text-align:center}
+  .evbanner a{color:var(--amber)}
+  .tokenurl{font-family:var(--mono);font-size:10.5px;background:var(--panel2);border:1px solid var(--line);
+            border-radius:8px;padding:9px;word-break:break-all;color:var(--blue);margin-top:12px}
+  .tokenurl.copyable{cursor:pointer;position:relative}
+  .tokenurl.copyable:active{border-color:var(--go)}
+  .tokenurl .cp{display:block;font-family:inherit;font-size:9px;color:var(--dim);margin-top:5px;letter-spacing:.05em}
+  .tokenurl.copied{border-color:var(--go)}
+  .tokenurl.copied .cp{color:var(--go)}
   .plist{list-style:none}
   .plist li{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);font-size:13px}
   .plist li:last-child{border:none}
@@ -86,13 +96,13 @@
   .selfgo.plain{background:var(--panel2);color:var(--tx);border:1px solid var(--line);font-weight:600}
   .vcard{display:flex;align-items:center;gap:10px;padding:12px;font-size:13px;cursor:pointer;
          background:var(--panel);border:1px solid var(--line);border-radius:12px;transition:border-color .15s,background .15s}
-  .vcard .ml{margin-left:auto;display:flex;align-items:center}
+  .vcard .vinfo{flex:1;min-width:0}
+  .vcard .ml{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;flex:none}
   .vcard.sel{border-color:var(--amber);background:#262316;box-shadow:0 0 0 1px var(--amber) inset}
-  .vdel{width:26px;height:26px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);
-        color:var(--dim);font-size:12px;cursor:pointer;margin-left:8px;flex:none;font-family:inherit}
-  .vdel:hover{color:var(--red);border-color:#5a3038}
-  .vcard.sel .vdel{display:none}
   .vcard:not(.sel):hover{border-color:var(--dim)}
+  .ve-unlink{width:100%;margin-top:14px;padding:10px;border-radius:9px;background:var(--panel2);
+             border:1px solid #5a3038;color:var(--red);font-family:inherit;font-size:12.5px;cursor:pointer}
+  .ve-unlink:hover{background:#3a2226}
   .runs{width:100%;border-collapse:collapse;font-size:12px}
   .runs th{font-size:9px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
   .runs td{padding:8px 6px;border-bottom:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums}
@@ -135,6 +145,7 @@
   </header>
 
   <main id="main">
+  <div class="evbanner" id="no-event-banner" style="display:none">開催中のイベントはありません — <a href="/archive">過去の記録はアーカイブへ</a></div>
   <section class="screen on" id="sc-my">
 {{if .Authed}}
     <div class="sec">MY PAGE</div>
@@ -172,7 +183,7 @@
   <nav id="nav">
     <a href="/"><span class="ic">⏱</span>Monitor</a>
     <a href="/ranking"><span class="ic">🏆</span>Ranking</a>
-    <a href="/my" class="on"><span class="ic">👤</span>My</a>
+    <a href="/mypage" class="on"><span class="ic">👤</span>Mypage</a>
     {{if .IsAdmin}}<a href="/admin"><span class="ic">🛠</span>運営</a>{{end}}
   </nav>
 
@@ -207,6 +218,7 @@
       <h3>ログインQR</h3>
       <p class="sub">このQRを読み込むと、この端末以外でもログインできます</p>
       <div class="qr"><img id="qr-img" alt="ログインQRコード"></div>
+      <div class="tokenurl copyable" id="my-url" title="タップでコピー"><span></span><span class="cp">📋 タップでコピー</span></div>
       <p class="note" style="text-align:left">スクリーンショット保存推奨。QRは他人に見せないでください (あなたのアカウントにログインされます)。紛失時は運営がトークン再発行で対応します。</p>
     </div>
   </div>
@@ -242,6 +254,12 @@
         <div class="fld"><label>駆動方式</label>
           <div class="seg" id="vm-dt"></div>
         </div>
+        <div class="fld"><label>アイコン (任意)</label>
+          <div class="card" style="padding:12px;display:flex;align-items:center;gap:12px;background:var(--panel2)">
+            <div class="avatar" id="vm-avatar-preview">?</div>
+            <button type="button" class="btn" id="vm-icon-btn">写真を選んで切り抜き</button>
+          </div>
+        </div>
       </div>
       <div id="vm-join" style="display:none">
         <div class="fld"><label>相乗りする車両</label>
@@ -250,7 +268,44 @@
         <div class="hint">本人操作のみで即成立します。</div>
       </div>
       <button type="button" class="btn primary" style="width:100%;margin-top:6px" id="vm-submit">追加する</button>
-      <p class="note">※諸元の事後修正は運営にご連絡ください (相乗りで共有される車両のため)。</p>
+      <p class="note">※諸元・アイコンは追加後も「編集」から変更できます。号車番号のみ運営が管理します。</p>
+    </div>
+  </div>
+
+  <div class="modal-bg" id="vehEditModal">
+    <div class="modal">
+      <h3>車両を編集</h3>
+      <p class="sub">諸元・アイコンを変更できます</p>
+      <div class="fldrow">
+        <div class="fld sm"><label>号車番号</label><input class="t" id="ve-num" style="text-align:center;opacity:.6" inputmode="numeric" disabled title="号車番号は運営のみ変更できます"></div>
+        <div class="fld"><label>車両名</label><input id="ve-name" placeholder="例: スイフト"></div>
+      </div>
+      <div class="fld"><label>エンジン方式</label>
+        <div class="seg" id="ve-eng">
+          <button type="button" data-e="gasoline">ガソリン</button>
+          <button type="button" data-e="diesel">ディーゼル</button>
+          <button type="button" data-e="rotary">ロータリー</button>
+          <button type="button" data-e="ev">EV</button>
+        </div>
+      </div>
+      <div id="ve-ice">
+        <div class="fld"><label>排気量 (実cc)</label><input class="t" id="ve-cc" inputmode="numeric"></div>
+        <div class="fld"><label>過給機</label>
+          <div class="seg" id="ve-fi"><button type="button" data-fi="0">NA</button><button type="button" data-fi="1">ターボ / SC</button></div>
+          <div class="hint" id="ve-conv"></div>
+        </div>
+      </div>
+      <div class="fld"><label>駆動方式</label>
+        <div class="seg" id="ve-dt"></div>
+      </div>
+      <div class="fld"><label>アイコン</label>
+        <div class="card" style="padding:12px;display:flex;align-items:center;gap:12px;background:var(--panel2)">
+          <div class="avatar" id="ve-avatar-preview">?</div>
+          <button type="button" class="btn" id="ve-icon-btn">写真を選んで切り抜き</button>
+        </div>
+      </div>
+      <button type="button" class="btn primary" style="width:100%;margin-top:6px" id="ve-save">保存</button>
+      <button type="button" class="ve-unlink" id="ve-unlink">紐づけを解除</button>
     </div>
   </div>
 
@@ -287,7 +342,7 @@ function toast(msg){
   toast._tm = setTimeout(() => t.classList.remove('on'), 1800);
 }
 
-let offset = 0;
+let offset = 0, offsetKnown = false;
 function fmt3(ms){
   if (ms === null || ms === undefined) return '—';
   const s = Math.floor(ms / 1000), mmm = ((ms % 1000) + 1000) % 1000;
@@ -308,15 +363,51 @@ async function api(method, url, body){
 }
 const apiGet = url => api('GET', url);
 
+let iconRev = Date.now();
 function avatarInto(el, driverId, name, hasIcon){
   clear(el);
   if (hasIcon){
-    const img = h('img', { src: '/api/drivers/' + driverId + '/icon', alt: '' });
+    const img = h('img', { src: '/api/drivers/' + driverId + '/icon?v=' + iconRev, alt: '' });
     img.addEventListener('error', () => { clear(el); el.textContent = (name || '?').slice(0, 1); });
     el.appendChild(img);
   } else {
     el.textContent = (name || '?').slice(0, 1);
   }
+}
+function vehicleAvatarInto(el, vehicleId, name, hasIcon){
+  clear(el);
+  if (hasIcon){
+    const img = h('img', { src: '/api/vehicles/' + vehicleId + '/icon?v=' + iconRev, alt: '' });
+    img.addEventListener('error', () => { clear(el); el.textContent = (name || '?').slice(0, 1); });
+    el.appendChild(img);
+  } else {
+    el.textContent = (name || '?').slice(0, 1);
+  }
+}
+
+function bindCopyable(el){
+  el.addEventListener('click', async () => {
+    const url = el.querySelector('span').textContent;
+    if (!url) return;
+    try { await navigator.clipboard.writeText(url); }
+    catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = url; document.body.appendChild(ta);
+      ta.select(); document.execCommand('copy'); ta.remove();
+    }
+    el.classList.add('copied');
+    el.querySelector('.cp').textContent = '✓ コピーしました';
+    setTimeout(() => {
+      el.classList.remove('copied');
+      el.querySelector('.cp').textContent = '📋 タップでコピー';
+    }, 1600);
+  });
+}
+
+/* ---------- no-active-event banner ---------- */
+function updateEventBanner(){
+  const noEvent = !settings || settings.event === null || settings.event_status === 'closed';
+  document.getElementById('no-event-banner').style.display = noEvent ? 'block' : 'none';
 }
 
 /* ---------- domain math mirror (preview only) ---------- */
@@ -339,7 +430,7 @@ function dispClassOf(cc, ok, classes){
 
 /* ---------- state ---------- */
 let settings = null;      // /api/settings public subset
-let myData = null;        // /api/my
+let myData = null;        // /api/mypage
 let allVehicles = [];     // /api/vehicles (for join list)
 let queueItems = [];      // queue SSE
 let onCourseCars = [];    // on_course SSE
@@ -353,7 +444,6 @@ function vehicleSpecText(v){
     if (v.converted_cc !== null && v.converted_cc !== undefined) spec += ` (換算${v.converted_cc}cc)`;
   }
   spec += ' / ' + (v.dt_class || '');
-  if ((v.drivers || []).length > 1) spec += ' ・相乗り';
   return spec;
 }
 
@@ -373,31 +463,26 @@ function renderVehicles(){
   if (!myData) return;
   (myData.vehicles || []).forEach(v => {
     const isMain = v.id === myData.main_vehicle_id;
+    const edit = h('button', { class: 'btn', style: 'font-size:10.5px;padding:4px 8px;white-space:nowrap', type: 'button', title: '車両情報を編集' }, '編集');
+    edit.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openVehEdit(v);
+    });
     const ml = h('span', { class: 'ml' },
-      h('span', { class: 'badge main mainmark', style: isMain ? '' : 'visibility:hidden' }, 'メイン'));
-    if (!isMain){
-      const del = h('button', { class: 'vdel', title: '紐づけ解除', type: 'button' }, '✕');
-      del.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (!confirm(`＃${v.number} ${v.name} の紐づけを解除しますか?\n(過去の走行記録・順位はそのまま残ります)`)) return;
-        try {
-          await api('DELETE', '/api/my/vehicles/' + v.id);
-          toast(`＃${v.number} ${v.name} の紐づけを解除`);
-          await reloadMy();
-        } catch (err) { toast(err.message || '解除に失敗しました'); }
-      });
-      ml.appendChild(del);
-    }
+      h('span', { class: 'badge main mainmark', style: isMain ? '' : 'visibility:hidden' }, 'メイン'),
+      edit);
+    const vav = h('div', { class: 'avatar sm' });
+    vehicleAvatarInto(vav, v.id, v.name, !!v.has_icon);
     const li = h('li', { class: 'vcard' + (isMain ? ' sel' : '') },
-      '🚗 ',
-      h('div', {}, h('b', {}, `＃${v.number} ${v.name}`), h('br'),
+      vav,
+      h('div', { class: 'vinfo' }, h('b', {}, `＃${v.number} ${v.name}`), h('br'),
         h('span', { style: 'font-size:10px;color:var(--mut)' }, vehicleSpecText(v))),
       ml
     );
     li.addEventListener('click', async () => {
       if (v.id === myData.main_vehicle_id) return;
       try {
-        await api('PUT', '/api/my/main-vehicle', { vehicle_id: v.id });
+        await api('PUT', '/api/mypage/main-vehicle', { vehicle_id: v.id });
         toast('メイン車両を変更');
         await reloadMy();
       } catch (err) { toast(err.message || '変更に失敗しました'); }
@@ -451,7 +536,7 @@ function renderMyQ(){
     box.appendChild(h('div', { class: 'pos' }, '投入済み — ', h('b', { style: 'font-size:14px' }, 'スタートセンサー通過待ち')));
     const btn = h('button', { class: 'btn danger', style: 'margin-top:10px', type: 'button' }, '出走取消 (キュー先頭に戻る)');
     btn.addEventListener('click', () => qAction(async () => {
-      await api('DELETE', '/api/my/queue/launch');
+      await api('DELETE', '/api/mypage/queue/launch');
       toast('出走を取り消しました');
     }));
     box.appendChild(btn);
@@ -470,7 +555,7 @@ function renderMyQ(){
       const btn = h('button', { class: 'selfgo plain', type: 'button' },
         '出走キューに並ぶ' + (mainV ? ` (＃${mainV.number} ${mainV.name})` : ''));
       btn.addEventListener('click', () => qAction(async () => {
-        await api('POST', '/api/my/queue', {});
+        await api('POST', '/api/mypage/queue', {});
         toast('キュー末尾に追加');
       }));
       box.appendChild(btn);
@@ -484,13 +569,13 @@ function renderMyQ(){
     box.appendChild(h('div', { class: 'pos' }, 'あなたの番です'));
     const go = h('button', { class: 'selfgo', type: 'button' }, '出走 ▶ (スタートラインへ)');
     go.addEventListener('click', () => qAction(async () => {
-      await api('POST', '/api/my/queue/launch');
+      await api('POST', '/api/mypage/queue/launch');
       toast('▶ 投入完了。センサー計測待ち');
     }));
     box.appendChild(go);
     const leave = h('button', { class: 'btn danger', style: 'margin-top:8px', type: 'button' }, '出走中止 (取り下げ)');
     leave.addEventListener('click', () => qAction(async () => {
-      await api('DELETE', '/api/my/queue');
+      await api('DELETE', '/api/mypage/queue');
       toast('出走中止');
     }));
     box.appendChild(leave);
@@ -502,7 +587,7 @@ function renderMyQ(){
     idx === 0 ? '手計測モードのため出走操作は運営が行います' : '順番が来るとここに出走ボタンが表示されます (センサーモード時)'));
   const leave = h('button', { class: 'btn danger', style: 'margin-top:10px', type: 'button' }, '出走中止 (取り下げ)');
   leave.addEventListener('click', () => qAction(async () => {
-    await api('DELETE', '/api/my/queue');
+    await api('DELETE', '/api/mypage/queue');
     toast('キューから取り下げ');
   }));
   box.appendChild(leave);
@@ -510,7 +595,7 @@ function renderMyQ(){
 
 /* ---------- data loading ---------- */
 async function reloadMy(){
-  myData = await apiGet('/api/my');
+  myData = await apiGet('/api/mypage');
   renderProfile();
   renderVehicles();
   renderRuns();
@@ -518,6 +603,7 @@ async function reloadMy(){
 }
 async function reloadSettings(){
   try { settings = await apiGet('/api/settings'); } catch (e) {}
+  updateEventBanner();
 }
 async function reloadAllVehicles(){
   try { const d = await apiGet('/api/vehicles'); allVehicles = d.vehicles || []; } catch (e) { allVehicles = []; }
@@ -547,16 +633,41 @@ async function saveEdit(){
   const name = document.getElementById('ed-name').value.trim();
   if (!name){ toast('名前を入力してください'); return; }
   try {
-    await api('PUT', '/api/my/profile', { name, driver_class_id: edClassId });
+    await api('PUT', '/api/mypage/profile', { name, driver_class_id: edClassId });
     document.getElementById('editmodal').classList.remove('on');
     toast('プロフィールを更新しました');
     await reloadMy();
   } catch (err) { toast(err.message || '更新に失敗しました'); }
 }
 
-/* icon crop & upload */
+/* icon crop & upload — shared by profile icon and vehicle icons.
+   startIconCrop(url[, onSuccess]) sets the upload target, then the common
+   file-pick -> cropper -> POST {icon_b64} flow runs against that URL. */
+let cropTargetUrl = '/api/mypage/icon';
+let cropOnSuccess = null;
+let cropDeferUpload = false;
+function startIconCrop(url, onSuccess, deferUpload){
+  cropTargetUrl = url;
+  cropOnSuccess = onSuccess || null;
+  cropDeferUpload = !!deferUpload;
+  document.getElementById('ed-icon-file').click();
+}
 function bindCrop(){
-  document.getElementById('ed-icon-btn').addEventListener('click', () => document.getElementById('ed-icon-file').click());
+  document.getElementById('ed-icon-btn').addEventListener('click', () => {
+    startIconCrop('/api/mypage/icon', (dataUrl) => {
+      const pv = document.getElementById('ed-avatar-preview');
+      clear(pv);
+      pv.appendChild(h('img', { src: dataUrl, alt: '' }));
+    });
+  });
+  document.getElementById('vm-icon-btn').addEventListener('click', () => {
+    startIconCrop('', (dataUrl, b64) => {
+      vmIconB64 = b64;
+      const pv = document.getElementById('vm-avatar-preview');
+      clear(pv);
+      pv.appendChild(h('img', { src: dataUrl, alt: '' }));
+    }, true);
+  });
   document.getElementById('ed-icon-file').addEventListener('change', (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
@@ -581,14 +692,18 @@ function bindCrop(){
     if (!cropper) return;
     const canvas = cropper.getCroppedCanvas({ width: 128, height: 128 });
     const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    const b64 = dataUrl.split(',')[1];
     cropper.destroy(); cropper = null;
     document.getElementById('cropmodal').classList.remove('on');
+    if (cropDeferUpload){
+      if (cropOnSuccess) cropOnSuccess(dataUrl, b64);
+      return;
+    }
     try {
-      await api('POST', '/api/my/icon', { icon_b64: dataUrl.split(',')[1] });
+      await api('POST', cropTargetUrl, { icon_b64: b64 });
+      iconRev = Date.now();
       toast('アイコンを更新しました');
-      const pv = document.getElementById('ed-avatar-preview');
-      clear(pv);
-      pv.appendChild(h('img', { src: dataUrl, alt: '' }));
+      if (cropOnSuccess) cropOnSuccess(dataUrl);
       await reloadMy();
     } catch (err) { toast(err.message || 'アップロードに失敗しました'); }
   });
@@ -598,6 +713,7 @@ function bindCrop(){
 let vmEngine = 'gasoline';
 let vmFI = false;
 let vmDtClassId = null;
+let vmIconB64 = null;
 function segBind(containerId, dataAttr, onSelect){
   const box = document.getElementById(containerId);
   box.querySelectorAll('button').forEach(btn => {
@@ -619,6 +735,10 @@ function vmConvPreview(){
 }
 async function openVehModal(){
   await reloadAllVehicles();
+  vmIconB64 = null;
+  const vmPv = document.getElementById('vm-avatar-preview');
+  clear(vmPv);
+  vmPv.textContent = '?';
   const sel = document.getElementById('vm-sel');
   clear(sel);
   const linked = new Set((myData.vehicles || []).map(v => v.id));
@@ -663,29 +783,114 @@ async function vmSubmit(){
     body = { vehicle_id: Number(sel.value) };
   }
   try {
-    await api('POST', '/api/my/vehicles', body);
+    const res = await api('POST', '/api/mypage/vehicles', body);
     document.getElementById('vehmodal').classList.remove('on');
-    toast(isNew ? '車両を登録して紐づけました' : '相乗りしました');
+    let iconFailed = false;
+    if (isNew && vmIconB64 && res && res.vehicle_id){
+      try {
+        await api('POST', '/api/mypage/vehicles/' + res.vehicle_id + '/icon', { icon_b64: vmIconB64 });
+        iconRev = Date.now();
+      } catch (err) { iconFailed = true; }
+    }
+    vmIconB64 = null;
+    toast(iconFailed ? 'アイコンの登録に失敗しました(後から編集可能)' : (isNew ? '車両を登録して紐づけました' : '相乗りしました'));
     await reloadMy();
   } catch (err) { toast(err.message || '追加に失敗しました'); }
 }
 
+/* ---------- vehicle edit modal ---------- */
+let veEditId = null;
+let veEngine = 'gasoline';
+let veFI = false;
+let veDtClassId = null;
+function veConvPreview(){
+  const hint = document.getElementById('ve-conv');
+  if (veEngine === 'ev'){ hint.textContent = 'EVクラス (換算なし)'; return; }
+  const coef = (settings && settings.coefficients) || DEF_COEF;
+  const dispClasses = (settings && settings.displacement_classes) || DEF_DISP;
+  const cc = parseInt(document.getElementById('ve-cc').value, 10) || 0;
+  const r = convertedCC(cc, veEngine, veFI, coef);
+  hint.textContent = `換算排気量 ${r.cc}cc → クラス自動判定: ${dispClassOf(r.cc, r.ok, dispClasses)}`;
+}
+function openVehEdit(v){
+  veEditId = v.id;
+  document.getElementById('ve-num').value = v.number;
+  document.getElementById('ve-name').value = v.name;
+  veEngine = v.engine;
+  document.querySelectorAll('#ve-eng button').forEach(b => b.classList.toggle('on', b.dataset.e === veEngine));
+  document.getElementById('ve-ice').style.display = (veEngine === 'ev') ? 'none' : 'block';
+  document.getElementById('ve-cc').value = v.displacement_cc || 1500;
+  veFI = !!v.forced_induction;
+  document.querySelectorAll('#ve-fi button').forEach(b => b.classList.toggle('on', (b.dataset.fi === '1') === veFI));
+  const dtSeg = document.getElementById('ve-dt');
+  clear(dtSeg);
+  veDtClassId = null;
+  ((settings && settings.dt_classes) || []).forEach(c => {
+    const on = c.label === v.dt_class;
+    const btn = h('button', { type: 'button', class: on ? 'on' : '' }, c.label);
+    btn.addEventListener('click', () => {
+      dtSeg.querySelectorAll('button').forEach(b => b.classList.remove('on'));
+      btn.classList.add('on');
+      veDtClassId = c.id;
+    });
+    dtSeg.appendChild(btn);
+    if (on) veDtClassId = c.id;
+  });
+  vehicleAvatarInto(document.getElementById('ve-avatar-preview'), v.id, v.name, !!v.has_icon);
+  veConvPreview();
+  const isMain = v.id === myData.main_vehicle_id;
+  const unlink = document.getElementById('ve-unlink');
+  unlink.style.display = isMain ? 'none' : 'block'; // main vehicle cannot be unlinked (must switch main first)
+  unlink.onclick = async () => {
+    if (!confirm(`＃${v.number} ${v.name} の紐づけを解除しますか?\n(過去の走行記録・順位はそのまま残ります)`)) return;
+    try {
+      await api('DELETE', '/api/mypage/vehicles/' + v.id);
+      closeModal('vehEditModal');
+      toast(`＃${v.number} ${v.name} の紐づけを解除`);
+      await reloadMy();
+    } catch (err) { toast(err.message || '解除に失敗しました'); }
+  };
+  document.getElementById('vehEditModal').classList.add('on');
+}
+async function veSubmit(){
+  const name = document.getElementById('ve-name').value.trim();
+  if (!name){ toast('車両名を入力してください'); return; }
+  const body = {
+    name,
+    engine_type: veEngine,
+    displacement_cc: veEngine === 'ev' ? null : (parseInt(document.getElementById('ve-cc').value, 10) || 0),
+    forced_induction: veEngine === 'ev' ? false : veFI,
+    drivetrain_class_id: veDtClassId
+  };
+  try {
+    await api('PUT', '/api/mypage/vehicles/' + veEditId, body);
+    closeModal('vehEditModal');
+    toast('車両情報を更新しました');
+    await reloadMy();
+  } catch (err) { toast(err.message || '更新に失敗しました'); }
+}
+
 /* ---------- modal close on backdrop ---------- */
+function closeModal(id){
+  document.getElementById(id).classList.remove('on');
+}
 function bindModalClose(id){
   const bg = document.getElementById(id);
-  bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('on'); });
+  bg.addEventListener('click', e => { if (e.target === bg) closeModal(id); });
   bg.querySelector('.modal').addEventListener('click', e => e.stopPropagation());
 }
 
 /* ---------- init ---------- */
 async function init(){
-  ['editmodal', 'qrmodal', 'vehmodal', 'cropmodal'].forEach(bindModalClose);
+  ['editmodal', 'qrmodal', 'vehmodal', 'cropmodal', 'vehEditModal'].forEach(bindModalClose);
   document.getElementById('btn-edit').addEventListener('click', openEdit);
   document.getElementById('ed-save').addEventListener('click', saveEdit);
   document.getElementById('btn-qr').addEventListener('click', () => {
-    document.getElementById('qr-img').src = '/api/my/qr?ts=' + Date.now();
+    document.getElementById('qr-img').src = '/api/mypage/qr?ts=' + Date.now();
+    document.getElementById('my-url').querySelector('span').textContent = (myData && myData.login_url) || '';
     document.getElementById('qrmodal').classList.add('on');
   });
+  bindCopyable(document.getElementById('my-url'));
   document.getElementById('veh-add-btn').addEventListener('click', openVehModal);
   document.getElementById('vm-submit').addEventListener('click', vmSubmit);
   document.querySelectorAll('#vm-mode button').forEach(b => b.addEventListener('click', () => {
@@ -706,6 +911,21 @@ async function init(){
     const num = parseInt(document.getElementById('vm-num').value, 10);
     warn.style.display = (!!num && allVehicles.some(v => v.number === num)) ? 'block' : 'none';
   });
+  document.getElementById('ve-save').addEventListener('click', veSubmit);
+  document.getElementById('ve-icon-btn').addEventListener('click', () => {
+    startIconCrop('/api/mypage/vehicles/' + veEditId + '/icon', (dataUrl) => {
+      const pv = document.getElementById('ve-avatar-preview');
+      clear(pv);
+      pv.appendChild(h('img', { src: dataUrl, alt: '' }));
+    });
+  });
+  segBind('ve-eng', 'e', (val) => {
+    veEngine = val;
+    document.getElementById('ve-ice').style.display = (val === 'ev') ? 'none' : 'block';
+    veConvPreview();
+  });
+  segBind('ve-fi', 'fi', (val) => { veFI = val === '1'; veConvPreview(); });
+  document.getElementById('ve-cc').addEventListener('input', veConvPreview);
   bindCrop();
 
   await reloadSettings();
@@ -716,11 +936,17 @@ async function init(){
     return;
   }
 
-  /* SSE: queue,on_course,time */
-  const es = new EventSource('/api/stream?topics=queue,on_course,time');
+  /* SSE: queue,on_course,time,settings */
+  const es = new EventSource('/api/stream?topics=queue,on_course,time,settings');
   es.addEventListener('time', e => {
     const d = JSON.parse(e.data);
     offset = d.server_ms - Date.now();
+    offsetKnown = true;
+  });
+  es.addEventListener('settings', e => {
+    settings = JSON.parse(e.data);
+    updateEventBanner();
+    renderMyQ();
   });
   es.addEventListener('queue', e => {
     const d = JSON.parse(e.data);

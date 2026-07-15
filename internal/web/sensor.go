@@ -17,9 +17,17 @@ func (s *Server) SensorController() timing.CourseController { return s.course }
 
 // SensorStart pairs a start-sensor trigger with the oldest on_course car that
 // has not yet been stamped (READY), turning it into RUNNING. Returns
-// timing.ErrNoTarget when there is no such car (an orphan start trigger).
+// timing.ErrNoTarget when there is no such car (an orphan start trigger, or
+// no event is currently active).
 func (cm *courseManager) SensorStart(tUS int64) error {
-	onCourse, err := cm.s.Store.ListQueue("on_course") // id asc = oldest first
+	ev, ok, err := cm.s.Store.GetActiveEvent()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return timing.ErrNoTarget
+	}
+	onCourse, err := cm.s.Store.ListQueue(ev.ID, "on_course") // id asc = oldest first
 	if err != nil {
 		return err
 	}
@@ -39,9 +47,17 @@ func (cm *courseManager) SensorStart(tUS int64) error {
 
 // SensorGoal pairs a goal-sensor trigger with the oldest RUNNING car (start
 // stamped, not already inside a finish grace window), finalizing it with
-// source="sensor". Returns timing.ErrNoTarget when no car is running.
+// source="sensor". Returns timing.ErrNoTarget when no car is running (or no
+// event is currently active).
 func (cm *courseManager) SensorGoal(tUS int64) error {
-	onCourse, err := cm.s.Store.ListQueue("on_course") // id asc = oldest first
+	ev, ok, err := cm.s.Store.GetActiveEvent()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return timing.ErrNoTarget
+	}
+	onCourse, err := cm.s.Store.ListQueue(ev.ID, "on_course") // id asc = oldest first
 	if err != nil {
 		return err
 	}

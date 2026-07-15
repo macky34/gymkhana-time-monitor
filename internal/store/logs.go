@@ -10,9 +10,10 @@ import (
 
 // LogRow mirrors a logs row. DriverID/VehicleID are nil for an unassigned
 // log (a raw sensor trigger pairing that couldn't be matched to a queue
-// entry).
+// entry). EventID identifies the event this log belongs to.
 type LogRow struct {
 	ID          int64
+	EventID     int64
 	DriverID    *int64
 	VehicleID   *int64
 	RawMS       int
@@ -24,13 +25,13 @@ type LogRow struct {
 	IsDeleted   bool
 }
 
-const logSelectCols = `id, driver_id, vehicle_id, raw_ms, pt_count, is_mc, timestamp_ms, source, edited_at, is_deleted`
+const logSelectCols = `id, event_id, driver_id, vehicle_id, raw_ms, pt_count, is_mc, timestamp_ms, source, edited_at, is_deleted`
 
 func scanLogRow(row rowScanner) (LogRow, error) {
 	var l LogRow
 	var driverID, vehicleID, editedAt sql.NullInt64
 	var isMC, isDeleted int
-	if err := row.Scan(&l.ID, &driverID, &vehicleID, &l.RawMS, &l.PTCount, &isMC, &l.TimestampMS,
+	if err := row.Scan(&l.ID, &l.EventID, &driverID, &vehicleID, &l.RawMS, &l.PTCount, &isMC, &l.TimestampMS,
 		&l.Source, &editedAt, &isDeleted); err != nil {
 		return LogRow{}, err
 	}
@@ -57,9 +58,9 @@ func (s *Store) InsertLog(l LogRow) (int64, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
-	res, err := s.db.Exec(`INSERT INTO logs (driver_id, vehicle_id, raw_ms, pt_count, is_mc, timestamp_ms, source, edited_at, is_deleted)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		nullableInt64(l.DriverID), nullableInt64(l.VehicleID), l.RawMS, l.PTCount, boolToInt(l.IsMC),
+	res, err := s.db.Exec(`INSERT INTO logs (event_id, driver_id, vehicle_id, raw_ms, pt_count, is_mc, timestamp_ms, source, edited_at, is_deleted)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		l.EventID, nullableInt64(l.DriverID), nullableInt64(l.VehicleID), l.RawMS, l.PTCount, boolToInt(l.IsMC),
 		l.TimestampMS, l.Source, nullableInt64(l.EditedAt), boolToInt(l.IsDeleted))
 	if err != nil {
 		return 0, fmt.Errorf("store: insert log: %w", err)
@@ -72,7 +73,8 @@ func (s *Store) InsertLog(l LogRow) (int64, error) {
 }
 
 // UpdateLog overwrites a log row in full (l.ID selects the row); the caller
-// sets EditedAt itself.
+// sets EditedAt itself. l.EventID is not written (a log never changes
+// event).
 func (s *Store) UpdateLog(l LogRow) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -126,17 +128,17 @@ func (s *Store) GetLog(id int64) (LogRow, bool, error) {
 	return l, true, nil
 }
 
-// ListLogs returns a page of all logs (including deleted and unassigned
-// ones — this feeds the admin log-management table), newest first, plus
-// the total row count for pagination.
-func (s *Store) ListLogs(limit, offset int) ([]LogRow, int, error) {
+// ListLogs returns a page of eventID's logs (including deleted and
+// unassigned ones — this feeds the admin log-management table), newest
+// first, plus the total row count for pagination.
+func (s *Store) ListLogs(eventID int64, limit, offset int) ([]LogRow, int, error) {
 	var total int
-	if err := s.db.QueryRow(`SELECT COUNT(*) FROM logs`).Scan(&total); err != nil {
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM logs WHERE event_id = ?`, eventID).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("store: list logs: count: %w", err)
 	}
 
-	rows, err := s.db.Query(`SELECT `+logSelectCols+` FROM logs ORDER BY timestamp_ms DESC, id DESC LIMIT ? OFFSET ?`,
-		limit, offset)
+	rows, err := s.db.Query(`SELECT `+logSelectCols+` FROM logs WHERE event_id = ? ORDER BY timestamp_ms DESC, id DESC LIMIT ? OFFSET ?`,
+		eventID, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("store: list logs: %w", err)
 	}
@@ -175,14 +177,14 @@ func scanRunRows(rows *sql.Rows) ([]domain.RunRow, error) {
 	return out, nil
 }
 
-// ListRuns returns every non-deleted, fully-assigned log as a
-// domain.RunRow — the input to domain.Rank. Ordered by timestamp_ms, id to
-// match the heat-numbering order (plan/DESIGN.md §4.4).
-func (s *Store) ListRuns() ([]domain.RunRow, error) {
+// ListRuns returns every non-deleted, fully-assigned log belonging to
+// eventID as a domain.RunRow — the input to domain.Rank. Ordered by
+// timestamp_ms, id to match the heat-numbering order (plan/DESIGN.md §4.4).
+func (s *Store) ListRuns(eventID int64) ([]domain.RunRow, error) {
 	rows, err := s.db.Query(`SELECT id, driver_id, vehicle_id, raw_ms, pt_count, is_mc, timestamp_ms
 		FROM logs
-		WHERE is_deleted = 0 AND driver_id IS NOT NULL AND vehicle_id IS NOT NULL
-		ORDER BY timestamp_ms, id`)
+		WHERE event_id = ? AND is_deleted = 0 AND driver_id IS NOT NULL AND vehicle_id IS NOT NULL
+		ORDER BY timestamp_ms, id`, eventID)
 	if err != nil {
 		return nil, fmt.Errorf("store: list runs: %w", err)
 	}
@@ -195,12 +197,13 @@ func (s *Store) ListRuns() ([]domain.RunRow, error) {
 }
 
 // ListRunsByCombo is ListRuns scoped to one (driver, vehicle) combination
-// (drives the combination drilldown / heat numbering for that pair alone).
-func (s *Store) ListRunsByCombo(d, v int64) ([]domain.RunRow, error) {
+// within eventID (drives the combination drilldown / heat numbering for
+// that pair alone).
+func (s *Store) ListRunsByCombo(eventID, d, v int64) ([]domain.RunRow, error) {
 	rows, err := s.db.Query(`SELECT id, driver_id, vehicle_id, raw_ms, pt_count, is_mc, timestamp_ms
 		FROM logs
-		WHERE is_deleted = 0 AND driver_id = ? AND vehicle_id = ?
-		ORDER BY timestamp_ms, id`, d, v)
+		WHERE event_id = ? AND is_deleted = 0 AND driver_id = ? AND vehicle_id = ?
+		ORDER BY timestamp_ms, id`, eventID, d, v)
 	if err != nil {
 		return nil, fmt.Errorf("store: list runs by combo: %w", err)
 	}
@@ -212,13 +215,13 @@ func (s *Store) ListRunsByCombo(d, v int64) ([]domain.RunRow, error) {
 	return out, nil
 }
 
-// ListUnassignedLogs returns non-deleted logs missing a driver and/or
-// vehicle (orphaned sensor pairings awaiting admin assignment), oldest
-// first.
-func (s *Store) ListUnassignedLogs() ([]LogRow, error) {
-	rows, err := s.db.Query(`SELECT ` + logSelectCols + ` FROM logs
-		WHERE is_deleted = 0 AND (driver_id IS NULL OR vehicle_id IS NULL)
-		ORDER BY timestamp_ms, id`)
+// ListUnassignedLogs returns eventID's non-deleted logs missing a driver
+// and/or vehicle (orphaned sensor pairings awaiting admin assignment),
+// oldest first.
+func (s *Store) ListUnassignedLogs(eventID int64) ([]LogRow, error) {
+	rows, err := s.db.Query(`SELECT `+logSelectCols+` FROM logs
+		WHERE event_id = ? AND is_deleted = 0 AND (driver_id IS NULL OR vehicle_id IS NULL)
+		ORDER BY timestamp_ms, id`, eventID)
 	if err != nil {
 		return nil, fmt.Errorf("store: list unassigned logs: %w", err)
 	}

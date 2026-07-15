@@ -2,16 +2,19 @@ package store
 
 import "fmt"
 
-// InsertSensorEvent records one raw sensor trigger. Returns (false, nil)
-// without error when (sensorID, bootID, seq) has already been recorded —
-// this is how the 3x UDP resend (plan/DESIGN.md §7.1) gets deduplicated;
-// the caller only proceeds to pairing logic on the first occurrence.
-func (s *Store) InsertSensorEvent(sensorID string, bootID, seq int64, tsUS int64, receivedAt int64) (bool, error) {
+// InsertSensorEvent records one raw sensor trigger. eventID is the current
+// active event's id, or nil when no event is active (the trigger is still
+// recorded as a dedup/safety-net entry, but the caller skips log
+// generation in that case). Returns (false, nil) without error when
+// (sensorID, bootID, seq) has already been recorded — this is how the 3x
+// UDP resend (plan/DESIGN.md §7.1) gets deduplicated; the caller only
+// proceeds to pairing logic on the first occurrence.
+func (s *Store) InsertSensorEvent(sensorID string, bootID, seq int64, tsUS int64, receivedAt int64, eventID *int64) (bool, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
-	_, err := s.db.Exec(`INSERT INTO sensor_events (sensor_id, boot_id, seq, timestamp_us, received_at)
-		VALUES (?, ?, ?, ?, ?)`, sensorID, bootID, seq, tsUS, receivedAt)
+	_, err := s.db.Exec(`INSERT INTO sensor_events (event_id, sensor_id, boot_id, seq, timestamp_us, received_at)
+		VALUES (?, ?, ?, ?, ?, ?)`, nullableInt64(eventID), sensorID, bootID, seq, tsUS, receivedAt)
 	if err != nil {
 		if isUniqueConstraintErr(err) {
 			return false, nil
@@ -21,13 +24,14 @@ func (s *Store) InsertSensorEvent(sensorID string, bootID, seq int64, tsUS int64
 	return true, nil
 }
 
-// AppendAudit records one administrative action for the audit log.
-func (s *Store) AppendAudit(atMS int64, driverID *int64, action, detailJSON string) error {
+// AppendAudit records one administrative action for the audit log. eventID
+// is the active event at the time of the action, or nil if none was active.
+func (s *Store) AppendAudit(atMS int64, driverID *int64, action, detailJSON string, eventID *int64) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
-	_, err := s.db.Exec(`INSERT INTO audit (at_ms, driver_id, action, detail) VALUES (?, ?, ?, ?)`,
-		atMS, nullableInt64(driverID), action, detailJSON)
+	_, err := s.db.Exec(`INSERT INTO audit (event_id, at_ms, driver_id, action, detail) VALUES (?, ?, ?, ?, ?)`,
+		nullableInt64(eventID), atMS, nullableInt64(driverID), action, detailJSON)
 	if err != nil {
 		return fmt.Errorf("store: append audit: %w", err)
 	}

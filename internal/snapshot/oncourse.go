@@ -37,13 +37,22 @@ func (b *Builder) finishFor(queueID int64) *onCourseFinish {
 	return &onCourseFinish{FinMS: finMS, UntilMS: untilMS}
 }
 
-// OnCourse builds the snapshot of cars currently running, ordered by queue
-// id (the same order store.ListQueue("on_course") returns). A car whose
-// finish is still inside the confirmation grace window carries a non-null
-// "finish" object (via the registered FinishProvider); all others report
-// null.
+// OnCourse builds the snapshot of cars currently running in the active
+// event, ordered by queue id (the same order store.ListQueue(eventID,
+// "on_course") returns). A car whose finish is still inside the
+// confirmation grace window carries a non-null "finish" object (via the
+// registered FinishProvider); all others report null. With no active
+// event, this is an empty list.
 func (b *Builder) OnCourse() ([]byte, error) {
-	rows, err := b.s.ListQueue("on_course")
+	ev, ok, err := b.s.GetActiveEvent()
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return json.Marshal(onCourseResponse{Cars: []onCourseCar{}})
+	}
+
+	rows, err := b.s.ListQueue(ev.ID, "on_course")
 	if err != nil {
 		return nil, err
 	}
@@ -70,8 +79,8 @@ func (b *Builder) OnCourse() ([]byte, error) {
 		}
 		cars = append(cars, onCourseCar{
 			QueueID:  r.ID,
-			Driver:   refDriver{ID: drv.ID, Name: drv.Name},
-			Vehicle:  refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name},
+			Driver:   refDriver{ID: drv.ID, Name: drv.Name, HasIcon: drv.HasIcon},
+			Vehicle:  refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name, HasIcon: veh.HasIcon},
 			TStartUS: r.TStartUS,
 			PTCount:  r.PTCount,
 			MCFlag:   r.MCFlag,

@@ -83,6 +83,25 @@ func (s *Server) publishRanking() {
 	}
 }
 
+// publishDirectory notifies subscribers that the driver/vehicle directory
+// (users, vehicles, or their linkage) changed, so the admin page knows to
+// refetch /api/admin/users and /api/vehicles.
+func (s *Server) publishDirectory() {
+	if err := s.Snap.PublishDirectory(s.Hub); err != nil {
+		log.Printf("web: publish directory failed: %v", err)
+	}
+}
+
+// publishAll regenerates and pushes ranking, queue, on_course, and settings
+// in one call (snapshot.Builder.PublishAll) - used where a single mutation
+// invalidates several public-facing snapshots at once (e.g. an icon change
+// touches the driver/vehicle references embedded in each of them).
+func (s *Server) publishAll() {
+	if err := s.Snap.PublishAll(s.Hub); err != nil {
+		log.Printf("web: publish all failed: %v", err)
+	}
+}
+
 // ---------------------------------------------------------------------
 // client_ms correction (manual timing mode)
 // ---------------------------------------------------------------------
@@ -207,6 +226,7 @@ func (cm *courseManager) finishCar(row store.QueueRow, tGoalUS int64, source str
 	driverID := row.DriverID
 	vehicleID := row.VehicleID
 	logID, err := cm.s.Store.InsertLog(store.LogRow{
+		EventID:     row.EventID,
 		DriverID:    &driverID,
 		VehicleID:   &vehicleID,
 		RawMS:       int(rawMS),
@@ -316,7 +336,7 @@ func (cm *courseManager) undoStart(row store.QueueRow) error {
 		return err
 	}
 
-	pos, err := cm.s.frontOfWaitingPosition()
+	pos, err := cm.s.frontOfWaitingPosition(row.EventID)
 	if err != nil {
 		return err
 	}
@@ -362,10 +382,10 @@ func (cm *courseManager) cancel(row store.QueueRow) error {
 }
 
 // frontOfWaitingPosition returns a position value smaller than the current
-// head of the waiting queue (or 0 if the queue is empty), suitable for
+// head of eventID's waiting queue (or 0 if the queue is empty), suitable for
 // reinserting an undone-start car at the very front of "waiting".
-func (s *Server) frontOfWaitingPosition() (float64, error) {
-	waiting, err := s.Store.ListQueue("waiting")
+func (s *Server) frontOfWaitingPosition(eventID int64) (float64, error) {
+	waiting, err := s.Store.ListQueue(eventID, "waiting")
 	if err != nil {
 		return 0, err
 	}
@@ -387,17 +407,12 @@ func (s *Server) frontOfWaitingPosition() (float64, error) {
 func (s *Server) handleAdminCourseLaunch(w http.ResponseWriter, r *http.Request, admin store.Driver) {
 	clientMS := decodeClientMs(r)
 
-	settings, ok, err := s.Store.GetSettings()
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
+	settings, ok := s.requireActiveEvent(w)
 	if !ok {
-		writeJSONError(w, http.StatusConflict, "event not configured")
 		return
 	}
 
-	waiting, err := s.Store.ListQueue("waiting")
+	waiting, err := s.Store.ListQueue(settings.ID, "waiting")
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -446,10 +461,18 @@ func (s *Server) handleAdminCourseFinishOldest(w http.ResponseWriter, r *http.Re
 	clientMS := decodeClientMs(r)
 	tGoalUS := correctedMs(clientMS) * 1000
 
-	onCourse, err := s.Store.ListQueue("on_course")
+	ev, activeOK, err := s.activeEvent()
 	if err != nil {
 		writeErr(w, err)
 		return
+	}
+	var onCourse []store.QueueRow
+	if activeOK {
+		onCourse, err = s.Store.ListQueue(ev.ID, "on_course")
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
 	}
 
 	var target *store.QueueRow
@@ -685,8 +708,13 @@ func (s *Server) handleAdminQueueAdd(w http.ResponseWriter, r *http.Request, adm
 		return
 	}
 
+	ev, ok := s.requireActiveEvent(w)
+	if !ok {
+		return
+	}
+
 	adminID := admin.ID
-	queueID, err := s.Store.Enqueue(body.DriverID, body.VehicleID, &adminID)
+	queueID, err := s.Store.Enqueue(ev.ID, body.DriverID, body.VehicleID, &adminID)
 	if err != nil {
 		if errors.Is(err, store.ErrAlreadyWaiting) {
 			writeJSONError(w, http.StatusConflict, err.Error())

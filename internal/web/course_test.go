@@ -27,7 +27,7 @@ func newTestServer(t *testing.T, timingMode string) (srv *Server, queueID, drive
 	}
 	t.Cleanup(func() { st.Close() })
 
-	set := store.SettingsRow{
+	set := store.EventRow{
 		EventName:        "test",
 		TimingMode:       timingMode,
 		PTMode:           "add",
@@ -67,7 +67,11 @@ func newTestServer(t *testing.T, timingMode string) (srv *Server, queueID, drive
 	if err := st.AddEntry(driverID, vehicleID); err != nil {
 		t.Fatalf("AddEntry: %v", err)
 	}
-	queueID, err = st.Enqueue(driverID, vehicleID, nil)
+	activeEvent, ok, err := st.GetActiveEvent()
+	if err != nil || !ok {
+		t.Fatalf("GetActiveEvent: ok=%v err=%v", ok, err)
+	}
+	queueID, err = st.Enqueue(activeEvent.ID, driverID, vehicleID, nil)
 	if err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
@@ -133,7 +137,7 @@ func TestFinishGraceConfirm(t *testing.T) {
 	if !srv.course.isPending(queueID) {
 		t.Fatal("expected finish to be pending during grace window")
 	}
-	logs, _, err := srv.Store.ListLogs(10, 0)
+	logs, _, err := srv.Store.ListLogs(row.EventID, 10, 0)
 	if err != nil {
 		t.Fatalf("ListLogs: %v", err)
 	}
@@ -170,7 +174,7 @@ func TestUndoGoalWithinGrace(t *testing.T) {
 	}
 
 	// Log hard-deleted, still on course, nothing ranked, grace window gone.
-	logs, _, _ := srv.Store.ListLogs(10, 0)
+	logs, _, _ := srv.Store.ListLogs(row.EventID, 10, 0)
 	if len(logs) != 0 {
 		t.Fatalf("expected log removed by undo-goal, got %d", len(logs))
 	}

@@ -274,6 +274,28 @@ func TestMalformedPacketsAreIgnored(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// (4b) non-JSON binary packets (e.g. LAN broadcast noise) are dropped
+// silently, without breaking subsequent valid packets.
+// ---------------------------------------------------------------------------
+
+func TestNonJSONBinaryPacketsAreDroppedSilently(t *testing.T) {
+	course := newFakeCourse(false)
+	h := startListener(t, Deps{Store: newTestStore(t), Course: course})
+
+	// Not JSON at all: leading byte isn't '{', and it isn't valid UTF-8 JSON
+	// either. Modeled on the kind of binary discovery broadcast a random
+	// LAN device (e.g. a TP-Link gadget) might send to our UDP port.
+	h.send("\x0c\x00\x00\x2a\xffsomething binary")
+
+	// The listener must still be alive and process a valid trigger afterward.
+	h.send(triggerJSON("start", 55, 1, 555))
+	if got := recvTS(t, course.startCh, "SensorStart after non-json binary packet"); got != 555 {
+		t.Fatalf("SensorStart ts = %d, want 555", got)
+	}
+	assertQuiet(t, course.startCh, 200*time.Millisecond, "extra SensorStart from binary packet")
+}
+
+// ---------------------------------------------------------------------------
 // (5) hb -> OnSensorStatus JSON shape (short injected ticker interval)
 // ---------------------------------------------------------------------------
 

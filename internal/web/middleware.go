@@ -2,6 +2,7 @@ package web
 
 import (
 	"net/http"
+	"strings"
 
 	"timemon/internal/store"
 )
@@ -37,8 +38,8 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, token 
 }
 
 // handleTokenLogin implements GET /a/{token}: exchange a driver's permanent
-// login token for a session cookie, then redirect to /my. Unknown tokens get
-// a bodyless 404 (no distinction from "expired"/"revoked").
+// login token for a session cookie, then redirect to /mypage. Unknown tokens
+// get a bodyless 404 (no distinction from "expired"/"revoked").
 func (s *Server) handleTokenLogin(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	d, ok, err := s.Store.GetDriverByToken(token)
@@ -51,7 +52,7 @@ func (s *Server) handleTokenLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.setSessionCookie(w, r, d.Token)
-	http.Redirect(w, r, "/my", http.StatusFound)
+	http.Redirect(w, r, "/mypage", http.StatusFound)
 }
 
 // withAuth requires a valid tm_session cookie and passes the resolved Driver
@@ -92,5 +93,44 @@ func (s *Server) withRateLimit(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 		next(w, r)
+	}
+}
+
+// withCacheControl sets "Cache-Control: no-store" on every response by
+// default. Deployments run behind Cloudflare (or any other shared/browser
+// cache) now, and HTML pages plus JSON APIs carry per-session auth state
+// (tm_session cookie) — caching them, even implicitly via a proxy default,
+// risks leaking one user's data to another. This is applied as a single
+// blanket wrapper around Routes() rather than sprinkled across every
+// handler/helper so nothing new can slip through uncovered; the few
+// responses that intentionally manage their own Cache-Control (icons,
+// /static/, the SSE stream) are exempted below, and since they always set
+// the header themselves afterwards, the exemption list is a belt-and-braces
+// optimization rather than a correctness requirement.
+func (s *Server) withCacheControl(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !cacheControlExempt(r.URL.Path) {
+			w.Header().Set("Cache-Control", "no-store")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// cacheControlExempt reports whether path already manages its own
+// Cache-Control header: /static/ (long-lived, versioned with the binary),
+// the driver/vehicle icon endpoints (ETag-revalidated, no-cache), and the
+// SSE stream (no-cache, set in internal/sse).
+func cacheControlExempt(path string) bool {
+	switch {
+	case strings.HasPrefix(path, "/static/"):
+		return true
+	case path == "/api/stream":
+		return true
+	case strings.HasPrefix(path, "/api/drivers/") && strings.HasSuffix(path, "/icon"):
+		return true
+	case strings.HasPrefix(path, "/api/vehicles/") && strings.HasSuffix(path, "/icon"):
+		return true
+	default:
+		return false
 	}
 }

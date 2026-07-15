@@ -28,20 +28,21 @@ type comboRunItem struct {
 	Source       string `json:"source"`
 }
 
-// allLogs fetches every LogRow known to the store. ListLogs is limit/offset
-// paginated with no combo filter, so this asks for the total count first
-// and then re-requests exactly that many rows. It is only needed for the
-// "source" field: domain.RunRow (what ListRunsByCombo returns) does not
-// carry it, so it must be joined back from LogRow by log id.
-func (b *Builder) allLogs() ([]store.LogRow, error) {
-	_, total, err := b.s.ListLogs(1, 0)
+// allLogs fetches every LogRow belonging to eventID. ListLogs is
+// limit/offset paginated with no combo filter, so this asks for the total
+// count first and then re-requests exactly that many rows. It is only
+// needed for the "source" field: domain.RunRow (what ListRunsByCombo
+// returns) does not carry it, so it must be joined back from LogRow by log
+// id.
+func (b *Builder) allLogs(eventID int64) ([]store.LogRow, error) {
+	_, total, err := b.s.ListLogs(eventID, 1, 0)
 	if err != nil {
 		return nil, err
 	}
 	if total <= 0 {
 		return nil, nil
 	}
-	all, _, err := b.s.ListLogs(total, 0)
+	all, _, err := b.s.ListLogs(eventID, total, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -64,10 +65,26 @@ func (b *Builder) allLogs() ([]store.LogRow, error) {
 // absent. Invalid runs (as determined by domain.FinalMS) are excluded from
 // the population and always report rank_in_filter: null.
 func (b *Builder) CombinationLogs(driverID, vehicleID int64, q url.Values) ([]byte, error) {
-	settings, _, err := b.s.GetSettings()
+	ev, activeOK, err := b.s.GetActiveEvent()
 	if err != nil {
 		return nil, err
 	}
+	return b.combinationLogsFor(ev, activeOK, driverID, vehicleID, q)
+}
+
+// CombinationLogsFor is CombinationLogs scoped to a specific event id
+// (active or archived/closed) rather than the currently active one — for
+// stage-2 archive/export use. Returns a zero-runs payload if eventID does
+// not exist.
+func (b *Builder) CombinationLogsFor(eventID, driverID, vehicleID int64, q url.Values) ([]byte, error) {
+	ev, ok, err := b.s.GetEvent(eventID)
+	if err != nil {
+		return nil, err
+	}
+	return b.combinationLogsFor(ev, ok, driverID, vehicleID, q)
+}
+
+func (b *Builder) combinationLogsFor(ev store.EventRow, activeOK bool, driverID, vehicleID int64, q url.Values) ([]byte, error) {
 	drivers, err := b.s.ListDrivers()
 	if err != nil {
 		return nil, err
@@ -89,18 +106,29 @@ func (b *Builder) CombinationLogs(driverID, vehicleID int64, q url.Values) ([]by
 	vehicleByID := indexVehicles(vehicles)
 	driverClassLabel := indexClassLabels(driverClasses)
 	dtClassLabel := indexClassLabels(dtClasses)
-	conv := buildVehicleConv(vehicles, settings.Coef, settings.DispClasses)
+	conv := buildVehicleConv(vehicles, ev.Coef, ev.DispClasses)
 
-	allRuns, err := b.s.ListRuns()
-	if err != nil {
-		return nil, err
+	// With no active event there are no runs/logs to scope to; every list
+	// below stays empty and the response reports zero runs for the combo.
+	var allRuns []domain.RunRow
+	var logs []store.LogRow
+	var comboRuns []domain.RunRow
+	if activeOK {
+		allRuns, err = b.s.ListRuns(ev.ID)
+		if err != nil {
+			return nil, err
+		}
+		logs, err = b.allLogs(ev.ID)
+		if err != nil {
+			return nil, err
+		}
+		comboRuns, err = b.s.ListRunsByCombo(ev.ID, driverID, vehicleID)
+		if err != nil {
+			return nil, err
+		}
 	}
 	heatByLogID := domain.HeatNumbers(allRuns)
 
-	logs, err := b.allLogs()
-	if err != nil {
-		return nil, err
-	}
 	sourceByLogID := make(map[int64]string, len(logs))
 	for _, l := range logs {
 		sourceByLogID[l.ID] = l.Source
@@ -153,7 +181,7 @@ func (b *Builder) CombinationLogs(driverID, vehicleID int64, q url.Values) ([]by
 		if hasHeatFilter && heatByLogID[r.LogID] != fHeat {
 			continue
 		}
-		fms, invalid := domain.FinalMS(r.RawMS, r.PTCount, r.IsMC, settings.PTMode, settings.PTPenaltyMS)
+		fms, invalid := domain.FinalMS(r.RawMS, r.PTCount, r.IsMC, ev.PTMode, ev.PTPenaltyMS)
 		if invalid {
 			continue
 		}
@@ -167,17 +195,13 @@ func (b *Builder) CombinationLogs(driverID, vehicleID int64, q url.Values) ([]by
 		return sort.SearchInts(population, fms) + 1
 	}
 
-	comboRuns, err := b.s.ListRunsByCombo(driverID, vehicleID)
-	if err != nil {
-		return nil, err
-	}
 	sort.Slice(comboRuns, func(i, j int) bool {
 		return heatByLogID[comboRuns[i].LogID] < heatByLogID[comboRuns[j].LogID]
 	})
 
 	runs := make([]comboRunItem, 0, len(comboRuns))
 	for _, r := range comboRuns {
-		fms, invalid := domain.FinalMS(r.RawMS, r.PTCount, r.IsMC, settings.PTMode, settings.PTPenaltyMS)
+		fms, invalid := domain.FinalMS(r.RawMS, r.PTCount, r.IsMC, ev.PTMode, ev.PTPenaltyMS)
 		var rank *int
 		if !invalid {
 			v := rankOf(fms)
@@ -198,12 +222,12 @@ func (b *Builder) CombinationLogs(driverID, vehicleID int64, q url.Values) ([]by
 
 	resp := combinationLogsResponse{Runs: runs}
 	if drv, ok := driverByID[driverID]; ok {
-		resp.Driver = refDriver{ID: drv.ID, Name: drv.Name}
+		resp.Driver = refDriver{ID: drv.ID, Name: drv.Name, HasIcon: drv.HasIcon}
 	} else {
 		resp.Driver = refDriver{ID: driverID}
 	}
 	if veh, ok := vehicleByID[vehicleID]; ok {
-		resp.Vehicle = refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name}
+		resp.Vehicle = refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name, HasIcon: veh.HasIcon}
 	} else {
 		resp.Vehicle = refVehicleBasic{ID: vehicleID}
 	}

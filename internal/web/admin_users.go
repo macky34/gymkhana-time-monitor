@@ -33,6 +33,7 @@ type adminUserOut struct {
 	Number        any    `json:"number"`
 	MainVehicleID *int64 `json:"main_vehicle_id"`
 	LoginURL      string `json:"login_url"`
+	HasIcon       bool   `json:"has_icon"`
 }
 
 // handleAdminUsersList implements GET /api/admin/users.
@@ -64,6 +65,7 @@ func (s *Server) handleAdminUsersList(w http.ResponseWriter, r *http.Request, ad
 			Number:        number,
 			MainVehicleID: d.MainVehicleID,
 			LoginURL:      s.BaseURL + "/a/" + d.Token,
+			HasIcon:       d.HasIcon,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"users": out})
@@ -95,6 +97,7 @@ func (s *Server) handleAdminUserCreate(w http.ResponseWriter, r *http.Request, a
 	}
 	loginURL := s.BaseURL + "/a/" + tok
 
+	s.publishDirectory()
 	s.audit(&admin.ID, "admin.user.create", map[string]any{
 		"driver_id":       id,
 		"name":            body.Name,
@@ -127,6 +130,7 @@ func (s *Server) handleAdminUserUpdate(w http.ResponseWriter, r *http.Request, a
 		return
 	}
 
+	s.publishDirectory()
 	s.audit(&admin.ID, "admin.user.update", map[string]any{
 		"driver_id":       id,
 		"name":            body.Name,
@@ -163,6 +167,7 @@ func (s *Server) handleAdminUserReissue(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	s.publishDirectory()
 	s.audit(&admin.ID, "admin.user.reissue", map[string]any{"driver_id": id})
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -222,7 +227,43 @@ func (s *Server) handleAdminUserRole(w http.ResponseWriter, r *http.Request, adm
 		return
 	}
 
+	s.publishDirectory()
 	s.audit(&admin.ID, "admin.user.role", map[string]any{"driver_id": id, "role": body.Role})
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+type adminIconBody struct {
+	IconB64 string `json:"icon_b64"`
+}
+
+// handleAdminUserIcon implements POST /api/admin/users/{id}/icon: sets any
+// driver's icon, symmetric to handleMyIcon but without the "self"
+// restriction.
+func (s *Server) handleAdminUserIcon(w http.ResponseWriter, r *http.Request, admin store.Driver) {
+	id, err := parsePathInt64(r, "id")
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid id")
+		return
+	}
+	var body adminIconBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid body")
+		return
+	}
+	jpg, err := iconFromB64(body.IconB64)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid icon")
+		return
+	}
+	if err := s.Store.SetIcon(id, jpg); err != nil {
+		writeErr(w, err)
+		return
+	}
+
+	s.publishAll()
+	s.publishDirectory()
+	s.audit(&admin.ID, "admin.user.icon", map[string]any{"driver_id": id})
 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }

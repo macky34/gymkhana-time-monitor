@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>{{.EventName}} | モニター</title>
 <style>
   :root{
@@ -13,9 +13,9 @@
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   body{background:#0b0d10;color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
-       display:flex;justify-content:center;padding:16px 0;min-height:100vh}
+       display:flex;justify-content:center;padding:0;min-height:100vh}
   .phone{width:392px;max-width:100%;background:var(--bg);border:1px solid #262d38;border-radius:22px;
-         overflow:hidden;display:flex;flex-direction:column;height:820px;max-height:96vh;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
+         overflow:hidden;display:flex;flex-direction:column;height:100vh;height:100dvh;max-height:none;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
   header{padding:10px 14px 8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px;flex:none}
   header .ev{font-size:13px;font-weight:700;letter-spacing:.02em}
   header .live{margin-left:auto;font-size:10px;color:var(--go);font-family:var(--mono);display:flex;align-items:center;gap:5px}
@@ -25,7 +25,7 @@
   .screen{display:none;padding:12px 12px 20px}
   .screen.on{display:block}
   nav{flex:none;display:flex;border-top:1px solid var(--line);background:#161a20}
-  nav a{flex:1;background:none;border:none;color:var(--dim);font-size:10.5px;padding:9px 0 11px;cursor:pointer;text-decoration:none;
+  nav a{flex:1;background:none;border:none;color:var(--dim);font-size:10.5px;padding:9px 0 calc(11px + env(safe-area-inset-bottom));cursor:pointer;text-decoration:none;
              display:flex;flex-direction:column;gap:3px;align-items:center;font-family:inherit}
   nav a .ic{font-size:16px;line-height:1}
   nav a.on{color:var(--tx)}
@@ -71,6 +71,9 @@
     .toast{bottom:auto;top:70px}
   }
   /* ---- monitor-specific ---- */
+  .evbanner{background:#2c2718;border-bottom:1px solid #77771f;color:var(--amber);font-size:11.5px;
+            padding:9px 12px;text-align:center}
+  .evbanner a{color:var(--amber)}
   .oncourse{border-radius:14px;padding:13px 14px;margin-bottom:9px;position:relative;overflow:hidden;cursor:pointer;
             background:linear-gradient(135deg,#1f2937,#1a222d);border:1px solid #3a4656}
   .oncourse.mc{border-color:#4a4a52;background:linear-gradient(135deg,#26262b,#1e1e23)}
@@ -81,6 +84,7 @@
   .oncourse .clk .tm{font-size:30px;font-weight:600;font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em;color:var(--go)}
   .oncourse.armed .clk .tm{color:var(--dim);font-size:22px}
   .oncourse.mc .clk .tm{color:var(--dim)}
+  .oncourse .clk .tm.offsetwait{font-size:13px;color:var(--dim)}
   .oncourse .clk .lb{font-size:9px;color:var(--dim);letter-spacing:.15em;margin-top:1px}
   .mcband{position:absolute;top:11px;right:-34px;background:#4d4d55;color:#c9c9d2;font-size:9px;letter-spacing:.12em;
           padding:3px 36px;transform:rotate(38deg)}
@@ -117,6 +121,7 @@
            font-size:120px;white-space:nowrap}
   .fs-time.fin{color:var(--amber)}
   .fs-time.mc{color:var(--dim)}
+  .fs-time.offsetwait{font-size:28px!important;color:var(--dim)}
   .fs-status{font-size:12px;color:var(--dim);letter-spacing:.4em}
   .fs-btn{position:absolute;background:var(--panel);border:1px solid var(--line);color:var(--mut);
           border-radius:99px;padding:9px 16px;font-size:12px;cursor:pointer;font-family:inherit}
@@ -139,6 +144,7 @@
   </header>
 
   <main id="main">
+  <div class="evbanner" id="no-event-banner" style="display:none">開催中のイベントはありません — <a href="/archive">過去の記録はアーカイブへ</a></div>
   <section class="screen on" id="sc-monitor">
     <div class="grid2">
       <div>
@@ -158,7 +164,7 @@
   <nav id="nav">
     <a href="/" class="on"><span class="ic">⏱</span>Monitor</a>
     <a href="/ranking"><span class="ic">🏆</span>Ranking</a>
-    <a href="/my"><span class="ic">👤</span>My</a>
+    <a href="/mypage"><span class="ic">👤</span>Mypage</a>
     {{if .IsAdmin}}<a href="/admin"><span class="ic">🛠</span>運営</a>{{end}}
   </nav>
 
@@ -194,6 +200,28 @@ function h(tag, attrs, ...children){
 }
 function clear(el){ while (el.firstChild) el.removeChild(el.firstChild); }
 
+let iconRev = Date.now();
+function avatarInto(el, driverId, name, hasIcon){
+  clear(el);
+  if (hasIcon){
+    const img = h('img', { src: '/api/drivers/' + driverId + '/icon?v=' + iconRev, alt: '' });
+    img.addEventListener('error', () => { clear(el); el.textContent = (name || '?').slice(0, 1); });
+    el.appendChild(img);
+  } else {
+    el.textContent = (name || '?').slice(0, 1);
+  }
+}
+function vehicleAvatarInto(el, vehicleId, name, hasIcon){
+  clear(el);
+  if (hasIcon){
+    const img = h('img', { src: '/api/vehicles/' + vehicleId + '/icon?v=' + iconRev, alt: '' });
+    img.addEventListener('error', () => { clear(el); el.textContent = (name || '?').slice(0, 1); });
+    el.appendChild(img);
+  } else {
+    el.textContent = (name || '?').slice(0, 1);
+  }
+}
+
 /* ---------- toast ---------- */
 function toast(msg){
   const t = document.getElementById('toast');
@@ -204,7 +232,7 @@ function toast(msg){
 }
 
 /* ---------- server time offset ---------- */
-let offset = 0;
+let offset = 0, offsetKnown = false;
 function nowMs(){ return Date.now() + offset; }
 
 /* ---------- time formatting ---------- */
@@ -228,6 +256,17 @@ async function apiGet(url){
 /* ---------- state ---------- */
 let onCourseCars = [];
 let waitingQueue = [];
+let settings = null;
+
+/* ---------- no-active-event banner ---------- */
+function updateEventBanner(){
+  const noEvent = !settings || settings.event === null || settings.event_status === 'closed';
+  document.getElementById('no-event-banner').style.display = noEvent ? 'block' : 'none';
+}
+async function loadSettings(){
+  try { settings = await apiGet('/api/settings'); } catch (e) { /* keep last-known state */ }
+  updateEventBanner();
+}
 
 /* ---------- ON COURSE + NEXT ---------- */
 function renderCourse(){
@@ -240,19 +279,23 @@ function renderCourse(){
   onCourseCars.forEach(c => {
     const armed = !c.t_start_us;
     const flash = !!c.finish;
+    const waitingOffset = !armed && !flash && !offsetKnown;
     const cls = 'oncourse' + (c.mc_flag ? ' mc' : '') + (flash ? ' flash' : '') + (armed ? ' armed' : '');
     const vhChildren = [`#${c.vehicle.number} ${c.vehicle.name}`];
     if (c.pt_count) vhChildren.push(h('span', { style: 'color:var(--amber)' }, ` ・PT${c.pt_count}`));
+    const av = h('div', { class: 'avatar' });
+    avatarInto(av, c.driver.id, c.driver.name, !!c.driver.has_icon);
+    const tmText = armed ? '—:——' : (flash ? fmt3(c.finish.fin_ms) : (waitingOffset ? 'タイム取得中…' : fmt1(nowMs() - c.t_start_us / 1000)));
     const el = h('div', { class: cls, onclick: () => openFS(c.queue_id) },
       c.mc_flag ? h('div', { class: 'mcband' }, 'ミスコース') : null,
       h('div', { class: 'who' },
-        h('div', { class: 'avatar' }, (c.driver.name || '?').slice(0, 1)),
+        av,
         h('div', {},
           h('div', { class: 'nm' }, c.driver.name),
           h('div', { class: 'vh' }, vhChildren)
         ),
         h('div', { class: 'clk' },
-          h('div', { class: 'tm' }, armed ? '—:——' : (flash ? fmt3(c.finish.fin_ms) : fmt1(nowMs() - c.t_start_us / 1000))),
+          h('div', { class: 'tm' + (waitingOffset ? ' offsetwait' : '') }, tmText),
           h('div', { class: 'lb' }, armed ? 'READY' : (flash ? 'FINISH' : 'RUNNING'))
         )
       )
@@ -269,9 +312,11 @@ function renderNext(){
     return;
   }
   waitingQueue.slice(0, 3).forEach((q, i) => {
+    const av = h('div', { class: 'avatar sm' });
+    avatarInto(av, q.driver.id, q.driver.name, !!q.driver.has_icon);
     nextEl.appendChild(h('li', {},
       h('span', { class: 'pos t' }, String(i + 1)),
-      h('div', { class: 'avatar sm' }, (q.driver.name || '?').slice(0, 1)),
+      av,
       h('div', { class: 'nm' }, h('b', {}, q.driver.name), h('span', {}, `#${q.vehicle.number} ${q.vehicle.name}`))
     ));
   });
@@ -291,9 +336,14 @@ function renderRecent(items){
     const isNew = !recentFirstRender && !knownRecentIds.has(it.log_id);
     const liCls = (isNew ? 'new' : '') + (it.invalid ? ' dead' : '');
     const nmSpanText = `#${it.vehicle.number} ${it.vehicle.name}` + (it.source === 'manual' ? ' ・✍️手計測' : '');
+    const av = h('div', { class: 'avatar sm' });
+    avatarInto(av, it.driver.id, it.driver.name, !!it.driver.has_icon);
+    const vAv = h('div', { class: 'avatar xs' });
+    vehicleAvatarInto(vAv, it.vehicle.id, it.vehicle.name, !!it.vehicle.has_icon);
     const li = h('li', { class: liCls.trim() },
       h('span', { class: 'hn' }, it.heat !== null && it.heat !== undefined ? ('H' + it.heat) : ''),
-      h('div', { class: 'avatar sm' }, (it.driver.name || '?').slice(0, 1)),
+      av,
+      vAv,
       h('div', { class: 'nm' }, h('b', {}, it.driver.name), h('span', {}, nmSpanText)),
       it.is_mc ? h('span', { class: 'badge' }, 'MC') : null,
       it.pt_count ? h('span', { class: 'pt' }, 'PT' + it.pt_count) : null,
@@ -373,11 +423,13 @@ function renderFS(){
   if (!car){
     if (!fsCloseTimer) fsCloseTimer = setTimeout(closeFS, 3000);
   } else if (!car.t_start_us){
-    t.textContent = '—:——'; t.classList.remove('fin'); st.textContent = 'READY';
+    t.textContent = '—:——'; t.classList.remove('fin'); t.classList.remove('offsetwait'); st.textContent = 'READY';
   } else if (car.finish){
-    t.textContent = fmt3(car.finish.fin_ms); t.classList.add('fin'); st.textContent = 'FINISH';
+    t.textContent = fmt3(car.finish.fin_ms); t.classList.add('fin'); t.classList.remove('offsetwait'); st.textContent = 'FINISH';
+  } else if (!offsetKnown){
+    t.textContent = 'タイム取得中…'; t.classList.remove('fin'); t.classList.add('offsetwait'); st.textContent = 'RUNNING';
   } else {
-    t.textContent = fmt1(nowMs() - car.t_start_us / 1000); t.classList.remove('fin'); st.textContent = 'RUNNING';
+    t.textContent = fmt1(nowMs() - car.t_start_us / 1000); t.classList.remove('fin'); t.classList.remove('offsetwait'); st.textContent = 'RUNNING';
   }
   fitFSTime();
 }
@@ -395,10 +447,15 @@ function tick(ts){
 requestAnimationFrame(tick);
 
 /* ---------- SSE ---------- */
-const es = new EventSource('/api/stream?topics=ranking,on_course,queue,time');
+const es = new EventSource('/api/stream?topics=ranking,on_course,queue,time,directory,settings');
 es.addEventListener('time', e => {
   const d = JSON.parse(e.data);
   offset = d.server_ms - Date.now();
+  offsetKnown = true;
+});
+es.addEventListener('settings', e => {
+  settings = JSON.parse(e.data);
+  updateEventBanner();
 });
 es.addEventListener('on_course', e => {
   const d = JSON.parse(e.data);
@@ -412,6 +469,14 @@ es.addEventListener('queue', e => {
   renderNext();
 });
 es.addEventListener('ranking', () => { refreshRecent(); });
+es.addEventListener('directory', () => {
+  // directory change = user/vehicle master data (incl. icons) updated;
+  // bump the cache-buster so re-renders pick up new icon bytes.
+  iconRev = Date.now();
+  renderCourse();
+  renderNext();
+  refreshRecent();
+});
 
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible'){
@@ -419,11 +484,13 @@ document.addEventListener('visibilitychange', () => {
     renderNext();
     renderFS();
     refreshRecent();
+    loadSettings();
   }
 });
 
 renderCourse();
 renderNext();
+loadSettings();
 </script>
 </body>
 </html>

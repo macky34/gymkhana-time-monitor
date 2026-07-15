@@ -16,3 +16,6 @@ firmware/src/config.h
 # editor/os
 .DS_Store
 Thumbs.db
+
+# tooling cache
+tools/__pycache__/

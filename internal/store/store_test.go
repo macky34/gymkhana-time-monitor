@@ -30,10 +30,10 @@ func newTestStore(t *testing.T) *Store {
 	return st
 }
 
-func defaultSettings(eventName string) SettingsRow {
+func defaultSettings(eventName string) EventRow {
 	max660 := 660
 	max1600 := 1600
-	return SettingsRow{
+	return EventRow{
 		EventName:        eventName,
 		TimingMode:       "sensor",
 		PTMode:           "add",
@@ -66,6 +66,20 @@ func seedMinimal(t *testing.T, st *Store) {
 	if err := st.SeedEvent(defaultSettings("Seed Event"), []string{"現役", "学内OB", "社会人"}, []string{"2WD", "4WD"}); err != nil {
 		t.Fatalf("seedMinimal: SeedEvent: %v", err)
 	}
+}
+
+// activeEventID resolves the currently active event's id, failing the test
+// if none is active.
+func activeEventID(t *testing.T, st *Store) int64 {
+	t.Helper()
+	ev, ok, err := st.GetActiveEvent()
+	if err != nil {
+		t.Fatalf("GetActiveEvent: %v", err)
+	}
+	if !ok {
+		t.Fatalf("GetActiveEvent: no active event")
+	}
+	return ev.ID
 }
 
 func queueIDs(rows []QueueRow) []int64 {
@@ -117,16 +131,16 @@ func TestOpenCreatesSchemaAndIsIdempotent(t *testing.T) {
 		tables[name] = true
 	}
 	rows.Close()
-	for _, want := range []string{"settings", "class_defs", "drivers", "vehicles", "entries", "queue", "logs", "sensor_events", "audit"} {
+	for _, want := range []string{"events", "class_defs", "drivers", "vehicles", "entries", "queue", "logs", "sensor_events", "audit"} {
 		if !tables[want] {
 			t.Errorf("missing table %q after Open", want)
 		}
 	}
 
-	if _, ok, err := st.GetSettings(); err != nil {
-		t.Fatalf("GetSettings on fresh db: %v", err)
+	if _, ok, err := st.GetActiveEvent(); err != nil {
+		t.Fatalf("GetActiveEvent on fresh db: %v", err)
 	} else if ok {
-		t.Errorf("GetSettings ok=true on fresh db, want false (setup mode signal)")
+		t.Errorf("GetActiveEvent ok=true on fresh db, want false (setup mode signal)")
 	}
 
 	if err := st.Close(); err != nil {
@@ -151,9 +165,9 @@ func TestOpenCreatesSchemaAndIsIdempotent(t *testing.T) {
 		t.Fatalf("re-Open after seed: %v", err)
 	}
 	defer st3.Close()
-	got, ok, err := st3.GetSettings()
+	got, ok, err := st3.GetActiveEvent()
 	if err != nil {
-		t.Fatalf("GetSettings after re-Open: %v", err)
+		t.Fatalf("GetActiveEvent after re-Open: %v", err)
 	}
 	if !ok || got.EventName != "Persisted Event" {
 		t.Errorf("data did not persist across close/re-Open: ok=%v got=%+v", ok, got)
@@ -170,9 +184,9 @@ func TestForeignKeysEnforced(t *testing.T) {
 	}
 }
 
-// --- settings / class_defs ----------------------------------------------
+// --- events / class_defs ----------------------------------------------
 
-func TestSeedEventAndGetSettings(t *testing.T) {
+func TestSeedEventAndGetActiveEvent(t *testing.T) {
 	st := newTestStore(t)
 
 	set := defaultSettings("Test Gymkhana 2026")
@@ -180,12 +194,21 @@ func TestSeedEventAndGetSettings(t *testing.T) {
 		t.Fatalf("SeedEvent: %v", err)
 	}
 
-	got, ok, err := st.GetSettings()
+	got, ok, err := st.GetActiveEvent()
 	if err != nil {
-		t.Fatalf("GetSettings: %v", err)
+		t.Fatalf("GetActiveEvent: %v", err)
 	}
 	if !ok {
-		t.Fatalf("GetSettings ok=false after SeedEvent")
+		t.Fatalf("GetActiveEvent ok=false after SeedEvent")
+	}
+	if got.Status != "active" {
+		t.Errorf("Status = %q, want active", got.Status)
+	}
+	if got.CreatedAtMS == 0 {
+		t.Errorf("CreatedAtMS = 0, want a real timestamp")
+	}
+	if got.ClosedAtMS != nil {
+		t.Errorf("ClosedAtMS = %v, want nil for a fresh active event", *got.ClosedAtMS)
 	}
 	if got.EventName != set.EventName ||
 		got.TimingMode != set.TimingMode ||
@@ -197,7 +220,7 @@ func TestSeedEventAndGetSettings(t *testing.T) {
 		got.QueueSelfEntry != set.QueueSelfEntry ||
 		got.MaxCourseTimeSec != set.MaxCourseTimeSec ||
 		got.SensorLockoutMS != set.SensorLockoutMS {
-		t.Errorf("GetSettings roundtrip mismatch:\n got=%+v\nwant=%+v", got, set)
+		t.Errorf("GetActiveEvent roundtrip mismatch:\n got=%+v\nwant=%+v", got, set)
 	}
 	if got.Coef != set.Coef {
 		t.Errorf("Coef roundtrip mismatch: got=%+v want=%+v", got.Coef, set.Coef)
@@ -250,19 +273,119 @@ func TestSeedEventAndGetSettings(t *testing.T) {
 		t.Errorf("len(ListClassDefs(\"\")) = %d, want 5", len(all))
 	}
 
-	// UpdateSettings persists.
-	set.EventName = "Renamed Event"
-	set.PTPenaltyMS = 6000
-	set.RegistrationOpen = false
-	if err := st.UpdateSettings(set); err != nil {
-		t.Fatalf("UpdateSettings: %v", err)
+	// UpdateEvent persists.
+	got.EventName = "Renamed Event"
+	got.PTPenaltyMS = 6000
+	got.RegistrationOpen = false
+	if err := st.UpdateEvent(got); err != nil {
+		t.Fatalf("UpdateEvent: %v", err)
 	}
-	got2, ok, err := st.GetSettings()
+	got2, ok, err := st.GetActiveEvent()
 	if err != nil || !ok {
-		t.Fatalf("GetSettings after UpdateSettings: ok=%v err=%v", ok, err)
+		t.Fatalf("GetActiveEvent after UpdateEvent: ok=%v err=%v", ok, err)
 	}
 	if got2.EventName != "Renamed Event" || got2.PTPenaltyMS != 6000 || got2.RegistrationOpen {
-		t.Errorf("UpdateSettings did not persist: got=%+v", got2)
+		t.Errorf("UpdateEvent did not persist: got=%+v", got2)
+	}
+}
+
+func TestCreateEventRejectsSecondActive(t *testing.T) {
+	st := newTestStore(t)
+	seedMinimal(t, st)
+
+	if _, err := st.CreateEvent(defaultSettings("Second Event")); !errors.Is(err, ErrActiveEventExists) {
+		t.Fatalf("CreateEvent while one is active: err=%v, want ErrActiveEventExists", err)
+	}
+}
+
+func TestCloseEventThenCreateNewActive(t *testing.T) {
+	st := newTestStore(t)
+	seedMinimal(t, st)
+	firstID := activeEventID(t, st)
+
+	if err := st.CloseEvent(firstID); err != nil {
+		t.Fatalf("CloseEvent: %v", err)
+	}
+	if _, ok, err := st.GetActiveEvent(); err != nil {
+		t.Fatalf("GetActiveEvent after close: %v", err)
+	} else if ok {
+		t.Errorf("GetActiveEvent ok=true after closing the only event")
+	}
+
+	closed, ok, err := st.GetEvent(firstID)
+	if err != nil || !ok {
+		t.Fatalf("GetEvent(closed): ok=%v err=%v", ok, err)
+	}
+	if closed.Status != "closed" || closed.ClosedAtMS == nil {
+		t.Errorf("closed event = %+v, want status=closed with ClosedAtMS set", closed)
+	}
+
+	// Closing again fails: no longer 'active'.
+	if err := st.CloseEvent(firstID); !errors.Is(err, ErrEventNotActive) {
+		t.Errorf("CloseEvent (already closed): err=%v, want ErrEventNotActive", err)
+	}
+
+	secondID, err := st.CreateEvent(defaultSettings("Second Event"))
+	if err != nil {
+		t.Fatalf("CreateEvent after close: %v", err)
+	}
+	active, ok, err := st.GetActiveEvent()
+	if err != nil || !ok || active.ID != secondID {
+		t.Fatalf("GetActiveEvent after second CreateEvent: ok=%v err=%v got=%+v", ok, err, active)
+	}
+
+	events, err := st.ListEvents()
+	if err != nil {
+		t.Fatalf("ListEvents: %v", err)
+	}
+	if len(events) != 2 || events[0].ID != secondID || events[1].ID != firstID {
+		t.Fatalf("ListEvents order = %+v, want [second, first] (created_at_ms DESC)", events)
+	}
+}
+
+// TestHasAdmin covers the stage-2 /setup gate: false on a freshly seeded
+// event (no drivers yet), true once an admin driver is created, and false
+// again does not apply once an admin has ever existed (there is no
+// "un-admin" path exercised here beyond SetRole, covered below).
+func TestHasAdmin(t *testing.T) {
+	st := newTestStore(t)
+	seedMinimal(t, st)
+
+	if has, err := st.HasAdmin(); err != nil {
+		t.Fatalf("HasAdmin (no drivers): %v", err)
+	} else if has {
+		t.Errorf("HasAdmin = true before any driver exists, want false")
+	}
+
+	driverClasses, _ := st.ListClassDefs("driver")
+	uid, err := st.CreateDriver("U", driverClasses[0].ID, "tok-user", "user")
+	if err != nil {
+		t.Fatalf("CreateDriver(user): %v", err)
+	}
+	if has, err := st.HasAdmin(); err != nil {
+		t.Fatalf("HasAdmin (user only): %v", err)
+	} else if has {
+		t.Errorf("HasAdmin = true with a non-admin driver, want false")
+	}
+
+	if _, err := st.CreateDriver("A", driverClasses[0].ID, "tok-admin", "admin"); err != nil {
+		t.Fatalf("CreateDriver(admin): %v", err)
+	}
+	if has, err := st.HasAdmin(); err != nil {
+		t.Fatalf("HasAdmin (admin created): %v", err)
+	} else if !has {
+		t.Errorf("HasAdmin = false after creating an admin, want true")
+	}
+
+	// SetRole demoting the sole non-admin has no effect on HasAdmin either
+	// way; sanity check it still reports true (the admin driver is untouched).
+	if err := st.SetRole(uid, "user"); err != nil {
+		t.Fatalf("SetRole: %v", err)
+	}
+	if has, err := st.HasAdmin(); err != nil {
+		t.Fatalf("HasAdmin (after unrelated SetRole): %v", err)
+	} else if !has {
+		t.Errorf("HasAdmin = false, want true (the admin driver is unaffected)")
 	}
 }
 
@@ -516,11 +639,96 @@ func TestDriverVehicleEntryCRUD(t *testing.T) {
 	}
 }
 
+// --- vehicle icon / auto main-vehicle -------------------------------------
+
+func TestVehicleIconRoundtrip(t *testing.T) {
+	st := newTestStore(t)
+	seedMinimal(t, st)
+	dtClasses, _ := st.ListClassDefs("drivetrain")
+
+	vid, err := st.CreateVehicle(Vehicle{Number: 1, Name: "V", Engine: "gasoline", DrivetrainClassID: dtClasses[0].ID})
+	if err != nil {
+		t.Fatalf("CreateVehicle: %v", err)
+	}
+
+	if _, ok, err := st.GetVehicleIcon(vid); err != nil || ok {
+		t.Errorf("GetVehicleIcon before SetVehicleIcon: ok=%v err=%v, want ok=false err=nil", ok, err)
+	}
+	v, ok, err := st.GetVehicle(vid)
+	if err != nil || !ok || v.HasIcon {
+		t.Fatalf("GetVehicle before SetVehicleIcon: ok=%v err=%v HasIcon=%v, want HasIcon=false", ok, err, v.HasIcon)
+	}
+
+	jpeg := []byte{0xFF, 0xD8, 0xFF, 0xD9}
+	if err := st.SetVehicleIcon(vid, jpeg); err != nil {
+		t.Fatalf("SetVehicleIcon: %v", err)
+	}
+	gotIcon, ok, err := st.GetVehicleIcon(vid)
+	if err != nil || !ok {
+		t.Fatalf("GetVehicleIcon after SetVehicleIcon: ok=%v err=%v", ok, err)
+	}
+	if string(gotIcon) != string(jpeg) {
+		t.Errorf("GetVehicleIcon mismatch: got=%v want=%v", gotIcon, jpeg)
+	}
+	vWithIcon, _, err := st.GetVehicle(vid)
+	if err != nil {
+		t.Fatalf("GetVehicle after SetVehicleIcon: %v", err)
+	}
+	if !vWithIcon.HasIcon {
+		t.Errorf("HasIcon should be true after SetVehicleIcon")
+	}
+}
+
+func TestAddEntryAutoSetsMainVehicleOnce(t *testing.T) {
+	st := newTestStore(t)
+	seedMinimal(t, st)
+	driverClasses, _ := st.ListClassDefs("driver")
+	dtClasses, _ := st.ListClassDefs("drivetrain")
+
+	driverID, err := st.CreateDriver("山田太郎", driverClasses[0].ID, "tok-auto-main", "user")
+	if err != nil {
+		t.Fatalf("CreateDriver: %v", err)
+	}
+	v1, err := st.CreateVehicle(Vehicle{Number: 1, Name: "V1", Engine: "gasoline", DrivetrainClassID: dtClasses[0].ID})
+	if err != nil {
+		t.Fatalf("CreateVehicle(1): %v", err)
+	}
+	v2, err := st.CreateVehicle(Vehicle{Number: 2, Name: "V2", Engine: "gasoline", DrivetrainClassID: dtClasses[0].ID})
+	if err != nil {
+		t.Fatalf("CreateVehicle(2): %v", err)
+	}
+
+	// First linked vehicle becomes the main vehicle automatically.
+	if err := st.AddEntry(driverID, v1); err != nil {
+		t.Fatalf("AddEntry(v1): %v", err)
+	}
+	d, _, err := st.GetDriver(driverID)
+	if err != nil {
+		t.Fatalf("GetDriver after AddEntry(v1): %v", err)
+	}
+	if d.MainVehicleID == nil || *d.MainVehicleID != v1 {
+		t.Fatalf("MainVehicleID after AddEntry(v1) = %v, want %d", d.MainVehicleID, v1)
+	}
+
+	// A second linked vehicle must not overwrite the already-set main vehicle.
+	if err := st.AddEntry(driverID, v2); err != nil {
+		t.Fatalf("AddEntry(v2): %v", err)
+	}
+	d, _, err = st.GetDriver(driverID)
+	if err != nil {
+		t.Fatalf("GetDriver after AddEntry(v2): %v", err)
+	}
+	if d.MainVehicleID == nil || *d.MainVehicleID != v1 {
+		t.Errorf("MainVehicleID after AddEntry(v2) = %v, want unchanged %d", d.MainVehicleID, v1)
+	}
+}
+
 // --- queue ---------------------------------------------------------------
 
 func TestQueueEnqueueReorderAndStatus(t *testing.T) {
 	st := newTestStore(t)
 	seedMinimal(t, st)
+	eventID := activeEventID(t, st)
 	driverClasses, _ := st.ListClassDefs("driver")
 	dtClasses, _ := st.ListClassDefs("drivetrain")
 
@@ -543,25 +751,25 @@ func TestQueueEnqueueReorderAndStatus(t *testing.T) {
 	d1, d2, d3 := mkDriver("A", "ta"), mkDriver("B", "tb"), mkDriver("C", "tc")
 	v1, v2, v3 := mkVehicle(1), mkVehicle(2), mkVehicle(3)
 
-	qid1, err := st.Enqueue(d1, v1, nil)
+	qid1, err := st.Enqueue(eventID, d1, v1, nil)
 	if err != nil {
 		t.Fatalf("Enqueue 1: %v", err)
 	}
 	selfCreator := d2
-	qid2, err := st.Enqueue(d2, v2, &selfCreator)
+	qid2, err := st.Enqueue(eventID, d2, v2, &selfCreator)
 	if err != nil {
 		t.Fatalf("Enqueue 2: %v", err)
 	}
-	qid3, err := st.Enqueue(d3, v3, nil)
+	qid3, err := st.Enqueue(eventID, d3, v3, nil)
 	if err != nil {
 		t.Fatalf("Enqueue 3: %v", err)
 	}
 
-	if _, err := st.Enqueue(d1, v1, nil); !errors.Is(err, ErrAlreadyWaiting) {
+	if _, err := st.Enqueue(eventID, d1, v1, nil); !errors.Is(err, ErrAlreadyWaiting) {
 		t.Errorf("Enqueue duplicate: err=%v, want ErrAlreadyWaiting", err)
 	}
 
-	waiting, err := st.ListQueue("waiting")
+	waiting, err := st.ListQueue(eventID, "waiting")
 	if err != nil {
 		t.Fatalf("ListQueue(waiting): %v", err)
 	}
@@ -571,6 +779,9 @@ func TestQueueEnqueueReorderAndStatus(t *testing.T) {
 	for i, want := range []int64{qid1, qid2, qid3} {
 		if waiting[i].ID != want {
 			t.Errorf("waiting[%d].ID = %d, want %d (position order = %v)", i, waiting[i].ID, want, queueIDs(waiting))
+		}
+		if waiting[i].EventID != eventID {
+			t.Errorf("waiting[%d].EventID = %d, want %d", i, waiting[i].EventID, eventID)
 		}
 	}
 	if waiting[0].Position != 1.0 || waiting[1].Position != 2.0 || waiting[2].Position != 3.0 {
@@ -583,7 +794,7 @@ func TestQueueEnqueueReorderAndStatus(t *testing.T) {
 	if err := st.Reorder(qid3, 1.5); err != nil {
 		t.Fatalf("Reorder: %v", err)
 	}
-	waiting, err = st.ListQueue("waiting")
+	waiting, err = st.ListQueue(eventID, "waiting")
 	if err != nil {
 		t.Fatalf("ListQueue(waiting) after Reorder: %v", err)
 	}
@@ -617,14 +828,14 @@ func TestQueueEnqueueReorderAndStatus(t *testing.T) {
 	if err := st.SetQueueStatus(qid3, "on_course"); err != nil {
 		t.Fatalf("SetQueueStatus(qid3): %v", err)
 	}
-	onCourse, err := st.ListQueue("on_course")
+	onCourse, err := st.ListQueue(eventID, "on_course")
 	if err != nil {
 		t.Fatalf("ListQueue(on_course): %v", err)
 	}
 	if len(onCourse) != 2 || onCourse[0].ID != qid1 || onCourse[1].ID != qid3 {
 		t.Errorf("ListQueue(on_course) = %v, want id order [qid1, qid3]", queueIDs(onCourse))
 	}
-	waitingAfter, err := st.ListQueue("waiting")
+	waitingAfter, err := st.ListQueue(eventID, "waiting")
 	if err != nil {
 		t.Fatalf("ListQueue(waiting) after two dequeues: %v", err)
 	}
@@ -669,9 +880,89 @@ func TestQueueEnqueueReorderAndStatus(t *testing.T) {
 	}
 }
 
+// TestCancelWaiting covers the event-close helper: every 'waiting' row of
+// the target event moves to 'canceled', on_course rows are left alone, and
+// another event's waiting rows are untouched.
+func TestCancelWaiting(t *testing.T) {
+	st := newTestStore(t)
+	seedMinimal(t, st)
+	eventA := activeEventID(t, st)
+	driverClasses, _ := st.ListClassDefs("driver")
+	dtClasses, _ := st.ListClassDefs("drivetrain")
+
+	cc := 1200
+	d1, err := st.CreateDriver("D1", driverClasses[0].ID, "tok-cw1", "user")
+	if err != nil {
+		t.Fatalf("CreateDriver: %v", err)
+	}
+	d2, err := st.CreateDriver("D2", driverClasses[0].ID, "tok-cw2", "user")
+	if err != nil {
+		t.Fatalf("CreateDriver: %v", err)
+	}
+	v1, err := st.CreateVehicle(Vehicle{Number: 1, Name: "V1", Engine: "gasoline", DisplacementCC: &cc, DrivetrainClassID: dtClasses[0].ID})
+	if err != nil {
+		t.Fatalf("CreateVehicle: %v", err)
+	}
+	v2, err := st.CreateVehicle(Vehicle{Number: 2, Name: "V2", Engine: "gasoline", DisplacementCC: &cc, DrivetrainClassID: dtClasses[0].ID})
+	if err != nil {
+		t.Fatalf("CreateVehicle: %v", err)
+	}
+
+	qWaiting, err := st.Enqueue(eventA, d1, v1, nil)
+	if err != nil {
+		t.Fatalf("Enqueue(waiting): %v", err)
+	}
+	qOnCourse, err := st.Enqueue(eventA, d2, v2, nil)
+	if err != nil {
+		t.Fatalf("Enqueue(on_course-to-be): %v", err)
+	}
+	if err := st.SetQueueStatus(qOnCourse, "on_course"); err != nil {
+		t.Fatalf("SetQueueStatus: %v", err)
+	}
+
+	if err := st.CloseEvent(eventA); err != nil {
+		t.Fatalf("CloseEvent: %v", err)
+	}
+	eventB, err := st.CreateEvent(defaultSettings("Event B"))
+	if err != nil {
+		t.Fatalf("CreateEvent(eventB): %v", err)
+	}
+	qOtherEvent, err := st.Enqueue(eventB, d1, v1, nil)
+	if err != nil {
+		t.Fatalf("Enqueue(eventB): %v", err)
+	}
+
+	if err := st.CancelWaiting(eventA); err != nil {
+		t.Fatalf("CancelWaiting: %v", err)
+	}
+
+	waitingRow, _, err := st.GetQueueRow(qWaiting)
+	if err != nil {
+		t.Fatalf("GetQueueRow(qWaiting): %v", err)
+	}
+	if waitingRow.Status != "canceled" {
+		t.Errorf("waiting row status = %q, want canceled", waitingRow.Status)
+	}
+	onCourseRow, _, err := st.GetQueueRow(qOnCourse)
+	if err != nil {
+		t.Fatalf("GetQueueRow(qOnCourse): %v", err)
+	}
+	if onCourseRow.Status != "on_course" {
+		t.Errorf("on_course row status = %q, want unchanged on_course", onCourseRow.Status)
+	}
+	otherEventRow, _, err := st.GetQueueRow(qOtherEvent)
+	if err != nil {
+		t.Fatalf("GetQueueRow(qOtherEvent): %v", err)
+	}
+	if otherEventRow.Status != "waiting" {
+		t.Errorf("other event's waiting row status = %q, want unchanged waiting", otherEventRow.Status)
+	}
+}
+
 func TestReorderRenumbersWhenPositionsConverge(t *testing.T) {
 	st := newTestStore(t)
 	seedMinimal(t, st)
+	eventID := activeEventID(t, st)
 	driverClasses, _ := st.ListClassDefs("driver")
 	dtClasses, _ := st.ListClassDefs("drivetrain")
 
@@ -686,7 +977,7 @@ func TestReorderRenumbersWhenPositionsConverge(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CreateVehicle: %v", err)
 		}
-		qid, err := st.Enqueue(did, vid, nil)
+		qid, err := st.Enqueue(eventID, did, vid, nil)
 		if err != nil {
 			t.Fatalf("Enqueue: %v", err)
 		}
@@ -700,7 +991,7 @@ func TestReorderRenumbersWhenPositionsConverge(t *testing.T) {
 		t.Fatalf("Reorder: %v", err)
 	}
 
-	waiting, err := st.ListQueue("waiting")
+	waiting, err := st.ListQueue(eventID, "waiting")
 	if err != nil {
 		t.Fatalf("ListQueue: %v", err)
 	}
@@ -722,6 +1013,7 @@ func TestReorderRenumbersWhenPositionsConverge(t *testing.T) {
 func TestSetPTGuard(t *testing.T) {
 	st := newTestStore(t)
 	seedMinimal(t, st)
+	eventID := activeEventID(t, st)
 	driverClasses, _ := st.ListClassDefs("driver")
 	dtClasses, _ := st.ListClassDefs("drivetrain")
 	did, err := st.CreateDriver("D", driverClasses[0].ID, "tok", "user")
@@ -733,7 +1025,7 @@ func TestSetPTGuard(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateVehicle: %v", err)
 	}
-	qid, err := st.Enqueue(did, vid, nil)
+	qid, err := st.Enqueue(eventID, did, vid, nil)
 	if err != nil {
 		t.Fatalf("Enqueue: %v", err)
 	}
@@ -792,6 +1084,7 @@ func TestSetPTGuard(t *testing.T) {
 func TestLogsCRUDAndListRuns(t *testing.T) {
 	st := newTestStore(t)
 	seedMinimal(t, st)
+	eventID := activeEventID(t, st)
 	driverClasses, _ := st.ListClassDefs("driver")
 	dtClasses, _ := st.ListClassDefs("drivetrain")
 
@@ -815,7 +1108,7 @@ func TestLogsCRUDAndListRuns(t *testing.T) {
 
 	p := func(v int64) *int64 { return &v }
 	mkLog := func(driverID, vehicleID *int64, rawMS int, ts int64, source string) int64 {
-		id, err := st.InsertLog(LogRow{DriverID: driverID, VehicleID: vehicleID, RawMS: rawMS, TimestampMS: ts, Source: source})
+		id, err := st.InsertLog(LogRow{EventID: eventID, DriverID: driverID, VehicleID: vehicleID, RawMS: rawMS, TimestampMS: ts, Source: source})
 		if err != nil {
 			t.Fatalf("InsertLog: %v", err)
 		}
@@ -834,6 +1127,9 @@ func TestLogsCRUDAndListRuns(t *testing.T) {
 	if gotLog.RawMS != 84310 || gotLog.Source != "sensor" || gotLog.DriverID == nil || *gotLog.DriverID != d1 {
 		t.Errorf("GetLog mismatch: %+v", gotLog)
 	}
+	if gotLog.EventID != eventID {
+		t.Errorf("GetLog.EventID = %d, want %d", gotLog.EventID, eventID)
+	}
 
 	editedAt := int64(9999)
 	gotLog.RawMS = 84000
@@ -849,7 +1145,7 @@ func TestLogsCRUDAndListRuns(t *testing.T) {
 		t.Errorf("UpdateLog did not persist: %+v", gotLog2)
 	}
 
-	runs, err := st.ListRuns()
+	runs, err := st.ListRuns(eventID)
 	if err != nil {
 		t.Fatalf("ListRuns: %v", err)
 	}
@@ -863,7 +1159,7 @@ func TestLogsCRUDAndListRuns(t *testing.T) {
 		t.Errorf("ListRuns[0].Combo = %+v", runs[0].Combo)
 	}
 
-	byCombo, err := st.ListRunsByCombo(d1, v1)
+	byCombo, err := st.ListRunsByCombo(eventID, d1, v1)
 	if err != nil {
 		t.Fatalf("ListRunsByCombo: %v", err)
 	}
@@ -871,7 +1167,7 @@ func TestLogsCRUDAndListRuns(t *testing.T) {
 		t.Fatalf("ListRunsByCombo len = %d, want 2", len(byCombo))
 	}
 
-	unassigned, err := st.ListUnassignedLogs()
+	unassigned, err := st.ListUnassignedLogs(eventID)
 	if err != nil {
 		t.Fatalf("ListUnassignedLogs: %v", err)
 	}
@@ -882,7 +1178,7 @@ func TestLogsCRUDAndListRuns(t *testing.T) {
 	if err := st.SoftDeleteLog(l2); err != nil {
 		t.Fatalf("SoftDeleteLog: %v", err)
 	}
-	runsAfterDelete, err := st.ListRuns()
+	runsAfterDelete, err := st.ListRuns(eventID)
 	if err != nil {
 		t.Fatalf("ListRuns after SoftDeleteLog: %v", err)
 	}
@@ -897,7 +1193,7 @@ func TestLogsCRUDAndListRuns(t *testing.T) {
 		t.Errorf("IsDeleted = false after SoftDeleteLog")
 	}
 
-	page, total, err := st.ListLogs(2, 0)
+	page, total, err := st.ListLogs(eventID, 2, 0)
 	if err != nil {
 		t.Fatalf("ListLogs: %v", err)
 	}
@@ -910,7 +1206,7 @@ func TestLogsCRUDAndListRuns(t *testing.T) {
 	if page[0].ID != lUnassigned {
 		t.Errorf("ListLogs[0].ID = %d, want %d (timestamp_ms DESC, newest first)", page[0].ID, lUnassigned)
 	}
-	page2, _, err := st.ListLogs(2, 2)
+	page2, _, err := st.ListLogs(eventID, 2, 2)
 	if err != nil {
 		t.Fatalf("ListLogs page2: %v", err)
 	}
@@ -926,7 +1222,7 @@ func TestLogsCRUDAndListRuns(t *testing.T) {
 	} else if ok {
 		t.Errorf("GetLog after HardDeleteLog: ok=true, want false")
 	}
-	_, total, err = st.ListLogs(10, 0)
+	_, total, err = st.ListLogs(eventID, 10, 0)
 	if err != nil {
 		t.Fatalf("ListLogs after HardDeleteLog: %v", err)
 	}
@@ -935,12 +1231,96 @@ func TestLogsCRUDAndListRuns(t *testing.T) {
 	}
 }
 
+// TestQueueAndLogsScopedPerEvent verifies that two events on the same store
+// keep independent queue/logs: entries created for event A must never leak
+// into event B's ListQueue/ListRuns results (plan/DESIGN.md multi-event
+// isolation requirement).
+func TestQueueAndLogsScopedPerEvent(t *testing.T) {
+	st := newTestStore(t)
+	seedMinimal(t, st)
+	eventA := activeEventID(t, st)
+	if err := st.CloseEvent(eventA); err != nil {
+		t.Fatalf("CloseEvent(eventA): %v", err)
+	}
+	eventB, err := st.CreateEvent(defaultSettings("Event B"))
+	if err != nil {
+		t.Fatalf("CreateEvent(eventB): %v", err)
+	}
+
+	driverClasses, _ := st.ListClassDefs("driver")
+	dtClasses, _ := st.ListClassDefs("drivetrain")
+	did, err := st.CreateDriver("D", driverClasses[0].ID, "tok-scope", "user")
+	if err != nil {
+		t.Fatalf("CreateDriver: %v", err)
+	}
+	cc := 1200
+	vid, err := st.CreateVehicle(Vehicle{Number: 1, Name: "V", Engine: "gasoline", DisplacementCC: &cc, DrivetrainClassID: dtClasses[0].ID})
+	if err != nil {
+		t.Fatalf("CreateVehicle: %v", err)
+	}
+
+	// One queue entry + one log in event A, none in event B.
+	if _, err := st.Enqueue(eventA, did, vid, nil); err != nil {
+		t.Fatalf("Enqueue(eventA): %v", err)
+	}
+	if _, err := st.InsertLog(LogRow{EventID: eventA, DriverID: &did, VehicleID: &vid, RawMS: 80000, TimestampMS: 1000, Source: "sensor"}); err != nil {
+		t.Fatalf("InsertLog(eventA): %v", err)
+	}
+
+	waitingA, err := st.ListQueue(eventA, "waiting")
+	if err != nil {
+		t.Fatalf("ListQueue(eventA): %v", err)
+	}
+	if len(waitingA) != 1 {
+		t.Fatalf("ListQueue(eventA, waiting) len = %d, want 1", len(waitingA))
+	}
+	waitingB, err := st.ListQueue(eventB, "waiting")
+	if err != nil {
+		t.Fatalf("ListQueue(eventB): %v", err)
+	}
+	if len(waitingB) != 0 {
+		t.Fatalf("ListQueue(eventB, waiting) len = %d, want 0 (must not see eventA's queue)", len(waitingB))
+	}
+
+	runsA, err := st.ListRuns(eventA)
+	if err != nil {
+		t.Fatalf("ListRuns(eventA): %v", err)
+	}
+	if len(runsA) != 1 {
+		t.Fatalf("ListRuns(eventA) len = %d, want 1", len(runsA))
+	}
+	runsB, err := st.ListRuns(eventB)
+	if err != nil {
+		t.Fatalf("ListRuns(eventB): %v", err)
+	}
+	if len(runsB) != 0 {
+		t.Fatalf("ListRuns(eventB) len = %d, want 0 (must not see eventA's logs)", len(runsB))
+	}
+
+	_, totalA, err := st.ListLogs(eventA, 10, 0)
+	if err != nil {
+		t.Fatalf("ListLogs(eventA): %v", err)
+	}
+	if totalA != 1 {
+		t.Errorf("ListLogs(eventA) total = %d, want 1", totalA)
+	}
+	_, totalB, err := st.ListLogs(eventB, 10, 0)
+	if err != nil {
+		t.Fatalf("ListLogs(eventB): %v", err)
+	}
+	if totalB != 0 {
+		t.Errorf("ListLogs(eventB) total = %d, want 0 (must not see eventA's logs)", totalB)
+	}
+}
+
 // --- sensor / audit / snapshot ---------------------------------------------
 
 func TestInsertSensorEventDedup(t *testing.T) {
 	st := newTestStore(t)
+	seedMinimal(t, st)
+	eventID := activeEventID(t, st)
 
-	ok, err := st.InsertSensorEvent("start", 42, 1, 1_000_000, 1_000_100)
+	ok, err := st.InsertSensorEvent("start", 42, 1, 1_000_000, 1_000_100, nil)
 	if err != nil {
 		t.Fatalf("InsertSensorEvent (first): %v", err)
 	}
@@ -950,24 +1330,24 @@ func TestInsertSensorEventDedup(t *testing.T) {
 
 	// Same (sensor_id, boot_id, seq) resent twice more (the 3x UDP resend) ->
 	// deduplicated both times.
-	if ok, err := st.InsertSensorEvent("start", 42, 1, 1_000_000, 1_000_150); err != nil {
+	if ok, err := st.InsertSensorEvent("start", 42, 1, 1_000_000, 1_000_150, nil); err != nil {
 		t.Fatalf("InsertSensorEvent (dup 1): %v", err)
 	} else if ok {
 		t.Errorf("InsertSensorEvent (dup 1) ok=true, want false")
 	}
-	if ok, err := st.InsertSensorEvent("start", 42, 1, 1_000_000, 1_000_200); err != nil {
+	if ok, err := st.InsertSensorEvent("start", 42, 1, 1_000_000, 1_000_200, nil); err != nil {
 		t.Fatalf("InsertSensorEvent (dup 2): %v", err)
 	} else if ok {
 		t.Errorf("InsertSensorEvent (dup 2) ok=true, want false")
 	}
 
-	if ok, err := st.InsertSensorEvent("start", 42, 2, 1_000_500, 1_000_600); err != nil {
+	if ok, err := st.InsertSensorEvent("start", 42, 2, 1_000_500, 1_000_600, nil); err != nil {
 		t.Fatalf("InsertSensorEvent (seq 2): %v", err)
 	} else if !ok {
 		t.Errorf("InsertSensorEvent (seq 2) ok=false, want true")
 	}
 
-	if ok, err := st.InsertSensorEvent("goal", 42, 1, 1_000_700, 1_000_800); err != nil {
+	if ok, err := st.InsertSensorEvent("goal", 42, 1, 1_000_700, 1_000_800, &eventID); err != nil {
 		t.Fatalf("InsertSensorEvent (goal sensor, same boot/seq): %v", err)
 	} else if !ok {
 		t.Errorf("InsertSensorEvent (goal) ok=false, want true (sensor_id differs)")
@@ -980,15 +1360,25 @@ func TestInsertSensorEventDedup(t *testing.T) {
 	if count != 3 {
 		t.Errorf("sensor_events row count = %d, want 3", count)
 	}
+
+	var gotEventID sql.NullInt64
+	if err := st.db.QueryRow(`SELECT event_id FROM sensor_events WHERE sensor_id = 'goal'`).Scan(&gotEventID); err != nil {
+		t.Fatalf("query goal event_id: %v", err)
+	}
+	if !gotEventID.Valid || gotEventID.Int64 != eventID {
+		t.Errorf("goal row event_id = %+v, want %d", gotEventID, eventID)
+	}
 }
 
 func TestAppendAudit(t *testing.T) {
 	st := newTestStore(t)
+	seedMinimal(t, st)
+	eventID := activeEventID(t, st)
 	driverID := int64(7)
-	if err := st.AppendAudit(123456, &driverID, "log.edit", `{"log_id":1}`); err != nil {
+	if err := st.AppendAudit(123456, &driverID, "log.edit", `{"log_id":1}`, nil); err != nil {
 		t.Fatalf("AppendAudit: %v", err)
 	}
-	if err := st.AppendAudit(123457, nil, "queue.launch", `{}`); err != nil {
+	if err := st.AppendAudit(123457, nil, "queue.launch", `{}`, &eventID); err != nil {
 		t.Fatalf("AppendAudit(nil driver): %v", err)
 	}
 
@@ -1007,6 +1397,14 @@ func TestAppendAudit(t *testing.T) {
 	}
 	if action != "log.edit" || !driverIDCol.Valid || driverIDCol.Int64 != 7 {
 		t.Errorf("audit row mismatch: action=%q driver_id=%+v", action, driverIDCol)
+	}
+
+	var gotEventID sql.NullInt64
+	if err := st.db.QueryRow(`SELECT event_id FROM audit WHERE at_ms = 123457`).Scan(&gotEventID); err != nil {
+		t.Fatalf("query audit event_id: %v", err)
+	}
+	if !gotEventID.Valid || gotEventID.Int64 != eventID {
+		t.Errorf("audit event_id = %+v, want %d", gotEventID, eventID)
 	}
 }
 
@@ -1036,9 +1434,9 @@ func TestVacuumInto(t *testing.T) {
 		t.Fatalf("Open(vacuum copy): %v", err)
 	}
 	defer copySt.Close()
-	got, ok, err := copySt.GetSettings()
+	got, ok, err := copySt.GetActiveEvent()
 	if err != nil || !ok {
-		t.Fatalf("GetSettings on vacuum copy: ok=%v err=%v", ok, err)
+		t.Fatalf("GetActiveEvent on vacuum copy: ok=%v err=%v", ok, err)
 	}
 	if got.EventName != "Seed Event" {
 		t.Errorf("vacuum copy EventName = %q, want %q", got.EventName, "Seed Event")
@@ -1055,6 +1453,7 @@ func TestVacuumInto(t *testing.T) {
 func TestConcurrentEnqueueIsSerialized(t *testing.T) {
 	st := newTestStore(t)
 	seedMinimal(t, st)
+	eventID := activeEventID(t, st)
 	driverClasses, _ := st.ListClassDefs("driver")
 	dtClasses, _ := st.ListClassDefs("drivetrain")
 
@@ -1081,7 +1480,7 @@ func TestConcurrentEnqueueIsSerialized(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			_, err := st.Enqueue(driverIDs[i], vehicleIDs[i], nil)
+			_, err := st.Enqueue(eventID, driverIDs[i], vehicleIDs[i], nil)
 			errs[i] = err
 		}(i)
 	}
@@ -1093,7 +1492,7 @@ func TestConcurrentEnqueueIsSerialized(t *testing.T) {
 		}
 	}
 
-	waiting, err := st.ListQueue("waiting")
+	waiting, err := st.ListQueue(eventID, "waiting")
 	if err != nil {
 		t.Fatalf("ListQueue: %v", err)
 	}

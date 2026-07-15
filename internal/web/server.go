@@ -72,11 +72,15 @@ func NewServer(st *store.Store, hub *sse.Hub, snap *snapshot.Builder, baseURL st
 	s.course = newCourseManager(s)
 	snap.SetFinishProvider(s.course.finishProvider)
 
-	_, ok, err := st.GetSettings()
+	// Stage-2 (multi-event): setup is a one-time, whole-database wizard, not
+	// tied to "is there an active event right now" (an operator legitimately
+	// has zero active events between event runs). Gate it on "no admin has
+	// ever been created" instead.
+	hasAdmin, err := st.HasAdmin()
 	if err != nil {
 		return nil, err
 	}
-	if !ok {
+	if !hasAdmin {
 		tok, err := randToken()
 		if err != nil {
 			return nil, err
@@ -98,17 +102,24 @@ func randToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(buf), nil
 }
 
-// Routes builds the full HTTP route table.
-func (s *Server) Routes() *http.ServeMux {
+// Routes builds the full HTTP route table. The returned handler is the mux
+// wrapped in withCacheControl, so every route gets "Cache-Control: no-store"
+// by default (see withCacheControl for why that is done here, once, rather
+// than in every handler).
+func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	// ---- Pages (always 200, auth-optional; page JS handles the rest) ----
 	mux.HandleFunc("GET /{$}", s.handleMonitorPage)
 	mux.HandleFunc("GET /ranking", s.handleRankingPage)
 	mux.HandleFunc("GET /register", s.handleRegisterPage)
-	mux.HandleFunc("GET /my", s.handleMyPage)
+	mux.HandleFunc("GET /mypage", s.handleMyPage)
+	mux.HandleFunc("GET /my", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/mypage", http.StatusMovedPermanently)
+	})
 	mux.HandleFunc("GET /admin", s.handleAdminPage)
 	mux.HandleFunc("GET /setup", s.handleSetupPage)
+	mux.HandleFunc("GET /archive", s.handleArchivePage)
 	mux.Handle("GET /static/", s.staticHandler())
 	mux.HandleFunc("GET /a/{token}", s.withRateLimit(s.handleTokenLogin))
 
@@ -130,22 +141,30 @@ func (s *Server) Routes() *http.ServeMux {
 	mux.HandleFunc("GET /api/drivers", s.handleAPIDrivers)
 	mux.HandleFunc("GET /api/vehicles", s.handleAPIVehicles)
 	mux.HandleFunc("GET /api/drivers/{id}/icon", s.handleDriverIcon)
+	mux.HandleFunc("GET /api/vehicles/{id}/icon", s.handleVehicleIcon)
+
+	// ---- Archive (public, closed events only) ----
+	mux.HandleFunc("GET /api/archive/events", s.handleAPIArchiveEvents)
+	mux.HandleFunc("GET /api/archive/{id}/ranking", s.handleAPIArchiveRanking)
+	mux.HandleFunc("GET /api/archive/{id}/recent", s.handleAPIArchiveRecent)
 
 	// ---- Registration ----
 	mux.HandleFunc("POST /api/register", s.withRateLimit(s.withCSRFGuard(s.handleRegister)))
 
-	// ---- My (authenticated participant self-service) ----
-	mux.HandleFunc("GET /api/my", s.withRateLimit(s.withAuth(s.handleGetMy)))
-	mux.HandleFunc("PUT /api/my/profile", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleUpdateProfile))))
-	mux.HandleFunc("POST /api/my/icon", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyIcon))))
-	mux.HandleFunc("GET /api/my/qr", s.withRateLimit(s.withAuth(s.handleMyQR)))
-	mux.HandleFunc("POST /api/my/vehicles", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleAddMyVehicle))))
-	mux.HandleFunc("DELETE /api/my/vehicles/{id}", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleDeleteMyVehicle))))
-	mux.HandleFunc("PUT /api/my/main-vehicle", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleSetMainVehicle))))
-	mux.HandleFunc("POST /api/my/queue", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyQueueAdd))))
-	mux.HandleFunc("DELETE /api/my/queue", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyQueueCancel))))
-	mux.HandleFunc("POST /api/my/queue/launch", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyLaunch))))
-	mux.HandleFunc("DELETE /api/my/queue/launch", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyLaunchUndo))))
+	// ---- Mypage (authenticated participant self-service) ----
+	mux.HandleFunc("GET /api/mypage", s.withRateLimit(s.withAuth(s.handleGetMy)))
+	mux.HandleFunc("PUT /api/mypage/profile", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleUpdateProfile))))
+	mux.HandleFunc("POST /api/mypage/icon", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyIcon))))
+	mux.HandleFunc("GET /api/mypage/qr", s.withRateLimit(s.withAuth(s.handleMyQR)))
+	mux.HandleFunc("POST /api/mypage/vehicles", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleAddMyVehicle))))
+	mux.HandleFunc("DELETE /api/mypage/vehicles/{id}", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleDeleteMyVehicle))))
+	mux.HandleFunc("POST /api/mypage/vehicles/{id}/icon", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyVehicleIcon))))
+	mux.HandleFunc("PUT /api/mypage/vehicles/{id}", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleUpdateMyVehicle))))
+	mux.HandleFunc("PUT /api/mypage/main-vehicle", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleSetMainVehicle))))
+	mux.HandleFunc("POST /api/mypage/queue", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyQueueAdd))))
+	mux.HandleFunc("DELETE /api/mypage/queue", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyQueueCancel))))
+	mux.HandleFunc("POST /api/mypage/queue/launch", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyLaunch))))
+	mux.HandleFunc("DELETE /api/mypage/queue/launch", s.withRateLimit(s.withCSRFGuard(s.withAuth(s.handleMyLaunchUndo))))
 
 	// ---- Admin: course control (W3) ----
 	mux.HandleFunc("POST /api/admin/course", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseLaunch)))
@@ -167,14 +186,20 @@ func (s *Server) Routes() *http.ServeMux {
 	mux.HandleFunc("PUT /api/admin/users/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminUserUpdate)))
 	mux.HandleFunc("POST /api/admin/users/{id}/reissue", s.withCSRFGuard(s.withAdmin(s.handleAdminUserReissue)))
 	mux.HandleFunc("PUT /api/admin/users/{id}/role", s.withCSRFGuard(s.withAdmin(s.handleAdminUserRole)))
+	mux.HandleFunc("POST /api/admin/users/{id}/icon", s.withCSRFGuard(s.withAdmin(s.handleAdminUserIcon)))
 	// ---- Admin: vehicle management (W4) ----
 	mux.HandleFunc("POST /api/admin/vehicles", s.withCSRFGuard(s.withAdmin(s.handleAdminVehicleCreate)))
 	mux.HandleFunc("PUT /api/admin/vehicles/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminVehicleUpdate)))
 	mux.HandleFunc("DELETE /api/admin/vehicles/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminVehicleDelete)))
+	mux.HandleFunc("POST /api/admin/vehicles/{id}/icon", s.withCSRFGuard(s.withAdmin(s.handleAdminVehicleIcon)))
 	// ---- Admin: settings (W4) ----
 	mux.HandleFunc("GET /api/admin/settings", s.withAdmin(s.handleAdminSettingsGet))
 	mux.HandleFunc("PUT /api/admin/settings", s.withCSRFGuard(s.withAdmin(s.handleAdminSettingsUpdate)))
 	mux.HandleFunc("PUT /api/admin/registration", s.withCSRFGuard(s.withAdmin(s.handleAdminRegistrationSet)))
+	// ---- Admin: event management (stage 2 multi-event) ----
+	mux.HandleFunc("GET /api/admin/events", s.withAdmin(s.handleAdminEventsList))
+	mux.HandleFunc("POST /api/admin/events", s.withCSRFGuard(s.withAdmin(s.handleAdminEventCreate)))
+	mux.HandleFunc("POST /api/admin/events/{id}/close", s.withCSRFGuard(s.withAdmin(s.handleAdminEventClose)))
 	// ---- Admin: log management (W4) ----
 	mux.HandleFunc("GET /api/admin/logs", s.withAdmin(s.handleAdminLogsList))
 	mux.HandleFunc("POST /api/admin/logs", s.withCSRFGuard(s.withAdmin(s.handleAdminLogCreate)))
@@ -188,12 +213,12 @@ func (s *Server) Routes() *http.ServeMux {
 
 	// ---- Internal (LAN only): ESP32 fetches its debounce lockout at boot ----
 	mux.Handle("GET /api/internal/sensor-config", timing.SensorConfigHandler(func() int {
-		set, ok, err := s.Store.GetSettings()
+		ev, ok, err := s.Store.GetActiveEvent()
 		if err != nil || !ok {
 			return 800 // defaults.json fallback
 		}
-		return set.SensorLockoutMS
+		return ev.SensorLockoutMS
 	}))
 
-	return mux
+	return s.withCacheControl(mux)
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"compress/gzip"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -107,6 +108,43 @@ func TestHandler_InitialSnapshotAndLiveUpdates(t *testing.T) {
 	}
 }
 
+func TestHandler_TimeSnapshotIsFreshlyStamped(t *testing.T) {
+	h := NewHub()
+	// Simulate a heartbeat published long ago: replaying this on subscribe
+	// would skew every client clock offset by its staleness.
+	h.Publish(TopicTime, []byte(`{"server_ms":123}`))
+
+	srv := httptest.NewServer(h.Handler(nil))
+	t.Cleanup(srv.Close)
+
+	before := time.Now().UnixMilli()
+	resp, err := newTestClient().Get(srv.URL + "/?topics=time")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+
+	sr := newSSEReader(t, resp.Body)
+	topic, data, err := sr.next()
+	if err != nil {
+		t.Fatalf("reading initial event: %v", err)
+	}
+	if topic != TopicTime {
+		t.Fatalf("initial topic = %q, want time", topic)
+	}
+	var payload struct {
+		ServerMS int64 `json:"server_ms"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("unmarshal %s: %v", data, err)
+	}
+	after := time.Now().UnixMilli()
+	if payload.ServerMS < before || payload.ServerMS > after {
+		t.Fatalf("server_ms = %d, want fresh value in [%d, %d] (stale snapshot must not be replayed)",
+			payload.ServerMS, before, after)
+	}
+}
+
 func TestHandler_ResponseIsGzippedSSE(t *testing.T) {
 	h := NewHub()
 	h.Publish(TopicSettings, []byte(`{"a":1}`))
@@ -187,6 +225,31 @@ func TestHandler_OrphanIncludedForAdmin(t *testing.T) {
 	}
 	if topic != TopicOrphan || string(data) != `{"secret":true}` {
 		t.Fatalf("expected orphan event, got %s %s", topic, data)
+	}
+}
+
+func TestHandler_DirectoryTopicIsPublic(t *testing.T) {
+	h := NewHub()
+	// isAdmin always false: unlike orphan, directory must still be
+	// delivered to a non-admin subscriber.
+	srv := httptest.NewServer(h.Handler(func(*http.Request) bool { return false }))
+	t.Cleanup(srv.Close)
+
+	resp, err := newTestClient().Get(srv.URL + "/?topics=directory")
+	if err != nil {
+		t.Fatalf("GET: %v", err)
+	}
+	t.Cleanup(func() { resp.Body.Close() })
+	sr := newSSEReader(t, resp.Body)
+
+	h.Publish(TopicDirectory, []byte(`{"rev":1}`))
+
+	topic, data, err := sr.next()
+	if err != nil {
+		t.Fatalf("reading event: %v", err)
+	}
+	if topic != TopicDirectory || string(data) != `{"rev":1}` {
+		t.Fatalf("expected directory event, got %s %s", topic, data)
 	}
 }
 

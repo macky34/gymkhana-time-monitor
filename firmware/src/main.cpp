@@ -17,6 +17,15 @@
 #include <time.h>
 #include "config.h"
 
+// Back-compat fallback defaults for boards (e.g. esp32dev) whose config.h
+// predates these macros.
+#ifndef LED_ACTIVE_LOW
+#define LED_ACTIVE_LOW 0
+#endif
+#ifndef USE_EXTERNAL_ANTENNA
+#define USE_EXTERNAL_ANTENNA 0
+#endif
+
 static WiFiUDP udp;
 static uint32_t bootID = 0; // random per boot; part of the dedup key
 static uint32_t triggerSeq = 0;
@@ -87,7 +96,10 @@ static void sendHeartbeat() {
   sendPacket(json);
 }
 
-static void setLed(bool on) { digitalWrite(STATUS_LED_GPIO, on ? HIGH : LOW); }
+static void setLed(bool on) {
+  bool level = LED_ACTIVE_LOW ? !on : on;
+  digitalWrite(STATUS_LED_GPIO, level ? HIGH : LOW);
+}
 
 static void syncClock() {
   // chrony on the RPi answers SNTP; anchor esp_timer to the synced wall clock.
@@ -133,6 +145,17 @@ static void fetchConfig() {
 
 void setup() {
   Serial.begin(115200);
+
+#if defined(CONFIG_IDF_TARGET_ESP32C6)
+  // XIAO ESP32C6 antenna select (Seeed Wiki): GPIO3 enables the RF switch
+  // (active low), GPIO14 picks onboard chip antenna (LOW) vs external u.FL
+  // (HIGH). Must run before WiFi.begin().
+  pinMode(3, OUTPUT);
+  digitalWrite(3, LOW);
+  pinMode(14, OUTPUT);
+  digitalWrite(14, USE_EXTERNAL_ANTENNA ? HIGH : LOW);
+#endif
+
   pinMode(STATUS_LED_GPIO, OUTPUT);
   pinMode(SENSOR_GPIO, INPUT_PULLUP);
   setLed(false);

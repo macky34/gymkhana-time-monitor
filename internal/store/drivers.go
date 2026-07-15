@@ -143,6 +143,21 @@ func (s *Store) CountAdmins() (int, error) {
 	return n, nil
 }
 
+// HasAdmin reports whether at least one non-deleted admin driver exists.
+// Stage-2 (multi-event) gates first-run /setup on this rather than on
+// GetActiveEvent: an operator may legitimately have zero active events
+// between event runs (all closed, none created yet), but setup itself is a
+// one-time, whole-database action that only makes sense before any admin
+// account exists.
+func (s *Store) HasAdmin() (bool, error) {
+	var exists int
+	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM drivers WHERE role = 'admin' AND is_deleted = 0)`).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("store: has admin: %w", err)
+	}
+	return exists != 0, nil
+}
+
 // ReissueToken overwrites a driver's login token, immediately invalidating
 // the old one.
 func (s *Store) ReissueToken(id int64, newToken string) error {

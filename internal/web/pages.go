@@ -18,8 +18,8 @@ type PageData struct {
 // any. Pages render regardless of auth state.
 func (s *Server) pageData(r *http.Request) PageData {
 	pd := PageData{}
-	if set, ok, err := s.Store.GetSettings(); err == nil && ok {
-		pd.EventName = set.EventName
+	if ev, ok, err := s.Store.GetActiveEvent(); err == nil && ok {
+		pd.EventName = ev.EventName
 	}
 	if d, ok := s.driverFromRequest(r); ok {
 		pd.Authed = true
@@ -49,7 +49,7 @@ func (s *Server) handleRegisterPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleMyPage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "my.html", s.pageData(r))
+	s.render(w, "mypage.html", s.pageData(r))
 }
 
 func (s *Server) handleAdminPage(w http.ResponseWriter, r *http.Request) {

@@ -8,7 +8,7 @@ import (
 )
 
 // rateLimiter is a per-key token bucket. Used to throttle POST
-// /api/register, GET /a/{token}, and /api/my/* to 10 requests per 10
+// /api/register, GET /a/{token}, and /api/mypage/* to 10 requests per 10
 // seconds per client IP.
 type rateLimiter struct {
 	mu           sync.Mutex

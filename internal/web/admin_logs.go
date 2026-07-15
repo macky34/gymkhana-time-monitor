@@ -11,14 +11,16 @@ import (
 )
 
 type adminLogDriverOut struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	ID      int64  `json:"id"`
+	Name    string `json:"name"`
+	HasIcon bool   `json:"has_icon"`
 }
 
 type adminLogVehicleOut struct {
-	ID     int64  `json:"id"`
-	Number int    `json:"number"`
-	Name   string `json:"name"`
+	ID      int64  `json:"id"`
+	Number  int    `json:"number"`
+	Name    string `json:"name"`
+	HasIcon bool   `json:"has_icon"`
 }
 
 type adminLogOut struct {
@@ -43,7 +45,7 @@ type adminLogOut struct {
 // domain.FinalMS under the current settings, and heat is looked up from a
 // HeatNumbers map the caller computed over every run - a miss (unassigned or
 // deleted logs are not "runs") surfaces as a null heat.
-func (s *Server) buildAdminLogOut(l store.LogRow, set store.SettingsRow, heatNums map[int64]int) adminLogOut {
+func (s *Server) buildAdminLogOut(l store.LogRow, set store.EventRow, heatNums map[int64]int) adminLogOut {
 	final, invalid := domain.FinalMS(l.RawMS, l.PTCount, l.IsMC, set.PTMode, set.PTPenaltyMS)
 
 	out := adminLogOut{
@@ -61,12 +63,12 @@ func (s *Server) buildAdminLogOut(l store.LogRow, set store.SettingsRow, heatNum
 
 	if l.DriverID != nil {
 		if d, ok, err := s.Store.GetDriver(*l.DriverID); err == nil && ok {
-			out.Driver = &adminLogDriverOut{ID: d.ID, Name: d.Name}
+			out.Driver = &adminLogDriverOut{ID: d.ID, Name: d.Name, HasIcon: d.HasIcon}
 		}
 	}
 	if l.VehicleID != nil {
 		if v, ok, err := s.Store.GetVehicle(*l.VehicleID); err == nil && ok {
-			out.Vehicle = &adminLogVehicleOut{ID: v.ID, Number: v.Number, Name: v.Name}
+			out.Vehicle = &adminLogVehicleOut{ID: v.ID, Number: v.Number, Name: v.Name, HasIcon: v.HasIcon}
 		}
 	}
 	if h, ok := heatNums[l.ID]; ok {
@@ -87,28 +89,32 @@ func (s *Server) handleAdminLogsList(w http.ResponseWriter, r *http.Request, adm
 	}
 	offset := (page - 1) * adminLogsPageSize
 
-	set, ok, err := s.Store.GetSettings()
+	set, ok, err := s.Store.GetActiveEvent()
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 	if !ok {
-		writeJSONError(w, http.StatusConflict, "event not configured")
+		writeJSON(w, http.StatusOK, map[string]any{
+			"logs":       []adminLogOut{},
+			"total":      0,
+			"unassigned": []adminLogOut{},
+		})
 		return
 	}
 
-	logs, total, err := s.Store.ListLogs(adminLogsPageSize, offset)
+	logs, total, err := s.Store.ListLogs(set.ID, adminLogsPageSize, offset)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
-	unassigned, err := s.Store.ListUnassignedLogs()
+	unassigned, err := s.Store.ListUnassignedLogs(set.ID)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 
-	allRuns, err := s.Store.ListRuns()
+	allRuns, err := s.Store.ListRuns(set.ID)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -149,6 +155,11 @@ func (s *Server) handleAdminLogCreate(w http.ResponseWriter, r *http.Request, ad
 		return
 	}
 
+	ev, ok := s.requireActiveEvent(w)
+	if !ok {
+		return
+	}
+
 	ts := time.Now().UnixMilli()
 	if body.TimestampMS != nil {
 		ts = *body.TimestampMS
@@ -157,6 +168,7 @@ func (s *Server) handleAdminLogCreate(w http.ResponseWriter, r *http.Request, ad
 	vehicleID := body.VehicleID
 
 	id, err := s.Store.InsertLog(store.LogRow{
+		EventID:     ev.ID,
 		DriverID:    &driverID,
 		VehicleID:   &vehicleID,
 		RawMS:       body.RawMS,

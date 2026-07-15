@@ -23,15 +23,40 @@ func adminFmtMS(ms int) string {
 	return fmt.Sprintf("%d:%02d.%03d", ms/60000, (ms%60000)/1000, ms%1000)
 }
 
-// handleAdminExport implements GET /api/admin/export?type=ranking|combination|logs.
+// resolveExportEventID reads the optional ?event_id= query param (any
+// event, active or archived/closed — this is how the archive UI downloads
+// CSVs for a past event); with it omitted, the active event is used (0, a
+// non-existent id, if none is active — every exporter below already
+// degrades to an empty/header-only CSV for a non-existent event id, so
+// there is no special-casing needed at call sites).
+func (s *Server) resolveExportEventID(r *http.Request) (int64, error) {
+	if idStr := r.URL.Query().Get("event_id"); idStr != "" {
+		return strconv.ParseInt(idStr, 10, 64)
+	}
+	ev, ok, err := s.Store.GetActiveEvent()
+	if err != nil {
+		return 0, err
+	}
+	if !ok {
+		return 0, nil
+	}
+	return ev.ID, nil
+}
+
+// handleAdminExport implements GET /api/admin/export?type=ranking|combination|logs[&event_id=N].
 func (s *Server) handleAdminExport(w http.ResponseWriter, r *http.Request, admin store.Driver) {
+	eventID, err := s.resolveExportEventID(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
 	switch r.URL.Query().Get("type") {
 	case "ranking":
-		s.adminExportRanking(w)
+		s.adminExportRanking(w, eventID)
 	case "combination":
-		s.adminExportCombination(w, r)
+		s.adminExportCombination(w, r, eventID)
 	case "logs":
-		s.adminExportLogs(w)
+		s.adminExportLogs(w, eventID)
 	default:
 		writeJSONError(w, http.StatusBadRequest, "invalid type")
 	}
@@ -69,9 +94,16 @@ type csvRankVehicle struct {
 	DTClass     string `json:"dt_class"`
 }
 
-// adminExportRanking writes the current ranking snapshot as UTF-8 BOM CSV.
-func (s *Server) adminExportRanking(w http.ResponseWriter) {
-	raw, err := s.Snap.Ranking()
+// adminExportRanking writes eventID's ranking snapshot as UTF-8 BOM CSV
+// (empty rows, header only, if eventID does not exist — e.g. no active
+// event and no event_id given).
+func (s *Server) adminExportRanking(w http.ResponseWriter, eventID int64) {
+	payload, err := s.Snap.RankingPayloadFor(eventID)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	raw, err := json.Marshal(payload)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -140,10 +172,10 @@ type csvComboRun struct {
 	RankInFilter *int `json:"rank_in_filter"`
 }
 
-// adminExportCombination writes every run for one driver/vehicle combo as
-// UTF-8 BOM CSV (heat order), including each run's rank within the current
-// filter.
-func (s *Server) adminExportCombination(w http.ResponseWriter, r *http.Request) {
+// adminExportCombination writes every run for one driver/vehicle combo in
+// eventID as UTF-8 BOM CSV (heat order), including each run's rank within
+// the current filter.
+func (s *Server) adminExportCombination(w http.ResponseWriter, r *http.Request, eventID int64) {
 	dq := r.URL.Query().Get("driver_id")
 	vq := r.URL.Query().Get("vehicle_id")
 	if dq == "" || vq == "" {
@@ -161,7 +193,7 @@ func (s *Server) adminExportCombination(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	raw, err := s.Snap.CombinationLogs(driverID, vehicleID, r.URL.Query())
+	raw, err := s.Snap.CombinationLogsFor(eventID, driverID, vehicleID, r.URL.Query())
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -199,12 +231,24 @@ func (s *Server) adminExportCombination(w http.ResponseWriter, r *http.Request) 
 }
 
 // adminExportLogs writes every raw timing log row (deleted/unassigned
-// included) as UTF-8 BOM CSV.
-func (s *Server) adminExportLogs(w http.ResponseWriter) {
-	logs, _, err := s.Store.ListLogs(1<<30, 0)
-	if err != nil {
-		writeErr(w, err)
-		return
+// included) belonging to eventID as UTF-8 BOM CSV. With no such event
+// (eventID 0 - no active event and none given, or an unknown id), this is
+// an empty CSV (header row only).
+func (s *Server) adminExportLogs(w http.ResponseWriter, eventID int64) {
+	var logs []store.LogRow
+	if eventID != 0 {
+		_, ok, err := s.Store.GetEvent(eventID)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		if ok {
+			logs, _, err = s.Store.ListLogs(eventID, 1<<30, 0)
+			if err != nil {
+				writeErr(w, err)
+				return
+			}
+		}
 	}
 
 	adminWriteCSVHeader(w, "logs.csv")

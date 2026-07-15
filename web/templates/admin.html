@@ -2,8 +2,9 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>{{.EventName}} | 運営</title>
+<link rel="stylesheet" href="/static/cropper.min.css">
 <style>
   :root{
     --bg:#14171c; --panel:#1d232c; --panel2:#242b36; --line:#313a47;
@@ -13,9 +14,9 @@
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   body{background:#0b0d10;color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
-       display:flex;justify-content:center;padding:16px 0;min-height:100vh}
+       display:flex;justify-content:center;padding:0;min-height:100vh}
   .phone{width:392px;max-width:100%;background:var(--bg);border:1px solid #262d38;border-radius:22px;
-         overflow:hidden;display:flex;flex-direction:column;height:820px;max-height:96vh;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
+         overflow:hidden;display:flex;flex-direction:column;height:100vh;height:100dvh;max-height:none;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
   header{padding:10px 14px 8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px;flex:none}
   header .ev{font-size:13px;font-weight:700;letter-spacing:.02em}
   header .live{margin-left:auto;font-size:10px;color:var(--go);font-family:var(--mono);display:flex;align-items:center;gap:5px}
@@ -25,7 +26,7 @@
   .screen{display:none;padding:12px 12px 20px}
   .screen.on{display:block}
   nav{flex:none;display:flex;border-top:1px solid var(--line);background:#161a20}
-  nav a{flex:1;background:none;border:none;color:var(--dim);font-size:10.5px;padding:9px 0 11px;cursor:pointer;text-decoration:none;
+  nav a{flex:1;background:none;border:none;color:var(--dim);font-size:10.5px;padding:9px 0 calc(11px + env(safe-area-inset-bottom));cursor:pointer;text-decoration:none;
              display:flex;flex-direction:column;gap:3px;align-items:center;font-family:inherit}
   nav a .ic{font-size:16px;line-height:1}
   nav a.on{color:var(--tx)}
@@ -44,6 +45,14 @@
   .avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
   .avatar.sm{width:28px;height:28px;font-size:11px}
   .avatar.xs{width:22px;height:22px;font-size:9.5px;display:inline-flex;vertical-align:-6px;margin-right:5px}
+  /* Groups a driver+vehicle avatar pair. Plain flex (not inline-flex) so
+     align-items:center centers both boxes against each other by geometry —
+     avoiding the text-vs-<img> baseline mismatch that misaligns bare
+     .avatar.xs siblings, and avoiding the block-level stacking that a
+     wrapping <div> around block-level .avatar.sm boxes would otherwise get. */
+  .avpair{display:flex;align-items:center;gap:4px;flex:none}
+  .iconpair{display:inline-flex;align-items:center;gap:3px;vertical-align:-6px}
+  .iconpair .avatar.xs{margin-right:0;vertical-align:baseline}
   .toast{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:#2b3a2f;border:1px solid var(--go);
          color:var(--go);font-size:12px;padding:9px 18px;border-radius:99px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:40;white-space:nowrap}
   .toast.on{opacity:1}
@@ -119,13 +128,13 @@
   .mini.undo{color:var(--blue);border-color:#2b4463}
   .mini.adm{color:var(--dim);border-style:dashed}
   .mini.adm.on{color:#ffd9d9;background:#3a2226;border-color:var(--red);border-style:solid;font-weight:700}
-  .q{list-style:none}
+  .q{list-style:none;border-radius:inherit;overflow:hidden} /* clip opaque rows to the card's rounded corners */
   .q li{display:flex;align-items:center;gap:9px;padding:10px 10px;border-bottom:1px solid var(--line);font-size:12.5px;background:var(--bg)}
   .q li:last-child{border:none}
-  .q li.dragging{opacity:.9;background:var(--panel2);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
-  .q li.drop-target{border-top:2px solid var(--go)}
+  .q li.sortable-ghost{opacity:.35;background:var(--panel2);border-radius:8px}
+  .q li.sortable-chosen{background:var(--panel2);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
   .q .grip{color:var(--dim);font-size:15px;cursor:grab;flex:none;padding:0 2px;touch-action:none;user-select:none}
-  .q li.dragging .grip{cursor:grabbing}
+  .q li.sortable-chosen .grip{cursor:grabbing}
   .q .pos{font-family:var(--mono);color:var(--dim);font-size:11px;width:18px;flex:none}
   .q .nm{min-width:0}
   .q .nm b{font-weight:600;display:block}
@@ -136,7 +145,9 @@
   .lg td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
   .lg .tm{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
   .lg .src{font-size:12px}
-  .lg .acts{display:flex;gap:4px;margin-top:5px;flex-wrap:wrap}
+  .lg .acts{display:flex;gap:4px;flex-wrap:wrap}
+  .lg tr.lg-data td{border-bottom:none;padding-bottom:4px}
+  .lg tr.lg-acts td{padding-top:0}
   .lg tr.deleted td{opacity:.4}
   .orphan{background:#2e2415;border:1px solid #5c4a1e;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11.5px}
   .orphan b{color:var(--amber);font-size:12px}
@@ -189,6 +200,8 @@
   .tokenurl .cp{display:block;font-family:inherit;font-size:9px;color:var(--dim);margin-top:5px;letter-spacing:.05em}
   .tokenurl.copied{border-color:var(--go)}
   .tokenurl.copied .cp{color:var(--go)}
+  .cropwrap{max-height:300px;min-height:180px;overflow:hidden;margin:0 0 14px;background:#000;border-radius:8px}
+  .cropwrap img{max-width:100%;display:block}
   @media(min-width:900px){
     .modal-bg{align-items:center;justify-content:center}
     .modal{width:520px;border-radius:18px;border:1px solid var(--line)}
@@ -296,8 +309,10 @@
           <button type="button" class="btn danger" style="width:100%;margin-top:14px" id="btn-reg-toggle">🔒 参加受付を終了する</button>
         </div>
         <div>
+          <div class="sec">EVENT MANAGEMENT</div>
+          <div class="card" id="evt-mgmt-card"></div>
           <div class="sec">EVENT SETTINGS</div>
-          <div class="card">
+          <div class="card" id="evt-settings-card">
             <div class="setrow">イベント名 <span class="ml"><input class="wide" id="set-event-name"></span></div>
             <div class="setrow">PTペナルティ <span class="ml"><select id="set-pt-mode"><option value="add">加算</option><option value="invalidate">無効</option></select> <input id="set-pt-sec"> 秒</span></div>
             <div class="setrow">参加登録 <span class="ml"><select id="set-reg-mode"><option value="public">公開</option><option value="staff">運営のみ</option></select></span></div>
@@ -330,7 +345,7 @@
   <nav id="nav">
     <a href="/"><span class="ic">⏱</span>Monitor</a>
     <a href="/ranking"><span class="ic">🏆</span>Ranking</a>
-    <a href="/my"><span class="ic">👤</span>My</a>
+    <a href="/mypage"><span class="ic">👤</span>Mypage</a>
     {{if .IsAdmin}}<a href="/admin" class="on"><span class="ic">🛠</span>運営</a>{{end}}
   </nav>
 
@@ -387,9 +402,15 @@
   <div class="modal-bg" id="renamemodal">
     <div class="modal">
       <h3>ユーザ編集</h3>
-      <p class="sub">名前と区分を変更できます</p>
+      <p class="sub">名前・区分・アイコンを変更できます</p>
       <div class="fld"><label>名前</label><input id="rn-name"></div>
       <div class="fld"><label>区分</label><div class="seg" id="rn-class-seg"></div></div>
+      <div class="fld"><label>アイコン</label>
+        <div class="card" style="padding:12px;display:flex;align-items:center;gap:12px;background:var(--panel2)">
+          <div class="avatar" id="rn-avatar-preview">?</div>
+          <button type="button" class="btn" id="rn-icon-btn">写真を選んで切り抜き</button>
+        </div>
+      </div>
       <button type="button" class="btn primary" style="width:100%" id="rn-save">保存</button>
     </div>
   </div>
@@ -437,6 +458,12 @@
         </div>
       </div>
       <div class="fld"><label>駆動方式</label><div class="seg" id="vm-dt"></div></div>
+      <div class="fld" id="vm-icon-fld" style="display:none"><label>アイコン</label>
+        <div class="card" style="padding:12px;display:flex;align-items:center;gap:12px;background:var(--panel2)">
+          <div class="avatar" id="vm-avatar-preview">?</div>
+          <button type="button" class="btn" id="vm-icon-btn">写真を選んで切り抜き</button>
+        </div>
+      </div>
       <button type="button" class="btn primary" style="width:100%" id="vm-save">保存</button>
     </div>
   </div>
@@ -452,8 +479,21 @@
     </div>
   </div>
 
+  <!-- アイコン切り抜き (ユーザ/車両共用) -->
+  <div class="modal-bg" id="cropmodal">
+    <div class="modal">
+      <h3 style="text-align:center;margin-bottom:10px">アイコンを切り抜き</h3>
+      <div class="cropwrap"><img id="crop-img" alt=""></div>
+      <button type="button" class="btn primary" style="width:100%" id="crop-apply">適用してアップロード</button>
+      <button type="button" class="btn" style="width:100%;margin-top:8px" id="crop-cancel">キャンセル</button>
+      <input type="file" accept="image/*" id="icon-file" style="display:none">
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
 </div>
+<script src="/static/sortable.min.js"></script>
+<script src="/static/cropper.min.js"></script>
 <script>
 'use strict';
 const IS_ADMIN = {{.IsAdmin}};
@@ -526,10 +566,21 @@ async function api(method, url, body){
 }
 const apiGet = url => api('GET', url);
 
+let iconRev = Date.now();
 function avatarInto(el, driverId, name, hasIcon){
   clear(el);
   if (hasIcon){
-    const img = h('img', { src: '/api/drivers/' + driverId + '/icon', alt: '' });
+    const img = h('img', { src: '/api/drivers/' + driverId + '/icon?v=' + iconRev, alt: '' });
+    img.addEventListener('error', () => { clear(el); el.textContent = (name || '?').slice(0, 1); });
+    el.appendChild(img);
+  } else {
+    el.textContent = (name || '?').slice(0, 1);
+  }
+}
+function vehicleAvatarInto(el, vehicleId, name, hasIcon){
+  clear(el);
+  if (hasIcon){
+    const img = h('img', { src: '/api/vehicles/' + vehicleId + '/icon?v=' + iconRev, alt: '' });
     img.addEventListener('error', () => { clear(el); el.textContent = (name || '?').slice(0, 1); });
     el.appendChild(img);
   } else {
@@ -552,6 +603,54 @@ function bindCopyable(el){
       el.classList.remove('copied');
       el.querySelector('.cp').textContent = '📋 タップでコピー';
     }, 1600);
+  });
+}
+
+/* ---------- icon crop & upload (user/vehicle shared) ----------
+   startIconCrop(url[, onSuccess]) sets the upload target, then the common
+   file-pick -> cropper -> POST {icon_b64} flow runs against that URL.
+   Same flow as my.html / register.html (128x128 JPEG). */
+let cropper = null;
+let cropTargetUrl = null;
+let cropOnSuccess = null;
+function startIconCrop(url, onSuccess){
+  cropTargetUrl = url;
+  cropOnSuccess = onSuccess || null;
+  document.getElementById('icon-file').click();
+}
+function bindCrop(){
+  document.getElementById('icon-file').addEventListener('change', (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = document.getElementById('crop-img');
+      img.src = reader.result;
+      document.getElementById('cropmodal').classList.add('on');
+      img.onload = () => {
+        if (cropper) { cropper.destroy(); cropper = null; }
+        cropper = new Cropper(img, { aspectRatio: 1, viewMode: 1, autoCropArea: 1, background: false });
+      };
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  });
+  document.getElementById('crop-cancel').addEventListener('click', () => {
+    if (cropper) { cropper.destroy(); cropper = null; }
+    closeModal('cropmodal');
+  });
+  document.getElementById('crop-apply').addEventListener('click', async () => {
+    if (!cropper || !cropTargetUrl) return;
+    const canvas = cropper.getCroppedCanvas({ width: 128, height: 128 });
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    cropper.destroy(); cropper = null;
+    closeModal('cropmodal');
+    try {
+      await api('POST', cropTargetUrl, { icon_b64: dataUrl.split(',')[1] });
+      iconRev = Date.now();
+      toast('アイコンを更新しました');
+      if (cropOnSuccess) cropOnSuccess(dataUrl);
+    } catch (err) { toast(err.message || 'アップロードに失敗しました'); }
   });
 }
 
@@ -583,8 +682,11 @@ let waitingQueue = [];    // queue SSE
 let onCourseCars = [];    // on_course SSE
 let sensors = [];         // sensor_status SSE
 let orphanItems = [];     // orphan SSE
+let events = [];          // GET /api/admin/events
 let logsPage = 1;
 let logsData = { logs: [], total: 0, unassigned: [] };
+let directoryRev = null;      // directory SSE: last-seen rev (null = not yet synced)
+let directoryPending = false; // a directory change arrived while an edit modal was open; refetch once it's closed
 
 function mode(){ return (S && S.timing_mode) || (pub && pub.timing_mode) || 'sensor'; }
 function maxCourseMs(){ return (((S && S.max_course_time_sec) || (pub && pub.max_course_time_sec) || 180)) * 1000; }
@@ -617,10 +719,15 @@ function renderGoButtons(){
   document.getElementById('goal-label').textContent = 'ゴール 🏁 ' + (running.length ? running[0].driver.name : '走行中なし');
 }
 
-/* on_course admin cards — rebuilt at ~10Hz like the mock */
+/* on_course admin cards — rebuilt only when the data changes (SSE). The
+   running clock text is updated in place by updateCourseClocks() at ~10Hz:
+   rebuilding the whole card each tick destroys the action buttons between
+   mousedown and mouseup, so desktop clicks would never register. */
+let courseClocks = []; // [{c, tm, card}] for cards with a live running clock
 function renderCourse(){
   const admC = document.getElementById('adm-course');
   clear(admC);
+  courseClocks = [];
   if (!onCourseCars.length){
     admC.appendChild(h('div', { class: 'empty-course' }, 'コース上に車両なし'));
     return;
@@ -636,30 +743,49 @@ function renderCourse(){
       b.addEventListener('click', fn);
       return b;
     };
+    // 完走 (finish) is intentionally not offered per-card: the large ゴール
+    // button already finishes the oldest running car (manual mode), so a
+    // duplicate per-card button here would be redundant.
     const acts = [];
     if (flash){
       acts.push(mini('PT+', '', () => coursePT(c, 1)));
       acts.push(mini('PT−', '', () => coursePT(c, -1)));
       acts.push(mini('ゴール取消', 'undo', () => courseUndoGoal(c)));
     } else if (armed){
-      acts.push(mini('スタート取消', 'undo', () => courseUndoStart(c)));
       acts.push(mini('ミスコース', c.mc_flag ? 'on' : '', () => courseMC(c)));
+      acts.push(mini('スタート取消', 'undo', () => courseUndoStartConfirm(c)));
       acts.push(mini('走行中止', 'red', () => courseDNF(c)));
     } else {
-      if (m === 'manual') acts.push(mini('🏁 完走', 'go', () => courseFinish(c)));
       acts.push(mini('PT+', '', () => coursePT(c, 1)));
       acts.push(mini('PT−', '', () => coursePT(c, -1)));
-      acts.push(mini('スタート取消', 'undo', () => courseUndoStart(c)));
       acts.push(mini('ミスコース', c.mc_flag ? 'on' : '', () => courseMC(c)));
+      acts.push(mini('スタート取消', 'undo', () => courseUndoStartConfirm(c)));
       acts.push(mini('走行中止', 'red', () => courseDNF(c)));
     }
+    const tm = h('div', { class: 'tm' }, armed ? 'センサー待ち' : (flash ? fmt3(c.finish.fin_ms) : fmt1(el)));
+    const av = h('div', { class: 'avatar sm' });
+    avatarInto(av, c.driver.id, c.driver.name, !!c.driver.has_icon);
+    const vav = h('div', { class: 'avatar sm' });
+    vehicleAvatarInto(vav, c.vehicle.id, c.vehicle.name, !!c.vehicle.has_icon);
     const card = h('div', { class: 'card oc-admin' + (over ? ' over' : '') + (armed ? ' armed' : '') + (flash ? ' flash' : '') },
-      h('div', { class: 'tm' }, armed ? 'センサー待ち' : (flash ? fmt3(c.finish.fin_ms) : fmt1(el))),
+      tm,
+      h('div', { class: 'avpair' }, av, vav),
       h('div', { class: 'nm' }, c.driver.name,
         h('span', {}, `＃${c.vehicle.number} ${c.vehicle.name}` + (c.pt_count ? ` ・PT${c.pt_count}` : '') + (c.mc_flag ? ' ・MC' : ''))),
       h('div', { class: 'acts' }, acts)
     );
+    if (!armed && !flash) courseClocks.push({ c, tm, card });
     admC.appendChild(card);
+  });
+}
+
+/* in-place 10Hz clock refresh — never touches card structure or buttons */
+function updateCourseClocks(){
+  const maxMs = maxCourseMs();
+  courseClocks.forEach(({ c, tm, card }) => {
+    const el = nowMs() - c.t_start_us / 1000;
+    tm.textContent = fmt1(el);
+    card.classList.toggle('over', el > maxMs);
   });
 }
 
@@ -675,12 +801,6 @@ async function courseMC(c){
     toast(`${c.driver.name} ミスコース${r.mc_flag ? '設定' : '解除'}`);
   } catch (err) { toast(err.message); }
 }
-async function courseFinish(c){
-  try {
-    await api('POST', `/api/admin/course/${c.queue_id}/finish`, clientMsBody());
-    toast(`🏁 ${c.driver.name} ゴール打刻`);
-  } catch (err) { toast(err.message); }
-}
 async function courseUndoGoal(c){
   try {
     await api('POST', `/api/admin/course/${c.queue_id}/undo-goal`, {});
@@ -693,6 +813,10 @@ async function courseUndoStart(c){
     toast(`↩ ${c.driver.name} スタート取消 → キュー先頭`);
   } catch (err) { toast(err.message); }
 }
+function courseUndoStartConfirm(c){
+  if (!confirm(`${c.driver.name} のスタートを取り消しますか?\n(キュー先頭に戻ります)`)) return;
+  courseUndoStart(c);
+}
 async function courseDNF(c){
   if (!confirm(`${c.driver.name} の走行を中止しますか? (記録は残りません)`)) return;
   try {
@@ -701,8 +825,9 @@ async function courseDNF(c){
   } catch (err) { toast(err.message); }
 }
 
-/* queue list with drag-to-reorder (pointer events: works with touch + mouse) */
+/* queue list with drag-to-reorder (SortableJS: handles touch + mouse) */
 let qDragging = false; // suppress SSE re-render mid-drag so it doesn't yank the row
+let queueSortable = null;
 function renderQueue(){
   const qEl = document.getElementById('adm-q');
   if (qDragging) return; // a drag is in flight; leave the live DOM alone
@@ -722,64 +847,53 @@ function renderQueue(){
     });
     const acts = h('div', { class: 'acts' }, cancel);
     const av = h('div', { class: 'avatar sm' });
-    avatarInto(av, q.driver.id, q.driver.name, false);
+    avatarInto(av, q.driver.id, q.driver.name, !!q.driver.has_icon);
+    const vav = h('div', { class: 'avatar sm' });
+    vehicleAvatarInto(vav, q.vehicle.id, q.vehicle.name, !!q.vehicle.has_icon);
     const li = h('li', { 'data-qid': String(q.queue_id) },
       grip,
       h('span', { class: 'pos t' }, String(i + 1)),
-      av,
+      h('div', { class: 'avpair' }, av, vav),
       h('div', { class: 'nm' }, h('b', {}, q.driver.name), h('span', {}, `＃${q.vehicle.number} ${q.vehicle.name}`)),
       acts
     );
-    grip.addEventListener('pointerdown', ev => beginQueueDrag(ev, li));
     qEl.appendChild(li);
   });
   renderGoButtons();
 }
-// Pointer-events drag: reorders the DOM live for feedback, then on release
-// commits the new slot by PUTting a position midway between the real neighbour
-// positions (from the queue snapshot). Renumbering, if positions converge, is
-// the server's job.
-function beginQueueDrag(ev, li){
-  ev.preventDefault();
+// SortableJS init (called once from init()): drag is restricted to the .grip
+// handle, with a short delay so it coexists with touch-scrolling the list.
+function initQueueSortable(){
   const qEl = document.getElementById('adm-q');
-  const grip = ev.currentTarget;
-  qDragging = true;
-  li.classList.add('dragging');
-  try { grip.setPointerCapture(ev.pointerId); } catch (e) {}
-
-  const onMove = e => {
-    const after = queueRowAfterY(qEl, e.clientY, li);
-    if (after === null) qEl.appendChild(li);
-    else if (after !== li) qEl.insertBefore(li, after);
-    renumberQueuePositions(qEl);
-  };
-  const onUp = async () => {
-    grip.removeEventListener('pointermove', onMove);
-    grip.removeEventListener('pointerup', onUp);
-    grip.removeEventListener('pointercancel', onUp);
-    li.classList.remove('dragging');
-    const order = [...qEl.querySelectorAll('li[data-qid]')].map(el => Number(el.dataset.qid));
-    const qid = Number(li.dataset.qid);
-    const idx = order.indexOf(qid);
-    qDragging = false;
-    const position = targetPosition(order, idx, qid);
-    if (position === null){ renderQueue(); return; } // no movement
-    try { await api('PUT', '/api/admin/queue/' + qid, { position }); }
-    catch (err) { toast(err.message); renderQueue(); }
-  };
-  grip.addEventListener('pointermove', onMove);
-  grip.addEventListener('pointerup', onUp);
-  grip.addEventListener('pointercancel', onUp);
+  queueSortable = Sortable.create(qEl, {
+    handle: '.grip',
+    animation: 150,
+    delay: 150,
+    delayOnTouchOnly: true,
+    onStart: () => { qDragging = true; }, // suppress SSE re-render mid-drag
+    onSort: () => renumberQueuePositions(qEl),
+    onEnd: async (evt) => {
+      const order = [...qEl.querySelectorAll('li[data-qid]')].map(el => Number(el.dataset.qid));
+      const qid = Number(evt.item.dataset.qid);
+      const idx = order.indexOf(qid);
+      const position = targetPosition(order, idx, qid);
+      if (position !== null){
+        try { await api('PUT', '/api/admin/queue/' + qid, { position }); }
+        catch (err) { toast(err.message); }
+      }
+      qDragging = false;
+      await refreshQueueFromServer();
+    }
+  });
 }
-// Returns the <li> that the dragged row should be inserted before given the
-// pointer's Y, or null to append at the end. Skips the dragged row itself.
-function queueRowAfterY(qEl, y, dragging){
-  const rows = [...qEl.querySelectorAll('li[data-qid]')].filter(el => el !== dragging);
-  for (const el of rows){
-    const r = el.getBoundingClientRect();
-    if (y < r.top + r.height / 2) return el;
-  }
-  return null;
+// After a drop, the server is the source of truth for order/positions —
+// refetch and re-render rather than trusting the client-side DOM order.
+async function refreshQueueFromServer(){
+  try {
+    const q = await apiGet('/api/queue');
+    waitingQueue = q.waiting || [];
+  } catch (e) { /* next SSE tick will retry */ }
+  renderQueue();
 }
 function renumberQueuePositions(qEl){
   [...qEl.querySelectorAll('li[data-qid] .pos')].forEach((el, i) => { el.textContent = String(i + 1); });
@@ -981,13 +1095,17 @@ function renderLogs(){
   logsData.logs.forEach(l => {
     const deleted = !!l.is_deleted;
     const invalidView = l.is_mc; /* display-only strike-through for MC */
-    const tr = h('tr', { class: deleted ? 'deleted' : '' });
-    tr.appendChild(h('td', { class: 't', style: 'color:var(--dim)' }, String(l.id)));
     const who = h('td', {});
     if (l.driver){
       const av = h('span', { class: 'avatar xs' });
-      avatarInto(av, l.driver.id, l.driver.name, false);
-      who.appendChild(av);
+      avatarInto(av, l.driver.id, l.driver.name, !!l.driver.has_icon);
+      if (l.vehicle){
+        const vav = h('span', { class: 'avatar xs' });
+        vehicleAvatarInto(vav, l.vehicle.id, l.vehicle.name, !!l.vehicle.has_icon);
+        who.appendChild(h('span', { class: 'iconpair' }, av, vav));
+      } else {
+        who.appendChild(av);
+      }
       who.appendChild(h('b', {}, l.driver.name));
       const meta = [];
       if (l.vehicle) meta.push(`＃${l.vehicle.number}`);
@@ -1002,8 +1120,9 @@ function renderLogs(){
       who.appendChild(h('br'));
       who.appendChild(h('span', { style: 'font-size:9.5px;color:var(--mut)' }, hhmmss(l.timestamp_ms) + (deleted ? ' ・ 削除済' : '')));
     }
+    let acts = null;
     if (!deleted){
-      const acts = h('div', { class: 'acts' });
+      acts = h('div', { class: 'acts' });
       const mini = (label, cls, fn) => {
         const b = h('button', { type: 'button', class: 'mini' + (cls ? ' ' + cls : '') }, label);
         b.addEventListener('click', fn);
@@ -1018,9 +1137,7 @@ function renderLogs(){
         acts.appendChild(mini('走者を割り当てる', '', () => openAssign(l)));
       }
       acts.appendChild(mini('削除', 'red', () => logDelete(l)));
-      who.appendChild(acts);
     }
-    tr.appendChild(who);
     const tmCell = h('td', { class: 'tm', style: invalidView && !deleted ? 'color:var(--dim);text-decoration:line-through' : '' }, fmt3(l.raw_ms));
     if (l.pt_count && !l.is_mc && S && S.pt_mode === 'add'){
       tmCell.appendChild(h('br'));
@@ -1030,9 +1147,18 @@ function renderLogs(){
       tmCell.appendChild(h('br'));
       tmCell.appendChild(h('span', { style: 'font-size:9px;color:var(--amber)' }, `PT${l.pt_count}`));
     }
-    tr.appendChild(tmCell);
-    tr.appendChild(h('td', { class: 'src', title: l.source === 'manual' ? '手計測' : 'センサー計測' }, l.source === 'manual' ? '✍️' : '📡'));
-    tb.appendChild(tr);
+    /* row 1: id / avatar+name+meta / time / src icon */
+    const dataRow = h('tr', { class: (deleted ? 'deleted ' : '') + (acts ? 'lg-data' : '') });
+    dataRow.appendChild(h('td', { class: 't', style: 'color:var(--dim)' }, String(l.id)));
+    dataRow.appendChild(who);
+    dataRow.appendChild(tmCell);
+    dataRow.appendChild(h('td', { class: 'src', title: l.source === 'manual' ? '手計測' : 'センサー計測' }, l.source === 'manual' ? '✍️' : '📡'));
+    tb.appendChild(dataRow);
+    /* row 2: action buttons, full width */
+    if (acts){
+      const actRow = h('tr', { class: 'lg-acts' }, h('td', { colspan: '4' }, acts));
+      tb.appendChild(actRow);
+    }
   });
   /* pagination */
   const shown = logsData.logs.length;
@@ -1167,7 +1293,7 @@ async function saveLogModal(){
       });
       toast('手動ログを追加しました');
     }
-    document.getElementById('logmodal').classList.remove('on');
+    closeModal('logmodal');
     reloadLogs();
   } catch (err) { toast(err.message); }
 }
@@ -1188,7 +1314,7 @@ async function saveAssign(){
   try {
     await api('PUT', `/api/admin/logs/${assignTarget.id}/assign`, { driver_id: Number(dv), vehicle_id: Number(vv) });
     toast('割り当てました');
-    document.getElementById('assignmodal').classList.remove('on');
+    closeModal('assignmodal');
     reloadLogs();
   } catch (err) { toast(err.message); }
 }
@@ -1234,6 +1360,15 @@ let renameTarget = null;
 function openRename(u){
   renameTarget = u;
   document.getElementById('rn-name').value = u.name;
+  avatarInto(document.getElementById('rn-avatar-preview'), u.id, u.name, !!u.has_icon);
+  document.getElementById('rn-icon-btn').onclick = () => {
+    startIconCrop('/api/admin/users/' + u.id + '/icon', (dataUrl) => {
+      const pv = document.getElementById('rn-avatar-preview');
+      clear(pv);
+      pv.appendChild(h('img', { src: dataUrl, alt: '' }));
+      reloadUsers();
+    });
+  };
   const seg = document.getElementById('rn-class-seg');
   clear(seg);
   let selId = u.driver_class_id || null;
@@ -1254,7 +1389,7 @@ function openRename(u){
     try {
       await api('PUT', '/api/admin/users/' + u.id, { name, driver_class_id: selId });
       toast('更新しました');
-      document.getElementById('renamemodal').classList.remove('on');
+      closeModal('renamemodal');
       await reloadUsers();
     } catch (err) { toast(err.message); }
   };
@@ -1342,8 +1477,10 @@ function renderVehiclesTab(){
         await reloadVehicles();
       } catch (err) { toast(err.message); }
     });
+    const vav = h('div', { class: 'avatar sm' });
+    vehicleAvatarInto(vav, v.id, v.name, !!v.has_icon);
     list.appendChild(h('li', {},
-      '🚗 ',
+      vav,
       h('div', {}, h('b', {}, `＃${v.number} ${v.name}`), h('br'),
         h('span', { style: 'font-size:10px;color:var(--mut)' }, vehSpecLine(v))),
       h('span', { class: 'ml' }, edit, del)
@@ -1393,6 +1530,19 @@ function openVehModal(v){
   setSeg('vm-fi', 'fi', vmFI ? '1' : '0');
   document.getElementById('vm-cc').value = v && v.displacement_cc ? String(v.displacement_cc) : '';
   document.getElementById('vm-ice').style.display = vmEngine === 'ev' ? 'none' : 'block';
+  /* icon edit: only for an existing vehicle (a new one has no id to POST to yet) */
+  document.getElementById('vm-icon-fld').style.display = v ? 'block' : 'none';
+  if (v){
+    vehicleAvatarInto(document.getElementById('vm-avatar-preview'), v.id, v.name, !!v.has_icon);
+    document.getElementById('vm-icon-btn').onclick = () => {
+      startIconCrop('/api/admin/vehicles/' + v.id + '/icon', (dataUrl) => {
+        const pv = document.getElementById('vm-avatar-preview');
+        clear(pv);
+        pv.appendChild(h('img', { src: dataUrl, alt: '' }));
+        reloadVehicles();
+      });
+    };
+  }
   const dtSeg = document.getElementById('vm-dt');
   clear(dtSeg);
   vmDtClassId = null;
@@ -1427,7 +1577,7 @@ async function saveVehModal(){
     if (vmEditing) await api('PUT', '/api/admin/vehicles/' + vmEditing.id, body);
     else await api('POST', '/api/admin/vehicles', body);
     toast(vmEditing ? '更新しました' : '追加しました');
-    document.getElementById('vehmodal').classList.remove('on');
+    closeModal('vehmodal');
     await reloadVehicles();
   } catch (err) { toast(err.message); }
 }
@@ -1480,6 +1630,89 @@ function renderRegToggle(){
   if (!S) return;
   btn.textContent = S.registration_open ? '🔒 参加受付を終了する' : '🔓 参加受付を再開する';
 }
+
+/* イベント管理カード (stage 2: multi-event) ------------------------------- */
+function fmtDate(ms){
+  const d = new Date(ms);
+  return `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`;
+}
+function renderEventMgmt(){
+  const card = document.getElementById('evt-mgmt-card');
+  clear(card);
+  const active = events.find(e => e.status === 'active');
+  const past = events.filter(e => e.status === 'closed');
+
+  if (active){
+    card.appendChild(h('div', { class: 'setrow' }, 'イベント名', h('span', { class: 'ml' }, active.name)));
+    card.appendChild(h('div', { class: 'setrow' }, 'ステータス', h('span', { class: 'ml badge' }, 'アクティブ')));
+    const wrap = h('div', { style: 'padding:0 12px 12px' });
+    const closeBtn = h('button', { type: 'button', class: 'btn danger', style: 'width:100%' }, 'イベントを終了する');
+    closeBtn.addEventListener('click', () => closeEventFlow(active));
+    wrap.appendChild(closeBtn);
+    card.appendChild(wrap);
+  } else {
+    const wrap = h('div', { style: 'padding:12px' });
+    const nameInput = h('input', { id: 'nev-name', placeholder: 'イベント名', style: 'width:100%;margin-bottom:10px' });
+    const copyLabel = h('label', { style: 'display:flex;align-items:center;gap:8px;font-size:12px;color:var(--mut);margin-bottom:12px' });
+    const copyChk = h('input', { type: 'checkbox', id: 'nev-copy' });
+    copyChk.checked = true;
+    copyLabel.appendChild(copyChk);
+    copyLabel.appendChild(document.createTextNode('前回イベントの設定を引き継ぐ'));
+    const createBtn = h('button', { type: 'button', class: 'btn primary', style: 'width:100%' }, '＋ 新規イベント作成');
+    createBtn.addEventListener('click', async () => {
+      const name = nameInput.value.trim();
+      if (!name){ toast('イベント名を入力してください'); return; }
+      try {
+        await api('POST', '/api/admin/events', { name, copy_from_last: copyChk.checked });
+        toast(`「${name}」を作成しました`);
+        location.reload();
+      } catch (err) { toast(err.message); }
+    });
+    wrap.appendChild(nameInput);
+    wrap.appendChild(copyLabel);
+    wrap.appendChild(createBtn);
+    card.appendChild(wrap);
+  }
+
+  if (past.length){
+    card.appendChild(h('div', { class: 'setrow', style: 'border-top:1px solid var(--line);font-size:10.5px;color:var(--mut);letter-spacing:.1em' }, '過去のイベント'));
+    const ul = h('ul', { class: 'ulist' });
+    past.forEach(e => {
+      const period = fmtDate(e.created_at_ms) + (e.closed_at_ms ? ' 〜 ' + fmtDate(e.closed_at_ms) : '');
+      ul.appendChild(h('li', {}, h('div', { class: 'nm' }, h('b', {}, e.name), h('span', {}, period))));
+    });
+    card.appendChild(ul);
+  }
+  const archLink = h('a', { href: '/archive', class: 'btn', style: 'display:block;text-align:center;margin:0 12px 12px;text-decoration:none' }, 'アーカイブを見る →');
+  card.appendChild(archLink);
+}
+async function closeEventFlow(ev){
+  if (!confirm(`「${ev.name}」を終了しますか?\n終了後は記録閲覧のみになります。`)) return;
+  if (!confirm('この操作は元に戻せません。本当によろしいですか?')) return;
+  try {
+    await api('POST', `/api/admin/events/${ev.id}/close`, {});
+    toast('イベントを終了しました');
+    location.reload();
+  } catch (err) { toast(err.message); }
+}
+async function reloadEvents(){
+  try {
+    const r = await apiGet('/api/admin/events');
+    events = r.events || [];
+    renderEventMgmt();
+  } catch (err) { toast('イベント一覧の取得に失敗: ' + err.message); }
+}
+// Gray out / disable the controls that only make sense with an active event
+// (S === null means none is active). Deliberately minimal — just disabling
+// the primary action buttons, no dedicated empty-state screens.
+function renderNoEventState(){
+  const noEvent = !S;
+  ['gobtn', 'goalbtn', 'qa-add', 'qa-driver', 'qa-vehicle', 'set-save', 'btn-reg-toggle'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = noEvent;
+  });
+  document.getElementById('evt-settings-card').style.opacity = noEvent ? '.45' : '';
+}
 async function saveSettings(){
   if (!S) return;
   const num = (id, fallback) => { const v = parseFloat(document.getElementById(id).value); return isNaN(v) ? fallback : v; };
@@ -1530,7 +1763,7 @@ function bindExports(){
     const v = document.getElementById('cm-vehicle').value;
     if (!d || !v){ toast('走者と車両を選択してください'); return; }
     location.href = `/api/admin/export?type=combination&driver_id=${encodeURIComponent(d)}&vehicle_id=${encodeURIComponent(v)}`;
-    document.getElementById('combomodal').classList.remove('on');
+    closeModal('combomodal');
   });
 }
 
@@ -1538,7 +1771,10 @@ function bindExports(){
    data loading / SSE / init
    ============================================================ */
 async function reloadAdminSettings(){
-  try { S = await apiGet('/api/admin/settings'); } catch (err) { toast('設定の取得に失敗: ' + err.message); }
+  try {
+    const r = await apiGet('/api/admin/settings');
+    S = (r && r.event === null) ? null : r; // {"event":null} = no active event (stage 2: between events)
+  } catch (err) { toast('設定の取得に失敗: ' + err.message); }
 }
 async function reloadUsers(){
   try {
@@ -1566,8 +1802,27 @@ async function reloadDrivers(){
 
 function bindModalClose(id){
   const bg = document.getElementById(id);
-  bg.addEventListener('click', e => { if (e.target === bg) bg.classList.remove('on'); });
+  bg.addEventListener('click', e => { if (e.target === bg) closeModal(id); });
   bg.querySelector('.modal').addEventListener('click', e => e.stopPropagation());
+}
+
+// True while any .modal-bg (user edit / vehicle edit / new user / reissue /
+// log / assign / combination export) is open.
+function anyModalOpen(){
+  return !!document.querySelector('.modal-bg.on');
+}
+// Every modal-close site funnels through here (instead of a raw
+// classList.remove('on')) so a directory refresh deferred while a modal was
+// open — see the 'directory' SSE listener below — fires exactly once, right
+// after the last open modal shuts. Mirrors the qDragging pattern used to
+// suppress queue re-renders mid-drag.
+function closeModal(id){
+  document.getElementById(id).classList.remove('on');
+  if (directoryPending && !anyModalOpen()){
+    directoryPending = false;
+    reloadUsers();
+    reloadVehicles();
+  }
 }
 
 let rankingReloadTimer = null;
@@ -1586,12 +1841,14 @@ async function init(){
     b.classList.add('on');
     document.querySelectorAll('.apane').forEach(p => p.classList.remove('on'));
     document.getElementById(b.dataset.p).classList.add('on');
-    if (b.dataset.p === 'a-set'){ reloadAdminSettings().then(fillSettingsForm); }
+    if (b.dataset.p === 'a-set'){ reloadAdminSettings().then(() => { fillSettingsForm(); renderNoEventState(); }); reloadEvents(); }
     if (b.dataset.p === 'a-log'){ reloadLogs(); }
   }));
-  ['logmodal', 'assignmodal', 'newusermodal', 'renamemodal', 'qrmodal', 'vehmodal', 'combomodal'].forEach(bindModalClose);
+  ['logmodal', 'assignmodal', 'newusermodal', 'renamemodal', 'qrmodal', 'vehmodal', 'combomodal', 'cropmodal'].forEach(bindModalClose);
   bindGoButtons();
   bindExports();
+  bindCrop();
+  initQueueSortable();
   segBind('vm-eng', 'e', (val) => {
     vmEngine = val;
     document.getElementById('vm-ice').style.display = (val === 'ev') ? 'none' : 'block';
@@ -1620,14 +1877,15 @@ async function init(){
   document.getElementById('set-save').addEventListener('click', saveSettings);
   document.getElementById('btn-reg-toggle').addEventListener('click', toggleRegistration);
 
-  await Promise.all([reloadAdminSettings(), reloadUsers(), reloadVehicles(), reloadDrivers()]);
+  await Promise.all([reloadAdminSettings(), reloadUsers(), reloadVehicles(), reloadDrivers(), reloadEvents()]);
   fillSettingsForm();
   renderModeUI();
+  renderNoEventState();
   reloadLogs();
   renderSensors();
 
   /* SSE — all topics */
-  const es = new EventSource('/api/stream?topics=ranking,on_course,queue,sensor_status,orphan,settings,time');
+  const es = new EventSource('/api/stream?topics=ranking,on_course,queue,sensor_status,orphan,settings,time,directory');
   es.addEventListener('time', e => {
     const d = JSON.parse(e.data);
     offset = d.server_ms - Date.now();
@@ -1652,19 +1910,52 @@ async function init(){
     renderOrphan();
   });
   es.addEventListener('settings', e => {
-    pub = JSON.parse(e.data);
-    if (S){
-      S.timing_mode = pub.timing_mode;
-      S.registration_open = pub.registration_open;
-      S.registration_mode = pub.registration_mode;
-      S.heat_ranking = pub.heat_ranking;
-      S.pt_mode = pub.pt_mode;
-      S.pt_penalty_ms = pub.pt_penalty_ms;
-      S.queue_self_entry = pub.queue_self_entry;
-      S.max_course_time_sec = pub.max_course_time_sec;
+    const data = JSON.parse(e.data);
+    if (data.event === null){
+      // No active event (stage 2: between events) — reload the event list
+      // so the management card can offer "create new event", and drop the
+      // stale admin-settings snapshot.
+      pub = null;
+      S = null;
+      reloadEvents();
+    } else {
+      pub = data;
+      if (S){
+        S.timing_mode = pub.timing_mode;
+        S.registration_open = pub.registration_open;
+        S.registration_mode = pub.registration_mode;
+        S.heat_ranking = pub.heat_ranking;
+        S.pt_mode = pub.pt_mode;
+        S.pt_penalty_ms = pub.pt_penalty_ms;
+        S.queue_self_entry = pub.queue_self_entry;
+        S.max_course_time_sec = pub.max_course_time_sec;
+      }
     }
     renderModeUI();
     renderRegToggle();
+    renderNoEventState();
+    renderCourse(); // card buttons depend on timing_mode; cards no longer rebuild on a timer
+  });
+  es.addEventListener('directory', e => {
+    const rev = JSON.parse(e.data).rev;
+    if (directoryRev === null){
+      // First event on this connection is just the current snapshot echoed
+      // back (or, on a reconnect, the value we already had) — init() already
+      // fetched users/vehicles via REST moments ago, so there is nothing new
+      // to fetch yet. Only a rev that differs from one we've already seen
+      // means something actually changed.
+      directoryRev = rev;
+      return;
+    }
+    if (rev === directoryRev) return;
+    directoryRev = rev;
+    iconRev = Date.now(); // master data (incl. icons) changed — bust icon cache on next draws
+    if (anyModalOpen()){
+      directoryPending = true;
+      return;
+    }
+    reloadUsers();
+    reloadVehicles();
   });
 
   /* running clocks at ~10Hz + sensor age at 1Hz */
@@ -1672,7 +1963,7 @@ async function init(){
   function tick(ts){
     if (ts - lastTick >= 100){
       lastTick = ts;
-      renderCourse();
+      updateCourseClocks();
     }
     if (ts - lastSensorTick >= 1000){
       lastSensorTick = ts;

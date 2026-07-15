@@ -7,9 +7,11 @@ import (
 )
 
 // QueueRow mirrors a queue row (both the waiting list and on_course state
-// live in this one table/status machine).
+// live in this one table/status machine). EventID identifies the event this
+// row belongs to (queue rows never move between events).
 type QueueRow struct {
 	ID        int64
+	EventID   int64
 	DriverID  int64
 	VehicleID int64
 	Position  float64
@@ -20,7 +22,7 @@ type QueueRow struct {
 	CreatedBy *int64
 }
 
-const queueSelectCols = `id, driver_id, vehicle_id, position, status, t_start_us, pt_count, mc_flag, created_by`
+const queueSelectCols = `id, event_id, driver_id, vehicle_id, position, status, t_start_us, pt_count, mc_flag, created_by`
 
 func scanQueueRow(row rowScanner) (QueueRow, error) {
 	var q QueueRow
@@ -28,7 +30,7 @@ func scanQueueRow(row rowScanner) (QueueRow, error) {
 	var tStart sql.NullInt64
 	var mc int
 	var createdBy sql.NullInt64
-	if err := row.Scan(&q.ID, &q.DriverID, &q.VehicleID, &position, &q.Status, &tStart, &q.PTCount, &mc, &createdBy); err != nil {
+	if err := row.Scan(&q.ID, &q.EventID, &q.DriverID, &q.VehicleID, &position, &q.Status, &tStart, &q.PTCount, &mc, &createdBy); err != nil {
 		return QueueRow{}, err
 	}
 	q.Position = position.Float64 // position is only ever NULL for rows this package never creates that way
@@ -44,14 +46,15 @@ func scanQueueRow(row rowScanner) (QueueRow, error) {
 	return q, nil
 }
 
-// ListQueue returns rows with the given status: waiting rows come back in
-// position order, everything else (on_course/done/canceled) in id order.
-func (s *Store) ListQueue(status string) ([]QueueRow, error) {
+// ListQueue returns eventID's rows with the given status: waiting rows come
+// back in position order, everything else (on_course/done/canceled) in id
+// order.
+func (s *Store) ListQueue(eventID int64, status string) ([]QueueRow, error) {
 	orderBy := "id"
 	if status == "waiting" {
 		orderBy = "position"
 	}
-	rows, err := s.db.Query(`SELECT `+queueSelectCols+` FROM queue WHERE status = ? ORDER BY `+orderBy+`, id`, status)
+	rows, err := s.db.Query(`SELECT `+queueSelectCols+` FROM queue WHERE event_id = ? AND status = ? ORDER BY `+orderBy+`, id`, eventID, status)
 	if err != nil {
 		return nil, fmt.Errorf("store: list queue: %w", err)
 	}
@@ -71,10 +74,11 @@ func (s *Store) ListQueue(status string) ([]QueueRow, error) {
 	return out, nil
 }
 
-// Enqueue appends (driverID, vehicleID) to the end of the waiting queue.
-// Returns ErrAlreadyWaiting (no row inserted) if that combination already
-// has a waiting-status row; callers translate that into HTTP 409.
-func (s *Store) Enqueue(driverID, vehicleID int64, createdBy *int64) (int64, error) {
+// Enqueue appends (driverID, vehicleID) to the end of eventID's waiting
+// queue. Returns ErrAlreadyWaiting (no row inserted) if that combination
+// already has a waiting-status row in this event; callers translate that
+// into HTTP 409.
+func (s *Store) Enqueue(eventID, driverID, vehicleID int64, createdBy *int64) (int64, error) {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 
@@ -85,8 +89,8 @@ func (s *Store) Enqueue(driverID, vehicleID int64, createdBy *int64) (int64, err
 	defer tx.Rollback()
 
 	var dupCount int
-	if err := tx.QueryRow(`SELECT COUNT(*) FROM queue WHERE status = 'waiting' AND driver_id = ? AND vehicle_id = ?`,
-		driverID, vehicleID).Scan(&dupCount); err != nil {
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM queue WHERE event_id = ? AND status = 'waiting' AND driver_id = ? AND vehicle_id = ?`,
+		eventID, driverID, vehicleID).Scan(&dupCount); err != nil {
 		return 0, fmt.Errorf("store: enqueue: check duplicate: %w", err)
 	}
 	if dupCount > 0 {
@@ -94,7 +98,7 @@ func (s *Store) Enqueue(driverID, vehicleID int64, createdBy *int64) (int64, err
 	}
 
 	var maxPos sql.NullFloat64
-	if err := tx.QueryRow(`SELECT MAX(position) FROM queue WHERE status = 'waiting'`).Scan(&maxPos); err != nil {
+	if err := tx.QueryRow(`SELECT MAX(position) FROM queue WHERE event_id = ? AND status = 'waiting'`, eventID).Scan(&maxPos); err != nil {
 		return 0, fmt.Errorf("store: enqueue: max position: %w", err)
 	}
 	newPos := 1.0
@@ -102,8 +106,8 @@ func (s *Store) Enqueue(driverID, vehicleID int64, createdBy *int64) (int64, err
 		newPos = maxPos.Float64 + 1.0
 	}
 
-	res, err := tx.Exec(`INSERT INTO queue (driver_id, vehicle_id, position, status, pt_count, mc_flag, created_by)
-		VALUES (?, ?, ?, 'waiting', 0, 0, ?)`, driverID, vehicleID, newPos, nullableInt64(createdBy))
+	res, err := tx.Exec(`INSERT INTO queue (event_id, driver_id, vehicle_id, position, status, pt_count, mc_flag, created_by)
+		VALUES (?, ?, ?, ?, 'waiting', 0, 0, ?)`, eventID, driverID, vehicleID, newPos, nullableInt64(createdBy))
 	if err != nil {
 		return 0, fmt.Errorf("store: enqueue: insert: %w", err)
 	}
@@ -119,10 +123,11 @@ func (s *Store) Enqueue(driverID, vehicleID int64, createdBy *int64) (int64, err
 }
 
 // Reorder sets id's position to the given value, then — within the same
-// transaction — checks whether any two adjacent waiting rows now sit closer
-// together than 1e-9. If so the entire waiting queue is renumbered to
-// 1.0, 2.0, 3.0, ... to restore room for future fractional inserts. This is
-// expected to be rare (repeated fine-grained drag-reorders).
+// transaction — looks up id's event_id and checks whether any two adjacent
+// waiting rows *of that same event* now sit closer together than 1e-9. If
+// so that event's entire waiting queue is renumbered to 1.0, 2.0, 3.0, ...
+// to restore room for future fractional inserts. This is expected to be
+// rare (repeated fine-grained drag-reorders).
 func (s *Store) Reorder(id int64, position float64) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
@@ -133,11 +138,19 @@ func (s *Store) Reorder(id int64, position float64) error {
 	}
 	defer tx.Rollback()
 
+	var eventID int64
+	if err := tx.QueryRow(`SELECT event_id FROM queue WHERE id = ?`, id).Scan(&eventID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("store: reorder: queue row %d not found", id)
+		}
+		return fmt.Errorf("store: reorder: lookup event_id: %w", err)
+	}
+
 	if _, err := tx.Exec(`UPDATE queue SET position = ? WHERE id = ?`, position, id); err != nil {
 		return fmt.Errorf("store: reorder: update: %w", err)
 	}
 
-	rows, err := tx.Query(`SELECT id, position FROM queue WHERE status = 'waiting' ORDER BY position, id`)
+	rows, err := tx.Query(`SELECT id, position FROM queue WHERE event_id = ? AND status = 'waiting' ORDER BY position, id`, eventID)
 	if err != nil {
 		return fmt.Errorf("store: reorder: read positions: %w", err)
 	}
@@ -254,6 +267,21 @@ func (s *Store) SetMC(id int64, on bool) error {
 	_, err := s.db.Exec(`UPDATE queue SET mc_flag = ? WHERE id = ?`, boolToInt(on), id)
 	if err != nil {
 		return fmt.Errorf("store: set mc: %w", err)
+	}
+	return nil
+}
+
+// CancelWaiting transitions every 'waiting' row of eventID to 'canceled'.
+// Called when closing an event so its queue does not linger in a stale
+// waiting state once the event can no longer be launched onto the course;
+// on_course/done/canceled rows are left untouched (the caller is
+// responsible for rejecting the close while any car is still on_course).
+func (s *Store) CancelWaiting(eventID int64) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	_, err := s.db.Exec(`UPDATE queue SET status = 'canceled' WHERE event_id = ? AND status = 'waiting'`, eventID)
+	if err != nil {
+		return fmt.Errorf("store: cancel waiting: %w", err)
 	}
 	return nil
 }

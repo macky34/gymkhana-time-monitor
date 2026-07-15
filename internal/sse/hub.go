@@ -27,6 +27,7 @@ const (
 	TopicOrphan       = "orphan"
 	TopicSettings     = "settings"
 	TopicTime         = "time"
+	TopicDirectory    = "directory"
 )
 
 var knownTopics = map[string]bool{
@@ -37,6 +38,7 @@ var knownTopics = map[string]bool{
 	TopicOrphan:       true,
 	TopicSettings:     true,
 	TopicTime:         true,
+	TopicDirectory:    true,
 }
 
 // subscriberBufferSize is how many pending events a subscriber may have
@@ -192,6 +194,11 @@ func (h *Hub) Handler(isAdmin func(*http.Request) bool) http.Handler {
 		header := w.Header()
 		header.Set("Content-Type", "text/event-stream")
 		header.Set("Cache-Control", "no-cache")
+		// Cloudflare/nginx-style reverse proxies buffer proxied responses by
+		// default, which would hold every SSE event until the buffer fills
+		// or the connection closes; this opts the response out of that
+		// buffering so events reach the client as soon as they are flushed.
+		header.Set("X-Accel-Buffering", "no")
 		header.Set("Content-Encoding", "gzip")
 		w.WriteHeader(http.StatusOK)
 		// Push the status line/headers to the client right away: a real
@@ -218,8 +225,18 @@ func (h *Hub) Handler(isAdmin func(*http.Request) bool) http.Handler {
 		}
 
 		// Send whatever snapshots already exist for the requested topics,
-		// in the order the client asked for them.
+		// in the order the client asked for them. TopicTime is special: its
+		// stored snapshot is up to one heartbeat interval stale, and clients
+		// derive their clock offset from it, so replaying it would skew every
+		// running timer by that staleness until the next heartbeat. Instead
+		// each new subscriber gets a freshly stamped payload.
 		for _, t := range topics {
+			if t == TopicTime {
+				if !write(t, timePayload()) {
+					return
+				}
+				continue
+			}
 			if d, ok := initial[t]; ok {
 				if !write(t, d) {
 					return
@@ -243,6 +260,14 @@ func (h *Hub) Handler(isAdmin func(*http.Request) bool) http.Handler {
 	})
 }
 
+// timePayload returns a freshly stamped {"server_ms": <UnixMilli>} payload.
+func timePayload() []byte {
+	data, _ := json.Marshal(struct {
+		ServerMS int64 `json:"server_ms"`
+	}{ServerMS: time.Now().UnixMilli()})
+	return data
+}
+
 // Run publishes a {"server_ms": <UnixMilli>} heartbeat to TopicTime every 25
 // seconds until ctx is cancelled.
 func (h *Hub) Run(ctx context.Context) {
@@ -253,13 +278,7 @@ func (h *Hub) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			data, err := json.Marshal(struct {
-				ServerMS int64 `json:"server_ms"`
-			}{ServerMS: time.Now().UnixMilli()})
-			if err != nil {
-				continue
-			}
-			h.Publish(TopicTime, data)
+			h.Publish(TopicTime, timePayload())
 		}
 	}
 }

@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>{{.EventName}} | 参加登録</title>
 <link rel="stylesheet" href="/static/cropper.min.css">
 <style>
@@ -14,9 +14,9 @@
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   body{background:#0b0d10;color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
-       display:flex;justify-content:center;padding:16px 0;min-height:100vh}
+       display:flex;justify-content:center;padding:0;min-height:100vh}
   .phone{width:392px;max-width:100%;background:var(--bg);border:1px solid #262d38;border-radius:22px;
-         overflow:hidden;display:flex;flex-direction:column;height:820px;max-height:96vh;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
+         overflow:hidden;display:flex;flex-direction:column;height:100vh;height:100dvh;max-height:none;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
   header{padding:10px 14px 8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px;flex:none}
   header .ev{font-size:13px;font-weight:700;letter-spacing:.02em}
   header .live{margin-left:auto;font-size:10px;color:var(--go);font-family:var(--mono);display:flex;align-items:center;gap:5px}
@@ -93,6 +93,7 @@
         <div style="font-size:32px">🚧</div>
         <h2>参加受付は終了しました</h2>
         <p id="reg-closed-msg">現在、新規の参加登録は受け付けていません。</p>
+        <a class="btn" href="/archive" style="display:inline-block;margin-top:16px;text-decoration:none">アーカイブを見る →</a>
       </div>
     </div>
 
@@ -272,9 +273,12 @@ async function loadStaticData(){
     toast('設定の取得に失敗しました');
     settings = { driver_classes: [], dt_classes: [], registration_open: true, registration_mode: 'public' };
   }
-  if (settings.registration_open === false || settings.registration_mode === 'staff'){
+  const noActiveEvent = settings.event === null || settings.event_status === 'closed';
+  if (noActiveEvent || settings.registration_open === false || settings.registration_mode === 'staff'){
     document.getElementById('reg-closed').style.display = 'block';
-    if (settings.registration_mode === 'staff' && settings.registration_open !== false){
+    if (noActiveEvent){
+      document.getElementById('reg-closed-msg').textContent = '現在開催中のイベントはありません。過去の記録はアーカイブからご覧いただけます。';
+    } else if (settings.registration_mode === 'staff' && settings.registration_open !== false){
       document.getElementById('reg-closed-msg').textContent = '現在、参加登録は運営による代理登録のみ受け付けています。受付窓口までお越しください。';
     }
     return;
@@ -371,7 +375,7 @@ async function submitRegister(getDriverClassId){
   btn.disabled = true;
   try {
     await apiPost('/api/register', body);
-    location.href = '/my';
+    location.href = '/mypage';
   } catch (e) {
     toast(e.message || '登録に失敗しました');
     btn.disabled = false;

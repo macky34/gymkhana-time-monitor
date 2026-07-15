@@ -66,6 +66,16 @@ type Deps struct {
 	// set this to a short duration to avoid slow tests.
 	StatusInterval time.Duration
 
+	// ActiveEventID reports the id of the currently active event, if any
+	// (ok=false when none is active). Every recorded sensor_events row
+	// carries this id (NULL when ok=false), and when ok=false incoming
+	// triggers are recorded for dedup purposes only — Course.SensorStart/
+	// SensorGoal are not called, so no queue/log mutation happens while no
+	// event is active. Left nil (the default; e.g. in tests that do not
+	// exercise multi-event behavior), every trigger is treated as
+	// belonging to an active event so pairing proceeds exactly as before.
+	ActiveEventID func() (id int64, ok bool)
+
 	// boundAddr, when non-nil, receives the UDP socket's actual local
 	// address once Listen has bound (useful with a ":0" addr). Unexported
 	// on purpose: it is an in-package test seam, not part of the public
@@ -91,6 +101,18 @@ type packet struct {
 
 func validSensorID(id string) bool {
 	return id == "start" || id == "goal"
+}
+
+// sourceIP extracts just the IP portion (no port) from a packet's source
+// address, for use as the rate-limiting key in the drop-packet logger below.
+func sourceIP(addr net.Addr) string {
+	if udpAddr, ok := addr.(*net.UDPAddr); ok && udpAddr.IP != nil {
+		return udpAddr.IP.String()
+	}
+	if host, _, err := net.SplitHostPort(addr.String()); err == nil {
+		return host
+	}
+	return addr.String()
 }
 
 // Listen receives UDP packets on addr (e.g. ":9999") until ctx is done, then
@@ -140,10 +162,41 @@ func Listen(ctx context.Context, addr string, deps Deps) error {
 		}
 	}()
 
+	// dropStat tracks how often we've silently discarded non-JSON/unparseable
+	// packets from a given source IP, so LAN broadcast noise (e.g. TP-Link
+	// discovery packets hitting our UDP port) doesn't spam the log on every
+	// packet: each source only logs on its first bad packet and then at most
+	// once every 5 minutes after that.
+	type dropStat struct {
+		lastLog time.Time
+		count   int
+	}
+	dropLog := make(map[string]*dropStat)
+	const dropLogInterval = 5 * time.Minute
+
+	logDrop := func(srcIP string, raw []byte) {
+		st, seen := dropLog[srcIP]
+		if !seen {
+			st = &dropStat{}
+			dropLog[srcIP] = st
+		}
+		st.count++
+		now := time.Now()
+		if seen && now.Sub(st.lastLog) < dropLogInterval {
+			return
+		}
+		st.lastLog = now
+		n := len(raw)
+		if n > 16 {
+			n = 16
+		}
+		log.Printf("timing: dropping non-json packets from %s (total %d, first bytes: %x)", srcIP, st.count, raw[:n])
+	}
+
 	var retErr error
 	buf := make([]byte, 2048)
 	for {
-		n, _, readErr := conn.ReadFrom(buf)
+		n, srcAddr, readErr := conn.ReadFrom(buf)
 		if readErr != nil {
 			select {
 			case <-ctx.Done():
@@ -154,9 +207,14 @@ func Listen(ctx context.Context, addr string, deps Deps) error {
 			break
 		}
 
+		if n == 0 || buf[0] != '{' {
+			logDrop(sourceIP(srcAddr), buf[:n])
+			continue
+		}
+
 		var p packet
 		if err := json.Unmarshal(buf[:n], &p); err != nil {
-			log.Printf("timing: dropping invalid json packet: %v", err)
+			logDrop(sourceIP(srcAddr), buf[:n])
 			continue
 		}
 		if p.Type != "trigger" && p.Type != "hb" {
@@ -222,8 +280,18 @@ func (d *dispatcher) handleTrigger(p packet) {
 		return
 	}
 
+	var eventIDPtr *int64
+	hasActiveEvent := true
+	if d.deps.ActiveEventID != nil {
+		id, ok := d.deps.ActiveEventID()
+		hasActiveEvent = ok
+		if ok {
+			eventIDPtr = &id
+		}
+	}
+
 	receivedAtMS := time.Now().UnixMilli()
-	inserted, err := d.deps.Store.InsertSensorEvent(p.SensorID, p.BootID, p.Seq, p.TimestampUS, receivedAtMS)
+	inserted, err := d.deps.Store.InsertSensorEvent(p.SensorID, p.BootID, p.Seq, p.TimestampUS, receivedAtMS, eventIDPtr)
 	if err != nil {
 		log.Printf("timing: store insert failed for %s trigger (boot_id=%d seq=%d): %v", p.SensorID, p.BootID, p.Seq, err)
 		return
@@ -231,6 +299,13 @@ func (d *dispatcher) handleTrigger(p packet) {
 	if !inserted {
 		// Duplicate delivery: the 2nd/3rd copy of the ESP32's burst-of-3
 		// resend for the same (sensor_id, boot_id, seq). Silently ignore.
+		return
+	}
+
+	if !hasActiveEvent {
+		// No active event: the trigger is now recorded as a dedup/safety
+		// net entry only. Pairing (which would generate a queue/log
+		// mutation) is skipped entirely until an event becomes active.
 		return
 	}
 

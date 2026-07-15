@@ -23,3 +23,13 @@
 
 // Fallback debounce lockout if the server config fetch fails (ms).
 #define DEFAULT_LOCKOUT_MS 800
+
+// --- Seeed Studio XIAO ESP32C6 (env:seeed_xiao_esp32c6) ---------------------
+// Uncomment/replace the above when building for the XIAO ESP32C6 instead of
+// the ESP32 DevKit:
+//   #define SENSOR_GPIO 1        // D1 pin (GPIO1)
+//   #define STATUS_LED_GPIO 15   // onboard LED, active-low
+//   #define LED_ACTIVE_LOW 1     // onboard LED is lit when driven LOW
+//   #define USE_EXTERNAL_ANTENNA 0  // 0 = onboard chip antenna, 1 = external (u.FL)
+// LED_ACTIVE_LOW and USE_EXTERNAL_ANTENNA default to 0 in main.cpp if not
+// defined here, so existing config.h files for esp32dev keep working as-is.

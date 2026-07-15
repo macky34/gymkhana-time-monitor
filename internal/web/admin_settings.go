@@ -47,7 +47,7 @@ type adminSettingsIO struct {
 	DisplacementClasses []adminDispClassIO  `json:"displacement_classes"`
 }
 
-func adminSettingsToIO(set store.SettingsRow) adminSettingsIO {
+func adminSettingsToIO(set store.EventRow) adminSettingsIO {
 	dispOut := make([]adminDispClassIO, 0, len(set.DispClasses))
 	for _, d := range set.DispClasses {
 		dispOut = append(dispOut, adminDispClassIO{Label: d.Label, MaxCC: d.MaxCC})
@@ -75,7 +75,7 @@ func adminSettingsToIO(set store.SettingsRow) adminSettingsIO {
 
 // applyTo overwrites every settings field on set with the values from io
 // (a full replace, matching the "同形body" contract for PUT).
-func (io adminSettingsIO) applyTo(set store.SettingsRow) store.SettingsRow {
+func (io adminSettingsIO) applyTo(set store.EventRow) store.EventRow {
 	set.EventName = io.EventName
 	set.TimingMode = io.TimingMode
 	set.PTMode = io.PTMode
@@ -100,31 +100,31 @@ func (io adminSettingsIO) applyTo(set store.SettingsRow) store.SettingsRow {
 	return set
 }
 
-// handleAdminSettingsGet implements GET /api/admin/settings.
+// handleAdminSettingsGet implements GET /api/admin/settings. Stage-2
+// (multi-event): with no active event (all closed, or none created yet)
+// this is not an error — it is the normal state between events — so the
+// response is {"event": null} (mirroring the public /api/settings
+// snapshot's shape for the same case) rather than a 409/404/500. The admin
+// UI uses that to switch to its "no active event" / "create event" view.
 func (s *Server) handleAdminSettingsGet(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	set, ok, err := s.Store.GetSettings()
+	ev, ok, err := s.activeEvent()
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 	if !ok {
-		writeJSONError(w, http.StatusConflict, "event not configured")
+		writeJSON(w, http.StatusOK, map[string]any{"event": nil})
 		return
 	}
-	writeJSON(w, http.StatusOK, adminSettingsToIO(set))
+	writeJSON(w, http.StatusOK, adminSettingsToIO(ev))
 }
 
 // handleAdminSettingsUpdate implements PUT /api/admin/settings: coefficient
 // and PT-mode changes affect converted cc / classes / ranking, so both the
 // settings and ranking snapshots are republished.
 func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	current, ok, err := s.Store.GetSettings()
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
+	current, ok := s.requireActiveEvent(w)
 	if !ok {
-		writeJSONError(w, http.StatusConflict, "event not configured")
 		return
 	}
 
@@ -135,7 +135,7 @@ func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 	}
 
 	updated := body.applyTo(current)
-	if err := s.Store.UpdateSettings(updated); err != nil {
+	if err := s.Store.UpdateEvent(updated); err != nil {
 		writeErr(w, err)
 		return
 	}
@@ -160,18 +160,13 @@ func (s *Server) handleAdminRegistrationSet(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	current, ok, err := s.Store.GetSettings()
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
+	current, ok := s.requireActiveEvent(w)
 	if !ok {
-		writeJSONError(w, http.StatusConflict, "event not configured")
 		return
 	}
 	current.RegistrationOpen = body.Open
 
-	if err := s.Store.UpdateSettings(current); err != nil {
+	if err := s.Store.UpdateEvent(current); err != nil {
 		writeErr(w, err)
 		return
 	}

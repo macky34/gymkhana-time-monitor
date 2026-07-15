@@ -22,12 +22,14 @@ func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, ok, err := s.Store.GetSettings()
+	// Stage-2 (multi-event): gate on "no admin has ever been created" rather
+	// than "no active event" — see NewServer's matching comment.
+	hasAdmin, err := s.Store.HasAdmin()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	if ok {
+	if hasAdmin {
 		http.NotFound(w, r)
 		return
 	}
@@ -89,12 +91,12 @@ func (s *Server) handleAPISetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, ok, err := s.Store.GetSettings()
+	hasAdmin, err := s.Store.HasAdmin()
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if ok {
+	if hasAdmin {
 		http.NotFound(w, r)
 		return
 	}
@@ -107,7 +109,7 @@ func (s *Server) handleAPISetup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	set := store.SettingsRow{
+	set := store.EventRow{
 		EventName:        req.EventName,
 		TimingMode:       req.Event.TimingMode,
 		PTMode:           req.Event.PTMode,
@@ -167,6 +169,7 @@ func (s *Server) handleAPISetup(w http.ResponseWriter, r *http.Request) {
 	s.audit(&driverID, "setup", map[string]any{"event_name": req.EventName})
 	if s.Snap != nil {
 		_ = s.Snap.PublishSettings(s.Hub)
+		_ = s.Snap.PublishDirectory(s.Hub)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})

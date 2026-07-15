@@ -13,10 +13,19 @@ type queueItem struct {
 	Position float64         `json:"position"` // admin drag-reorder computes midpoints from this
 }
 
-// Queue builds the waiting-line snapshot, ordered by queue position (the
-// same order store.ListQueue("waiting") returns).
+// Queue builds the waiting-line snapshot for the current active event,
+// ordered by queue position (the same order store.ListQueue(eventID,
+// "waiting") returns). With no active event, this is an empty list.
 func (b *Builder) Queue() ([]byte, error) {
-	rows, err := b.s.ListQueue("waiting")
+	ev, ok, err := b.s.GetActiveEvent()
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return json.Marshal(queueResponse{Items: []queueItem{}})
+	}
+
+	rows, err := b.s.ListQueue(ev.ID, "waiting")
 	if err != nil {
 		return nil, err
 	}
@@ -43,8 +52,8 @@ func (b *Builder) Queue() ([]byte, error) {
 		}
 		items = append(items, queueItem{
 			QueueID:  r.ID,
-			Driver:   refDriver{ID: drv.ID, Name: drv.Name},
-			Vehicle:  refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name},
+			Driver:   refDriver{ID: drv.ID, Name: drv.Name, HasIcon: drv.HasIcon},
+			Vehicle:  refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name, HasIcon: veh.HasIcon},
 			Position: r.Position,
 		})
 	}
