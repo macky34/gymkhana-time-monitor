@@ -158,6 +158,19 @@ func (s *Store) HasAdmin() (bool, error) {
 	return exists != 0, nil
 }
 
+// IsSeeded reports whether the one-time setup wizard has ever completed.
+// class_defs rows are written only by SeedEvent and never deleted, so their
+// existence is a permanent "setup done" marker (HasAdmin is not: admins can
+// in principle drop to zero later, e.g. by manual DB edits).
+func (s *Store) IsSeeded() (bool, error) {
+	var exists int
+	err := s.db.QueryRow(`SELECT EXISTS(SELECT 1 FROM class_defs)`).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("store: is seeded: %w", err)
+	}
+	return exists != 0, nil
+}
+
 // ReissueToken overwrites a driver's login token, immediately invalidating
 // the old one.
 func (s *Store) ReissueToken(id int64, newToken string) error {

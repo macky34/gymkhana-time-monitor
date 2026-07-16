@@ -38,6 +38,11 @@ type Server struct {
 
 	setupMu    sync.Mutex
 	setupToken string
+
+	// emergencyToken is written once here in NewServer and never mutated
+	// afterwards (unlike setupToken, which is cleared on successful setup
+	// under setupMu), so it needs no mutex of its own.
+	emergencyToken string
 }
 
 // NewServer builds a Server. If the event has not been configured yet, a
@@ -74,19 +79,37 @@ func NewServer(st *store.Store, hub *sse.Hub, snap *snapshot.Builder, baseURL st
 
 	// Stage-2 (multi-event): setup is a one-time, whole-database wizard, not
 	// tied to "is there an active event right now" (an operator legitimately
-	// has zero active events between event runs). Gate it on "no admin has
-	// ever been created" instead.
-	hasAdmin, err := st.HasAdmin()
+	// has zero active events between event runs). Gate it on "has setup ever
+	// completed" (IsSeeded) rather than "is there an admin right now"
+	// (HasAdmin): admins can in principle drop to zero after setup has
+	// completed (manual DB edits, a demotion race), and gating on HasAdmin
+	// would let /setup run again in that case, which would re-run SeedEvent
+	// against an already-seeded database.
+	seeded, err := st.IsSeeded()
 	if err != nil {
 		return nil, err
 	}
-	if !hasAdmin {
+	if !seeded {
 		tok, err := randToken()
 		if err != nil {
 			return nil, err
 		}
 		s.setupToken = tok
 		log.Printf("Setup URL: %s/setup?t=%s", baseURL, tok)
+	} else {
+		// Once setup has completed, mint a fresh emergency-admin token on
+		// every start and log it. It authenticates as a synthetic admin for
+		// the whole process lifetime (see emergencyDriver), giving the
+		// operator a last-resort way back into /admin when nobody can log in
+		// anymore (all admin login URLs lost, admins wiped by manual DB
+		// edits, ...) without a restart. Log readers are server operators
+		// with direct DB access anyway, so this leaks no new authority.
+		tok, err := randToken()
+		if err != nil {
+			return nil, err
+		}
+		s.emergencyToken = tok
+		log.Printf("Emergency admin URL (keep secret; rotates on every restart): %s/a/%s", baseURL, tok)
 	}
 
 	return s, nil

@@ -16,10 +16,32 @@ func (s *Server) driverFromRequest(r *http.Request) (store.Driver, bool) {
 		return store.Driver{}, false
 	}
 	d, ok, err := s.Store.GetDriverByToken(c.Value)
-	if err != nil || !ok {
+	if err != nil {
 		return store.Driver{}, false
 	}
+	if !ok {
+		return s.emergencyDriver(c.Value)
+	}
 	return d, true
+}
+
+// emergencyDriver returns the synthetic emergency-admin identity for tok.
+// ok=false unless tok matches the emergency token generated at startup. The
+// token stays valid for the whole process lifetime and rotates on every
+// restart: it exists so an operator can always recover when nobody can log
+// in as an admin anymore (all admin login URLs lost, admins dropped to zero
+// by manual DB edits, ...). Anyone who can read the startup log is the
+// server operator and could already edit the database directly, so the
+// logged token grants no authority they do not have.
+// The synthetic driver has no drivers row (ID 0): it exists to reach the
+// admin user-management APIs and reissue tokens / promote a real admin, not
+// to run an event (handlers that INSERT the acting driver's id into FK
+// columns, e.g. queue.created_by, will fail for it).
+func (s *Server) emergencyDriver(tok string) (store.Driver, bool) {
+	if tok == "" || s.emergencyToken == "" || tok != s.emergencyToken {
+		return store.Driver{}, false
+	}
+	return store.Driver{ID: 0, Name: "emergency-admin", Role: "admin"}, true
 }
 
 // setSessionCookie sets the tm_session auth cookie. Secure is only set when
@@ -48,6 +70,16 @@ func (s *Server) handleTokenLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
+		// Not a known driver token - try the emergency-admin token before
+		// giving up (see emergencyDriver for what it is and why it is safe).
+		if _, ok := s.emergencyDriver(token); ok {
+			s.setSessionCookie(w, r, token)
+			// The emergency admin has no drivers row, so /mypage (the normal
+			// post-login destination) would not work for it - send it
+			// straight to the admin console instead.
+			http.Redirect(w, r, "/admin", http.StatusFound)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
