@@ -7,7 +7,7 @@ import "fmt"
 // recorded as a dedup/safety-net entry, but the caller skips log
 // generation in that case). Returns (false, nil) without error when
 // (sensorID, bootID, seq) has already been recorded — this is how the 3x
-// UDP resend (plan/DESIGN.md §7.1) gets deduplicated; the caller only
+// UDP resend (the Sensor-Device wiki page) gets deduplicated; the caller only
 // proceeds to pairing logic on the first occurrence.
 func (s *Store) InsertSensorEvent(sensorID string, bootID, seq int64, tsUS int64, receivedAt int64, eventID *int64) (bool, error) {
 	s.writeMu.Lock()

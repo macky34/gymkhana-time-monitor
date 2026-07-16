@@ -151,57 +151,11 @@ func (s *Server) handleAPIVehicles(w http.ResponseWriter, r *http.Request) {
 // handleDriverIcon implements GET /api/drivers/{id}/icon with ETag-based
 // conditional GET support.
 func (s *Server) handleDriverIcon(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	data, ok, err := s.Store.GetIcon(id)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-
-	etag := etagFor(data)
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(data)
+	serveIcon(w, r, s.Store.GetIcon)
 }
 
 // handleVehicleIcon implements GET /api/vehicles/{id}/icon with ETag-based
 // conditional GET support, symmetric to handleDriverIcon.
 func (s *Server) handleVehicleIcon(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	data, ok, err := s.Store.GetVehicleIcon(id)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-
-	etag := etagFor(data)
-	if r.Header.Get("If-None-Match") == etag {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "no-cache")
-	_, _ = w.Write(data)
+	serveIcon(w, r, s.Store.GetVehicleIcon)
 }

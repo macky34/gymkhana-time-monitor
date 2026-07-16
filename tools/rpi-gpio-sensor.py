@@ -4,7 +4,7 @@
 Reads falling edges (beam broken, NPN open-collector output pulled low) on a
 GPIO line via libgpiod v2, applies the same debounce lockout as the ESP32
 firmware (first edge wins, later edges inside the window are dropped), and
-sends the trigger in the exact UDP wire format of docs/CONTRACTS.md §4.5:
+sends the trigger in the exact UDP wire format of the Sensor-Device wiki page:
 
   {"type":"trigger","sensor_id":"start","boot_id":...,"seq":...,"timestamp_us":...}
 

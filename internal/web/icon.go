@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
+	"net/http"
 	"strings"
 )
 
@@ -40,6 +41,70 @@ func iconFromB64(b64 string) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// serveIcon implements the shared body of the driver/vehicle icon GET
+// handlers: resolve "id" from the path, fetch the stored icon bytes via
+// get, and serve them with ETag-based conditional GET support.
+func serveIcon(w http.ResponseWriter, r *http.Request, get func(int64) ([]byte, bool, error)) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	data, ok, err := get(id)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	etag := etagFor(data)
+	if r.Header.Get("If-None-Match") == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "no-cache")
+	_, _ = w.Write(data)
+}
+
+// setIconBody is the {"icon_b64": ...} JSON shape shared by every
+// icon-upload endpoint (own driver/vehicle, admin-managed driver/vehicle).
+type setIconBody struct {
+	IconB64 string `json:"icon_b64"`
+}
+
+// applyIcon implements the shared tail of every icon-upload POST handler:
+// decode {"icon_b64":...}, validate+resize it via iconFromB64, persist it
+// via set(id, jpg), then publishAll+publishDirectory (an icon change
+// touches the driver/vehicle refs embedded in every public snapshot plus
+// the admin directory) and respond {"ok":true}. Callers perform their own
+// path/ownership resolution beforehand and their own audit call via
+// onSuccess (action name and payload differ per caller).
+func (s *Server) applyIcon(w http.ResponseWriter, r *http.Request, id int64, set func(int64, []byte) error, onSuccess func()) {
+	body, ok := decodeReqJSON[setIconBody](w, r)
+	if !ok {
+		return
+	}
+	jpg, err := iconFromB64(body.IconB64)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid icon")
+		return
+	}
+	if err := set(id, jpg); err != nil {
+		writeErr(w, err)
+		return
+	}
+
+	s.publishAll()
+	s.publishDirectory()
+	onSuccess()
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 // resizeTo128 does a simple nearest-neighbor resize to 128x128 using only

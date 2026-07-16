@@ -10,7 +10,7 @@ func comboOrder(sts []Standing) []ComboKey {
 	return out
 }
 
-// TestRank is table-driven over full ranking scenarios (DESIGN.md §4.3/§4.4).
+// TestRank is table-driven over full ranking scenarios (Architecture wiki: ランキング・集計仕様).
 // Each case names which PM-required scenario it covers.
 func TestRank(t *testing.T) {
 	const addMode = "add"

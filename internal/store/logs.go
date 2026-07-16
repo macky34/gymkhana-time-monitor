@@ -102,7 +102,7 @@ func (s *Store) SoftDeleteLog(id int64) error {
 }
 
 // HardDeleteLog physically removes a log row. This exists only for the
-// undo-goal flow (plan/DESIGN.md §7.3): while still within the finish
+// undo-goal flow (the Architecture wiki page): while still within the finish
 // grace period, undoing a finish removes the log that was already written
 // and restores the queue row to on_course/running.
 func (s *Store) HardDeleteLog(id int64) error {
@@ -179,7 +179,7 @@ func scanRunRows(rows *sql.Rows) ([]domain.RunRow, error) {
 
 // ListRuns returns every non-deleted, fully-assigned log belonging to
 // eventID as a domain.RunRow — the input to domain.Rank. Ordered by
-// timestamp_ms, id to match the heat-numbering order (plan/DESIGN.md §4.4).
+// timestamp_ms, id to match the heat-numbering order (Architecture wiki: ヒート番号).
 func (s *Store) ListRuns(eventID int64) ([]domain.RunRow, error) {
 	rows, err := s.db.Query(`SELECT id, driver_id, vehicle_id, raw_ms, pt_count, is_mc, timestamp_ms
 		FROM logs

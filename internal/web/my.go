@@ -168,13 +168,14 @@ func (s *Server) handleGetMy(w http.ResponseWriter, r *http.Request, d store.Dri
 	})
 }
 
+type updateProfileBody struct {
+	Name          string `json:"name"`
+	DriverClassID int64  `json:"driver_class_id"`
+}
+
 func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request, d store.Driver) {
-	var body struct {
-		Name          string `json:"name"`
-		DriverClassID int64  `json:"driver_class_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	body, ok := decodeReqJSON[updateProfileBody](w, r)
+	if !ok {
 		return
 	}
 	if err := s.Store.UpdateDriver(d.ID, body.Name, body.DriverClassID); err != nil {
@@ -187,109 +188,61 @@ func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request, d s
 }
 
 func (s *Server) handleMyIcon(w http.ResponseWriter, r *http.Request, d store.Driver) {
-	var body struct {
-		IconB64 string `json:"icon_b64"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	jpg, err := iconFromB64(body.IconB64)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid icon")
-		return
-	}
-	if err := s.Store.SetIcon(d.ID, jpg); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	s.publishAll()
-	s.publishDirectory()
-	s.audit(&d.ID, "my.icon", map[string]any{})
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	s.applyIcon(w, r, d.ID, s.Store.SetIcon, func() {
+		s.audit(&d.ID, "my.icon", map[string]any{})
+	})
 }
 
-// handleMyVehicleIcon implements POST /api/mypage/vehicles/{id}/icon: sets the
-// icon of a vehicle the caller is linked to via entries. Vehicles the
-// caller is not linked to are reported as a bare 404, same as an unknown
-// vehicle id (no existence leakage), mirroring handleDeleteMyVehicle's
-// treatment of vehicle ids that are not the caller's.
-func (s *Server) handleMyVehicleIcon(w http.ResponseWriter, r *http.Request, d store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		http.NotFound(w, r)
-		return
+// myVehicleID extracts the {id} path value and confirms it names a vehicle
+// the caller is linked to via entries. Any other case — malformed id,
+// unknown vehicle, or a vehicle that exists but isn't the caller's — is a
+// bare 404 (no existence leakage): every /api/mypage/vehicles/{id} handler
+// (icon, spec edit, unlink) shares this single ownership check so they stay
+// consistent by construction.
+func (s *Server) myVehicleID(w http.ResponseWriter, r *http.Request, d store.Driver) (int64, bool) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return 0, false
 	}
 
 	entries, err := s.Store.ListEntriesByDriver(d.ID)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
+		return 0, false
 	}
-	found := false
 	for _, v := range entries {
 		if v.ID == id {
-			found = true
-			break
+			return id, true
 		}
 	}
-	if !found {
-		http.NotFound(w, r)
+	http.NotFound(w, r)
+	return 0, false
+}
+
+// handleMyVehicleIcon implements POST /api/mypage/vehicles/{id}/icon: sets
+// the icon of a vehicle the caller is linked to via entries.
+func (s *Server) handleMyVehicleIcon(w http.ResponseWriter, r *http.Request, d store.Driver) {
+	id, ok := s.myVehicleID(w, r, d)
+	if !ok {
 		return
 	}
 
-	var body struct {
-		IconB64 string `json:"icon_b64"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	jpg, err := iconFromB64(body.IconB64)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid icon")
-		return
-	}
-	if err := s.Store.SetVehicleIcon(id, jpg); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	s.publishAll()
-	s.publishDirectory()
-	s.audit(&d.ID, "my.vehicle.icon", map[string]any{"vehicle_id": id})
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	s.applyIcon(w, r, id, s.Store.SetVehicleIcon, func() {
+		s.audit(&d.ID, "my.vehicle.icon", map[string]any{"vehicle_id": id})
+	})
 }
 
 // handleUpdateMyVehicle implements PUT /api/mypage/vehicles/{id}: lets the
-// caller edit the spec of a vehicle they are linked to via entries (same
-// ownership check, and the same 404-for-not-mine treatment, as
-// handleMyVehicleIcon). Reuses adminVehicleBody (admin_vehicles.go) for the
-// wire shape/EV-nulling so the field names and validation match the admin
-// vehicle-update handler exactly. Vehicle number/name feed the ranking,
-// queue and on-course displays, so publishAll+publishDirectory mirror
-// handleMyVehicleIcon (rather than handleAdminVehicleUpdate's
-// publishRanking-only, since that handler has no icon-touching path).
+// caller edit the spec of a vehicle they are linked to via entries. Reuses
+// adminVehicleBody (admin_vehicles.go) for the wire shape/EV-nulling so the
+// field names and validation match the admin vehicle-update handler
+// exactly. Vehicle number/name feed the ranking, queue and on-course
+// displays, so publishAll+publishDirectory mirror handleMyVehicleIcon
+// (rather than handleAdminVehicleUpdate's publishRanking-only, since that
+// handler has no icon-touching path).
 func (s *Server) handleUpdateMyVehicle(w http.ResponseWriter, r *http.Request, d store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	entries, err := s.Store.ListEntriesByDriver(d.ID)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	found := false
-	for _, v := range entries {
-		if v.ID == id {
-			found = true
-			break
-		}
-	}
-	if !found {
-		http.NotFound(w, r)
+	id, ok := s.myVehicleID(w, r, d)
+	if !ok {
 		return
 	}
 
@@ -303,9 +256,8 @@ func (s *Server) handleUpdateMyVehicle(w http.ResponseWriter, r *http.Request, d
 		return
 	}
 
-	var body adminVehicleBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	body, ok := decodeReqJSON[adminVehicleBody](w, r)
+	if !ok {
 		return
 	}
 	// The 号車番号 is assigned/managed by event staff, not the driver — a
@@ -340,9 +292,8 @@ func (s *Server) handleMyQR(w http.ResponseWriter, r *http.Request, d store.Driv
 }
 
 func (s *Server) handleAddMyVehicle(w http.ResponseWriter, r *http.Request, d store.Driver) {
-	var body vehicleRegInput
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	body, ok := decodeReqJSON[vehicleRegInput](w, r)
+	if !ok {
 		return
 	}
 	vehicleID, numberWarning, err := s.resolveOrCreateVehicle(body)
@@ -364,10 +315,11 @@ func (s *Server) handleAddMyVehicle(w http.ResponseWriter, r *http.Request, d st
 	writeJSON(w, http.StatusOK, resp)
 }
 
+// handleDeleteMyVehicle implements DELETE /api/mypage/vehicles/{id}: unlinks
+// a vehicle the caller is linked to via entries (main vehicle excepted).
 func (s *Server) handleDeleteMyVehicle(w http.ResponseWriter, r *http.Request, d store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		http.NotFound(w, r)
+	id, ok := s.myVehicleID(w, r, d)
+	if !ok {
 		return
 	}
 	if d.MainVehicleID != nil && *d.MainVehicleID == id {
@@ -384,11 +336,10 @@ func (s *Server) handleDeleteMyVehicle(w http.ResponseWriter, r *http.Request, d
 }
 
 func (s *Server) handleSetMainVehicle(w http.ResponseWriter, r *http.Request, d store.Driver) {
-	var body struct {
+	body, ok := decodeReqJSON[struct {
 		VehicleID int64 `json:"vehicle_id"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	}](w, r)
+	if !ok {
 		return
 	}
 

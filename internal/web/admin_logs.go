@@ -1,7 +1,6 @@
 package web
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -149,9 +148,8 @@ type adminLogCreateBody struct {
 // handleAdminLogCreate implements POST /api/admin/logs: manual entry of a
 // timing log.
 func (s *Server) handleAdminLogCreate(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	var body adminLogCreateBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	body, ok := decodeReqJSON[adminLogCreateBody](w, r)
+	if !ok {
 		return
 	}
 
@@ -204,14 +202,12 @@ type adminLogUpdateBody struct {
 // handleAdminLogUpdate implements PUT /api/admin/logs/{id}: corrects a
 // timing log's raw fields and stamps edited_at.
 func (s *Server) handleAdminLogUpdate(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid id")
+	id, ok := requirePathID(w, r)
+	if !ok {
 		return
 	}
-	var body adminLogUpdateBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	body, ok := decodeReqJSON[adminLogUpdateBody](w, r)
+	if !ok {
 		return
 	}
 
@@ -248,9 +244,8 @@ func (s *Server) handleAdminLogUpdate(w http.ResponseWriter, r *http.Request, ad
 
 // handleAdminLogDelete implements DELETE /api/admin/logs/{id} (soft delete).
 func (s *Server) handleAdminLogDelete(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid id")
+	id, ok := requirePathID(w, r)
+	if !ok {
 		return
 	}
 
@@ -273,14 +268,12 @@ type adminLogAssignBody struct {
 // handleAdminLogAssign implements PUT /api/admin/logs/{id}/assign: attaches
 // a driver/vehicle to a previously unassigned (or misassigned) log.
 func (s *Server) handleAdminLogAssign(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid id")
+	id, ok := requirePathID(w, r)
+	if !ok {
 		return
 	}
-	var body adminLogAssignBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	body, ok := decodeReqJSON[adminLogAssignBody](w, r)
+	if !ok {
 		return
 	}
 

@@ -2,9 +2,9 @@
 // the rest of timemon: displacement conversion, class lookup, penalty/final
 // time computation, heat numbering, and ranking with tie-breaks.
 //
-// Nothing in this package performs I/O. See docs/CONTRACTS.md §1 for the
-// frozen type/function shapes and plan/DESIGN.md §4 for the authoritative
-// rule text these implementations follow.
+// Nothing in this package performs I/O. The aggregation/ranking rule text
+// these implementations follow is documented on the Architecture wiki page
+// (ランキング・集計仕様); the table-driven tests are the executable spec.
 package domain
 
 // EngineType is the vehicle engine category used for displacement
@@ -34,7 +34,7 @@ type DispClass struct {
 }
 
 // ConvertedCC computes the converted displacement used for class lookup and
-// ranking tie-breaks (DESIGN.md §4.1).
+// ranking tie-breaks (Architecture wiki: 換算排気量).
 //
 //	ev       -> (0, false)                                     — no conversion
 //	rotary   -> cc * coef.Rotary * (fi ? coef.TurboGasoline : 1)
@@ -46,7 +46,7 @@ type DispClass struct {
 // NOTE: Coefficients.Supercharger is intentionally unused by this formula —
 // vehicles carry a single forced_induction bool with no turbo/supercharger
 // distinction, so forced induction always applies the turbo_* coefficient
-// per the frozen CONTRACTS.md formula (see final report for this callout).
+// by (frozen) design.
 func ConvertedCC(cc int, engine EngineType, forcedInduction bool, c Coefficients) (int, bool) {
 	switch engine {
 	case EngineEV:

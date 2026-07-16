@@ -1,0 +1,23 @@
+{{/* _shared.html holds template blocks reused across the page templates:
+     the common <head> boilerplate (charset/viewport meta + the shared
+     app.css/app.js includes) and the bottom nav bar. Parsed together with
+     every other *.html in this directory (see NewServer in server.go), so
+     {{template "head-common" .}} / {{template "nav" .}} are available from
+     any page template without an explicit import. */}}
+
+{{define "head-common"}}<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<link rel="stylesheet" href="/static/app.css?v=1">
+<script src="/static/app.js?v=1"></script>
+{{end}}
+
+{{/* nav renders the bottom/side nav bar. .Active picks which item gets the
+     "on" class ("monitor"/"ranking"/"mypage"/"admin"/"archive"/"" - see
+     PageData.Active in pages.go). The 運営 (admin) link is gated on
+     .IsAdmin, matching monitor/ranking/mypage/admin's existing behavior. */}}
+{{define "nav"}}<nav id="nav">
+    {{if eq .Active "monitor"}}<a href="/" class="on">{{else}}<a href="/">{{end}}<span class="ic">⏱</span>Monitor</a>
+    {{if eq .Active "ranking"}}<a href="/ranking" class="on">{{else}}<a href="/ranking">{{end}}<span class="ic">🏆</span>Ranking</a>
+    {{if eq .Active "mypage"}}<a href="/mypage" class="on">{{else}}<a href="/mypage">{{end}}<span class="ic">👤</span>Mypage</a>
+    {{if .IsAdmin}}{{if eq .Active "admin"}}<a href="/admin" class="on">{{else}}<a href="/admin">{{end}}<span class="ic">🛠</span>運営</a>{{end}}
+  </nav>{{end}}

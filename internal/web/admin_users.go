@@ -2,7 +2,6 @@ package web
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"net/http"
 
 	qrcode "github.com/skip2/go-qrcode"
@@ -79,9 +78,8 @@ type adminUserCreateBody struct {
 // handleAdminUserCreate implements POST /api/admin/users: registers a new
 // driver with role "user" and a fresh login token.
 func (s *Server) handleAdminUserCreate(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	var body adminUserCreateBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	body, ok := decodeReqJSON[adminUserCreateBody](w, r)
+	if !ok {
 		return
 	}
 
@@ -114,14 +112,12 @@ type adminUserUpdateBody struct {
 
 // handleAdminUserUpdate implements PUT /api/admin/users/{id}.
 func (s *Server) handleAdminUserUpdate(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid id")
+	id, ok := requirePathID(w, r)
+	if !ok {
 		return
 	}
-	var body adminUserUpdateBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	body, ok := decodeReqJSON[adminUserUpdateBody](w, r)
+	if !ok {
 		return
 	}
 
@@ -144,9 +140,8 @@ func (s *Server) handleAdminUserUpdate(w http.ResponseWriter, r *http.Request, a
 // issues a brand new login token for the driver and returns both the login
 // URL and a ready-to-print QR PNG for it.
 func (s *Server) handleAdminUserReissue(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid id")
+	id, ok := requirePathID(w, r)
+	if !ok {
 		return
 	}
 
@@ -184,14 +179,12 @@ type adminUserRoleBody struct {
 // demotes a driver between "user" and "admin", refusing to strip admin role
 // from the last remaining admin.
 func (s *Server) handleAdminUserRole(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid id")
+	id, ok := requirePathID(w, r)
+	if !ok {
 		return
 	}
-	var body adminUserRoleBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	body, ok := decodeReqJSON[adminUserRoleBody](w, r)
+	if !ok {
 		return
 	}
 	if body.Role != "admin" && body.Role != "user" {
@@ -233,37 +226,15 @@ func (s *Server) handleAdminUserRole(w http.ResponseWriter, r *http.Request, adm
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
-type adminIconBody struct {
-	IconB64 string `json:"icon_b64"`
-}
-
 // handleAdminUserIcon implements POST /api/admin/users/{id}/icon: sets any
 // driver's icon, symmetric to handleMyIcon but without the "self"
 // restriction.
 func (s *Server) handleAdminUserIcon(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid id")
+	id, ok := requirePathID(w, r)
+	if !ok {
 		return
 	}
-	var body adminIconBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	jpg, err := iconFromB64(body.IconB64)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid icon")
-		return
-	}
-	if err := s.Store.SetIcon(id, jpg); err != nil {
-		writeErr(w, err)
-		return
-	}
-
-	s.publishAll()
-	s.publishDirectory()
-	s.audit(&admin.ID, "admin.user.icon", map[string]any{"driver_id": id})
-
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	s.applyIcon(w, r, id, s.Store.SetIcon, func() {
+		s.audit(&admin.ID, "admin.user.icon", map[string]any{"driver_id": id})
+	})
 }

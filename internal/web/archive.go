@@ -6,13 +6,6 @@ import (
 	"timemon/internal/store"
 )
 
-// handleArchivePage serves GET /archive: no auth required, same as the
-// other pages (monitor/ranking/register/mypage) — the page JS fetches its
-// data client-side from the /api/archive/* endpoints below.
-func (s *Server) handleArchivePage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "archive.html", s.pageData(r))
-}
-
 // handleAPIArchiveEvents implements GET /api/archive/events: every closed
 // event, newest first. Public (no auth) — the archive is meant to be
 // shareable outside the admin surface.
@@ -50,9 +43,8 @@ func (s *Server) closedEventOr404(w http.ResponseWriter, r *http.Request, id int
 
 // handleAPIArchiveRanking implements GET /api/archive/{id}/ranking.
 func (s *Server) handleAPIArchiveRanking(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		http.NotFound(w, r)
+	id, ok := pathID(w, r)
+	if !ok {
 		return
 	}
 	if _, ok := s.closedEventOr404(w, r, id); !ok {
@@ -69,9 +61,8 @@ func (s *Server) handleAPIArchiveRanking(w http.ResponseWriter, r *http.Request)
 // handleAPIArchiveRecent implements GET /api/archive/{id}/recent (fixed
 // 1000-row cap — the archive has no pagination UI).
 func (s *Server) handleAPIArchiveRecent(w http.ResponseWriter, r *http.Request) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		http.NotFound(w, r)
+	id, ok := pathID(w, r)
+	if !ok {
 		return
 	}
 	if _, ok := s.closedEventOr404(w, r, id); !ok {

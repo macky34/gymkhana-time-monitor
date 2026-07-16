@@ -79,8 +79,8 @@ func (b *Builder) OnCourse() ([]byte, error) {
 		}
 		cars = append(cars, onCourseCar{
 			QueueID:  r.ID,
-			Driver:   refDriver{ID: drv.ID, Name: drv.Name, HasIcon: drv.HasIcon},
-			Vehicle:  refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name, HasIcon: veh.HasIcon},
+			Driver:   newRefDriver(drv),
+			Vehicle:  newRefVehicle(veh),
 			TStartUS: r.TStartUS,
 			PTCount:  r.PTCount,
 			MCFlag:   r.MCFlag,

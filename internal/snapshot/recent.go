@@ -73,8 +73,8 @@ func (b *Builder) buildRecent(ev store.EventRow, limit int) (recentResponse, err
 
 		items = append(items, recentItem{
 			LogID:       l.ID,
-			Driver:      refDriver{ID: drv.ID, Name: drv.Name, HasIcon: drv.HasIcon},
-			Vehicle:     refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name, HasIcon: veh.HasIcon},
+			Driver:      newRefDriver(drv),
+			Vehicle:     newRefVehicle(veh),
 			Heat:        heatByLogID[l.ID],
 			RawMS:       l.RawMS,
 			PTCount:     l.PTCount,

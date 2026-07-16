@@ -154,7 +154,7 @@ func main() {
 }
 
 // vacuumLoop writes a consistent DB snapshot to ./snapshots/{unix}.sqlite3
-// once an hour (DESIGN.md §2). Backups beyond that are an external concern
+// once an hour (Architecture wiki: バックアップ). Backups beyond that are an external concern
 // (a Nextcloud client syncs the directory).
 func vacuumLoop(ctx context.Context, st *store.Store, dbPath string) {
 	dir := filepath.Join(filepath.Dir(dbPath), "snapshots")

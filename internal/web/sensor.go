@@ -12,7 +12,7 @@ import (
 
 // SensorController exposes the course manager as a timing.CourseController so
 // main.go can hand it to timing.Listen. The FIFO pairing rules
-// (DESIGN.md §7.1) live on the course manager below.
+// (the Sensor-Device wiki page) live on the course manager below.
 func (s *Server) SensorController() timing.CourseController { return s.course }
 
 // SensorStart pairs a start-sensor trigger with the oldest on_course car that

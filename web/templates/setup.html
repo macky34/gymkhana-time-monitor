@@ -1,37 +1,17 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+{{template "head-common" .}}
 <title>タイムモニター | イベント セットアップ</title>
 <style>
-  :root{
-    --bg:#14171c; --panel:#1d232c; --panel2:#242b36; --line:#313a47;
-    --tx:#e9edf3; --mut:#8b95a5; --dim:#5b6472;
-    --go:#3ad07f; --amber:#ffb224; --red:#ff5d5d; --blue:#5aa2ff;
-    --mono:"SFMono-Regular","Cascadia Mono","Consolas","Roboto Mono",ui-monospace,monospace;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  body{background:#0b0d10;color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
-       display:flex;justify-content:center;padding:0;min-height:100vh}
-  .phone{width:392px;max-width:100%;background:var(--bg);border:1px solid #262d38;border-radius:22px;
-         overflow:hidden;display:flex;flex-direction:column;height:100vh;height:100dvh;max-height:none;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
-  header{padding:10px 14px 8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px;flex:none}
-  header .ev{font-size:13px;font-weight:700;letter-spacing:.02em}
   header .setup{margin-left:auto;font-size:10px;color:var(--amber);font-family:var(--mono);letter-spacing:.1em}
-  main{flex:1;overflow-y:auto;overscroll-behavior:contain}
-  .screen{padding:12px 12px 20px}
-  .sec{font-size:10.5px;color:var(--mut);letter-spacing:.14em;margin:16px 2px 7px;font-weight:600}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
-  .t{font-family:var(--mono);font-variant-numeric:tabular-nums}
-  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:8px;
-       padding:7px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
-  .btn:active{transform:translateY(1px)}
-  .btn.primary{background:var(--go);border-color:var(--go);color:#08130c;font-weight:700}
-  .toast{position:absolute;bottom:24px;left:50%;transform:translateX(-50%);background:#2b3a2f;border:1px solid var(--go);
-         color:var(--go);font-size:12px;padding:9px 18px;border-radius:99px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:40;white-space:nowrap}
-  .toast.on{opacity:1}
-  .note{font-size:10px;color:var(--dim);margin-top:8px;line-height:1.6}
+  /* setup has a single always-visible screen (no bottom nav / .screen.on
+     toggling like the other pages), so it overrides app.css's shared
+     .screen{display:none} default back to visible. */
+  #sc-setup{display:block}
+  /* setup's toast sits lower than the shared app.css default (no bottom nav
+     to clear here) - only the offset differs, so just override that. */
+  .toast{bottom:24px}
   .welcome{text-align:center;padding:24px 8px 4px}
   .welcome h2{font-size:17px;margin-bottom:4px}
   .welcome p{font-size:11.5px;color:var(--mut)}
@@ -63,10 +43,16 @@
   .dcrow button:hover{color:var(--red);border-color:#5a3038}
   .err{text-align:center;padding:40px 16px;color:var(--mut);font-size:13px;line-height:1.8}
   @media(min-width:900px){
-    body{padding:20px;align-items:flex-start}
-    .phone{width:min(760px,97vw);height:94vh;max-height:none;border-radius:14px}
-    header .ev{font-size:15px}
-    .screen{padding:20px 28px 32px;max-width:620px;margin:0 auto}
+    /* .phone is narrower here (single-column form) than the other pages'
+       shared 1180px, so only the width is page-specific; height/radius come
+       from app.css. .screen's shared padding is common, the max-width/margin
+       centering is setup-only. The toast reposition-to-top override is kept
+       inside this same media query (rather than relying on cascade against
+       app.css's own copy of it) so it unconditionally wins over the
+       non-media `.toast{bottom:24px}` override above regardless of stylesheet
+       order. */
+    .phone{width:min(760px,97vw)}
+    .screen{max-width:620px;margin:0 auto}
     .toast{bottom:auto;top:70px}
   }
 </style>
@@ -143,23 +129,8 @@
 const SETUP_MODE = {{.SetupMode}};
 const TOKEN = new URLSearchParams(location.search).get('t') || '';
 
-/* ---------- tiny DOM builder ---------- */
-function h(tag, attrs, ...children){
-  const e = document.createElement(tag);
-  if (attrs) for (const k in attrs){
-    if (k === 'class') e.className = attrs[k];
-    else if (k === 'style') e.setAttribute('style', attrs[k]);
-    else if (k.indexOf('on') === 0 && typeof attrs[k] === 'function') e.addEventListener(k.slice(2), attrs[k]);
-    else e.setAttribute(k, attrs[k]);
-  }
-  for (const c of children.flat(Infinity)){
-    if (c === null || c === undefined) continue;
-    e.appendChild((typeof c === 'string' || typeof c === 'number') ? document.createTextNode(String(c)) : c);
-  }
-  return e;
-}
-function clear(el){ while (el.firstChild) el.removeChild(el.firstChild); }
-
+/* ---------- toast (page-specific: 2200ms timeout here vs 1800ms elsewhere,
+   so this isn't shared via app.js - see task report) ---------- */
 function toast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
@@ -252,14 +223,7 @@ async function submitSetup(){
   const btn = document.getElementById('su-submit');
   btn.disabled = true;
   try {
-    const res = await fetch('/api/setup', {
-      method: 'POST', credentials: 'same-origin',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    });
-    let data = null;
-    try { data = await res.json(); } catch (e) {}
-    if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+    await api('POST', '/api/setup', body);
     toast('イベントを作成しました');
     location.href = '/admin';
   } catch (err) {

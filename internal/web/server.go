@@ -110,16 +110,13 @@ func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	// ---- Pages (always 200, auth-optional; page JS handles the rest) ----
-	mux.HandleFunc("GET /{$}", s.handleMonitorPage)
-	mux.HandleFunc("GET /ranking", s.handleRankingPage)
-	mux.HandleFunc("GET /register", s.handleRegisterPage)
-	mux.HandleFunc("GET /mypage", s.handleMyPage)
+	for _, pr := range pageRoutes {
+		mux.HandleFunc(pr.Pattern, s.pageHandler(pr.Template, pr.Active))
+	}
 	mux.HandleFunc("GET /my", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/mypage", http.StatusMovedPermanently)
 	})
-	mux.HandleFunc("GET /admin", s.handleAdminPage)
 	mux.HandleFunc("GET /setup", s.handleSetupPage)
-	mux.HandleFunc("GET /archive", s.handleArchivePage)
 	mux.Handle("GET /static/", s.staticHandler())
 	mux.HandleFunc("GET /a/{token}", s.withRateLimit(s.handleTokenLogin))
 

@@ -62,7 +62,7 @@ func (s *Server) handleAdminExport(w http.ResponseWriter, r *http.Request, admin
 	}
 }
 
-// The CSV exporters decode the exact snapshot JSON shapes (docs/CONTRACTS.md
+// The CSV exporters decode the exact snapshot JSON shapes (the API wiki page
 // §3) into typed structs rather than guessing key names — the snapshot layer
 // and these exporters share one frozen contract.
 

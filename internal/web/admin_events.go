@@ -103,9 +103,8 @@ func loadDefaultEventRow(name string) (store.EventRow, error) {
 // (store.ErrActiveEventExists, from the events(status) partial unique
 // index).
 func (s *Server) handleAdminEventCreate(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	var req adminEventCreateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	req, ok := decodeReqJSON[adminEventCreateRequest](w, r)
+	if !ok {
 		return
 	}
 	name := strings.TrimSpace(req.Name)
@@ -163,9 +162,8 @@ func (s *Server) handleAdminEventCreate(w http.ResponseWriter, r *http.Request, 
 // 'closed'. Rejected with 409 while any car is on_course (must be finished
 // or DNF'd first) or if id is not currently active.
 func (s *Server) handleAdminEventClose(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		http.NotFound(w, r)
+	id, ok := pathID(w, r)
+	if !ok {
 		return
 	}
 

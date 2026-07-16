@@ -12,7 +12,7 @@ import (
 
 // ErrActiveEventExists is returned by CreateEvent when an active event
 // already exists: the events(status) partial unique index only allows one
-// 'active' row at a time (plan/DESIGN.md multi-event design), so a second
+// 'active' row at a time (the Architecture wiki page: マルチイベント設計), so a second
 // concurrent CreateEvent call fails on that constraint.
 var ErrActiveEventExists = errors.New("store: an active event already exists")
 
@@ -189,7 +189,7 @@ func (s *Store) CloseEvent(id int64) error {
 
 // SeedEvent creates the first event (status='active') plus the driver/
 // drivetrain class_defs rows, in one transaction. This is the "event
-// creation" act of the first-run setup wizard (plan/DESIGN.md §2.1).
+// creation" act of the first-run setup wizard (the Architecture wiki page).
 // set.ID/Status/CreatedAtMS/ClosedAtMS are ignored (assigned by this
 // insert); if an active event already exists this fails on the
 // events(status) partial unique index.
