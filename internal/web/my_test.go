@@ -3,6 +3,8 @@ package web
 import (
 	"net/http"
 	"testing"
+
+	"timemon/internal/store"
 )
 
 // TestMypageVehicleFlow drives a single participant through the mypage
@@ -96,5 +98,24 @@ func TestMypageVehicleFlow(t *testing.T) {
 		firstVehicle, nil, user)
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("delete main vehicle: status = %d, want 409; body=%s", rec.Code, rec.Body.String())
+	}
+
+	// (e) a vehicle the caller is not linked to is a bare 404 on delete, same
+	// as the icon/spec-edit handlers (myVehicleID is the shared ownership
+	// check for all three) — not a silent no-op 200.
+	otherVehicleID, err := srv.Store.CreateVehicle(store.Vehicle{
+		Number: 60, Name: "他人の車両", Engine: "gasoline",
+		DisplacementCC: intp(1000), DrivetrainClassID: dtClasses[0].ID,
+	})
+	if err != nil {
+		t.Fatalf("CreateVehicle: %v", err)
+	}
+	rec = callAdminUsersByID(t, srv.handleDeleteMyVehicle, http.MethodDelete, "/api/mypage/vehicles/"+itoa(otherVehicleID),
+		otherVehicleID, nil, user)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("delete unlinked vehicle: status = %d, want 404; body=%s", rec.Code, rec.Body.String())
+	}
+	if _, ok, err := srv.Store.GetVehicle(otherVehicleID); err != nil || !ok {
+		t.Fatalf("unlinked vehicle should still exist untouched: ok=%v err=%v", ok, err)
 	}
 }
