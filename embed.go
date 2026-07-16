@@ -7,7 +7,11 @@ import (
 	"io/fs"
 )
 
-//go:embed web/templates web/static defaults.json
+// "all:" on web/templates is required because that directory contains
+// _shared.html: go:embed silently excludes files/dirs whose name starts
+// with "_" or "." unless the pattern is prefixed with "all:".
+//
+//go:embed all:web/templates web/static defaults.json
 var FS embed.FS
 
 // Templates returns an fs.FS rooted at web/templates.

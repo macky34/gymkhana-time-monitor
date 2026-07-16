@@ -1,74 +1,21 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+{{template "head-common" .}}
 <title>{{.EventName}} | ランキング</title>
 <style>
-  :root{
-    --bg:#14171c; --panel:#1d232c; --panel2:#242b36; --line:#313a47;
-    --tx:#e9edf3; --mut:#8b95a5; --dim:#5b6472;
-    --go:#3ad07f; --amber:#ffb224; --red:#ff5d5d; --blue:#5aa2ff;
-    --mono:"SFMono-Regular","Cascadia Mono","Consolas","Roboto Mono",ui-monospace,monospace;
-  }
-  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-  body{background:#0b0d10;color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
-       display:flex;justify-content:center;padding:0;min-height:100vh}
-  .phone{width:392px;max-width:100%;background:var(--bg);border:1px solid #262d38;border-radius:22px;
-         overflow:hidden;display:flex;flex-direction:column;height:100vh;height:100dvh;max-height:none;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
-  header{padding:10px 14px 8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px;flex:none}
-  header .ev{font-size:13px;font-weight:700;letter-spacing:.02em}
+  /* header .live "LIVE" indicator: page-specific, see monitor.html for why. */
   header .live{margin-left:auto;font-size:10px;color:var(--go);font-family:var(--mono);display:flex;align-items:center;gap:5px}
   header .live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--go);animation:pulse 1.6s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
-  main{flex:1;overflow-y:auto;overscroll-behavior:contain}
-  .screen{display:none;padding:12px 12px 20px}
-  .screen.on{display:block}
-  nav{flex:none;display:flex;border-top:1px solid var(--line);background:#161a20}
-  nav a{flex:1;background:none;border:none;color:var(--dim);font-size:10.5px;padding:9px 0 calc(11px + env(safe-area-inset-bottom));cursor:pointer;text-decoration:none;
-             display:flex;flex-direction:column;gap:3px;align-items:center;font-family:inherit}
-  nav a .ic{font-size:16px;line-height:1}
-  nav a.on{color:var(--tx)}
-  nav a.on .ic{color:var(--amber)}
-  .sec{font-size:10.5px;color:var(--mut);letter-spacing:.14em;margin:16px 2px 7px;font-weight:600}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
-  .t{font-family:var(--mono);font-variant-numeric:tabular-nums}
-  .btn{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:8px;
-       padding:7px 12px;font-size:12.5px;cursor:pointer;font-family:inherit}
-  .btn:active{transform:translateY(1px)}
-  .btn.primary{background:var(--go);border-color:var(--go);color:#08130c;font-weight:700}
-  .btn.danger{color:var(--red);border-color:#5a3038}
-  .badge{font-size:9.5px;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
-  .badge.main{border-color:var(--amber);color:var(--amber)}
-  .avatar{width:38px;height:38px;border-radius:50%;background:var(--panel2);display:flex;align-items:center;justify-content:center;
-          font-size:15px;font-weight:700;flex:none;border:1px solid var(--line);overflow:hidden}
-  .avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
-  .avatar.sm{width:28px;height:28px;font-size:11px}
-  .avatar.xs{width:22px;height:22px;font-size:9.5px;display:inline-flex;vertical-align:-6px;margin-right:5px}
-  .toast{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:#2b3a2f;border:1px solid var(--go);
-         color:var(--go);font-size:12px;padding:9px 18px;border-radius:99px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:40;white-space:nowrap}
-  .toast.on{opacity:1}
-  .note{font-size:10px;color:var(--dim);margin-top:8px;line-height:1.6}
-  .grid2{display:block}
   @media(min-width:900px){
-    body{padding:20px;align-items:flex-start}
-    .phone{width:min(1180px,97vw);height:94vh;max-height:none;border-radius:14px}
+    /* .phone width/grid-layout and avatar upsizing: page-specific, see
+       monitor.html for why. */
+    .phone{width:min(1180px,97vw)}
     .phone{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto 1fr;
            grid-template-areas:"header header" "nav main"}
-    header{grid-area:header}
-    main{grid-area:main}
-    nav{grid-area:nav;width:176px;flex-direction:column;justify-content:flex-start;
-        border-top:none;border-right:1px solid var(--line);padding:10px 0;gap:2px}
-    nav a{flex:0 0 auto;width:100%;flex-direction:row;justify-content:flex-start;
-               gap:11px;font-size:13px;padding:12px 22px;border-left:2px solid transparent}
-    nav a.on{border-left-color:var(--amber);background:rgba(255,178,36,.06)}
-    nav a .ic{font-size:15px}
-    header .ev{font-size:15px}
-    .screen{padding:20px 28px 32px}
-    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
     .avatar{width:46px;height:46px;font-size:18px}
     .avatar.sm{width:30px;height:30px;font-size:12px}
-    .toast{bottom:auto;top:70px}
   }
   /* ---- ranking-specific ---- */
   .evbanner{background:#2c2718;border-bottom:1px solid #77771f;color:var(--amber);font-size:11.5px;
@@ -95,7 +42,6 @@
   .rk .pos{font-family:var(--mono);font-weight:700;font-size:14px;width:22px}
   .rk tr:nth-child(1) .pos{color:var(--amber)}
   .rk td.av{width:64px;padding-right:0}
-  .avpair{display:flex;gap:4px;align-items:center}
   .rk .nm b{display:block;font-weight:600}
   .rk .nm span{font-size:10px;color:var(--mut)}
   .rk .best{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:14px}
@@ -159,12 +105,7 @@
   </section>
   </main>
 
-  <nav id="nav">
-    <a href="/"><span class="ic">⏱</span>Monitor</a>
-    <a href="/ranking" class="on"><span class="ic">🏆</span>Ranking</a>
-    <a href="/mypage"><span class="ic">👤</span>Mypage</a>
-    {{if .IsAdmin}}<a href="/admin"><span class="ic">🛠</span>運営</a>{{end}}
-  </nav>
+  {{template "nav" .}}
 
   <div class="modal-bg" id="modal">
     <div class="modal">
@@ -183,64 +124,14 @@
 <script>
 'use strict';
 
-/* ---------- tiny DOM builder (no innerHTML anywhere) ---------- */
-function h(tag, attrs, ...children){
-  const e = document.createElement(tag);
-  if (attrs) for (const k in attrs){
-    if (k === 'class') e.className = attrs[k];
-    else if (k === 'style') e.setAttribute('style', attrs[k]);
-    else if (k.indexOf('on') === 0 && typeof attrs[k] === 'function') e.addEventListener(k.slice(2), attrs[k]);
-    else e.setAttribute(k, attrs[k]);
-  }
-  for (const c of children.flat(Infinity)){
-    if (c === null || c === undefined) continue;
-    e.appendChild((typeof c === 'string' || typeof c === 'number') ? document.createTextNode(String(c)) : c);
-  }
-  return e;
-}
-function clear(el){ while (el.firstChild) el.removeChild(el.firstChild); }
-
-let iconRev = Date.now();
-function avatarInto(el, driverId, name, hasIcon){
-  clear(el);
-  if (hasIcon){
-    const img = h('img', { src: '/api/drivers/' + driverId + '/icon?v=' + iconRev, alt: '' });
-    img.addEventListener('error', () => { clear(el); el.textContent = (name || '?').slice(0, 1); });
-    el.appendChild(img);
-  } else {
-    el.textContent = (name || '?').slice(0, 1);
-  }
-}
-function vehicleAvatarInto(el, vehicleId, name, hasIcon){
-  clear(el);
-  if (hasIcon){
-    const img = h('img', { src: '/api/vehicles/' + vehicleId + '/icon?v=' + iconRev, alt: '' });
-    img.addEventListener('error', () => { clear(el); el.textContent = (name || '?').slice(0, 1); });
-    el.appendChild(img);
-  } else {
-    el.textContent = (name || '?').slice(0, 1);
-  }
-}
-
+/* ---------- toast (page-specific: setup.html uses a different timeout, so
+   this isn't shared via app.js - see task report) ---------- */
 function toast(msg){
   const t = document.getElementById('toast');
   t.textContent = msg;
   t.classList.add('on');
   clearTimeout(toast._tm);
   toast._tm = setTimeout(() => t.classList.remove('on'), 1800);
-}
-
-let offset = 0;
-function fmt3(ms){
-  if (ms === null || ms === undefined) return '—';
-  const s = Math.floor(ms / 1000), mmm = ((ms % 1000) + 1000) % 1000;
-  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '.' + String(mmm).padStart(3, '0');
-}
-
-async function apiGet(url){
-  const res = await fetch(url, { credentials: 'same-origin' });
-  if (!res.ok) throw new Error('HTTP ' + res.status);
-  return res.json();
 }
 
 /* ---------- filter state (synced to URL query) ---------- */
@@ -450,25 +341,21 @@ document.getElementById('modal').addEventListener('click', function (e) { if (e.
 document.getElementById('modal').querySelector('.modal').addEventListener('click', e => e.stopPropagation());
 
 /* ---------- SSE ---------- */
-const es = new EventSource('/api/stream?topics=ranking,time,directory,settings');
-es.addEventListener('time', e => {
-  const d = JSON.parse(e.data);
-  offset = d.server_ms - Date.now();
-});
-es.addEventListener('settings', e => {
-  settings = JSON.parse(e.data);
-  updateEventBanner();
-});
-es.addEventListener('ranking', e => {
-  const d = JSON.parse(e.data);
-  rankingRowsAll = d.rows || [];
-  if (FIL.heat) { refreshHeatRanking().then(drawRk); } else { drawRk(); }
-});
-es.addEventListener('directory', () => {
-  // directory change = user/vehicle master data (incl. icons) updated;
-  // bump the cache-buster so the next draw picks up new icon bytes.
-  iconRev = Date.now();
-  if (FIL.heat) { refreshHeatRanking().then(drawRk); } else { drawRk(); }
+openStream(['ranking', 'time', 'directory', 'settings'], {
+  settings: d => {
+    settings = d;
+    updateEventBanner();
+  },
+  ranking: d => {
+    rankingRowsAll = d.rows || [];
+    if (FIL.heat) { refreshHeatRanking().then(drawRk); } else { drawRk(); }
+  },
+  directory: () => {
+    // directory change = user/vehicle master data (incl. icons) updated;
+    // bump the cache-buster so the next draw picks up new icon bytes.
+    iconRev = Date.now();
+    if (FIL.heat) { refreshHeatRanking().then(drawRk); } else { drawRk(); }
+  }
 });
 
 document.addEventListener('visibilitychange', () => {

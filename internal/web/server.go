@@ -111,7 +111,7 @@ func (s *Server) Routes() http.Handler {
 
 	// ---- Pages (always 200, auth-optional; page JS handles the rest) ----
 	for _, pr := range pageRoutes {
-		mux.HandleFunc(pr.Pattern, s.pageHandler(pr.Template))
+		mux.HandleFunc(pr.Pattern, s.pageHandler(pr.Template, pr.Active))
 	}
 	mux.HandleFunc("GET /my", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/mypage", http.StatusMovedPermanently)

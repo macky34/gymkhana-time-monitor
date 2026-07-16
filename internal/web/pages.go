@@ -11,6 +11,11 @@ type PageData struct {
 	IsAdmin   bool
 	MyID      int64
 	SetupMode bool
+
+	// Active is which bottom-nav item (if any) this page highlights: one of
+	// "monitor"/"ranking"/"mypage"/"admin"/"archive", or "" for pages with no
+	// nav bar (register, setup). Consumed by the shared "nav" template.
+	Active string
 }
 
 // pageData builds the PageData for the current request: event name (empty
@@ -37,10 +42,11 @@ func (s *Server) render(w http.ResponseWriter, name string, data PageData) {
 }
 
 // pageRoute is one entry of pageRoutes: a mux pattern paired with the
-// template it renders.
+// template it renders and the nav item it highlights.
 type pageRoute struct {
 	Pattern  string
 	Template string
+	Active   string
 }
 
 // pageRoutes lists every server-rendered page whose handler is nothing more
@@ -49,17 +55,19 @@ type pageRoute struct {
 // Registered in Routes() via pageHandler. Pages with extra logic (redirects,
 // token checks, ...) are registered directly instead.
 var pageRoutes = []pageRoute{
-	{"GET /{$}", "monitor.html"},
-	{"GET /ranking", "ranking.html"},
-	{"GET /register", "register.html"},
-	{"GET /mypage", "mypage.html"},
-	{"GET /admin", "admin.html"},
-	{"GET /archive", "archive.html"},
+	{"GET /{$}", "monitor.html", "monitor"},
+	{"GET /ranking", "ranking.html", "ranking"},
+	{"GET /register", "register.html", ""},
+	{"GET /mypage", "mypage.html", "mypage"},
+	{"GET /admin", "admin.html", "admin"},
+	{"GET /archive", "archive.html", "archive"},
 }
 
 // pageHandler builds the http.HandlerFunc for one pageRoutes entry.
-func (s *Server) pageHandler(template string) http.HandlerFunc {
+func (s *Server) pageHandler(template, active string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.render(w, template, s.pageData(r))
+		pd := s.pageData(r)
+		pd.Active = active
+		s.render(w, template, pd)
 	}
 }
