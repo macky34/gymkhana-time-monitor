@@ -17,6 +17,8 @@ import (
 	"sync"
 	"time"
 
+	qrcode "github.com/skip2/go-qrcode"
+
 	embedded "timemon"
 	"timemon/internal/snapshot"
 	"timemon/internal/sse"
@@ -95,7 +97,7 @@ func NewServer(st *store.Store, hub *sse.Hub, snap *snapshot.Builder, baseURL st
 			return nil, err
 		}
 		s.setupToken = tok
-		log.Printf("Setup URL: %s/setup?t=%s", baseURL, tok)
+		logURLWithQR("Setup URL: ", baseURL+"/setup?t="+tok)
 	} else {
 		// Once setup has completed, mint a fresh emergency-admin token on
 		// every start and log it. It authenticates as a synthetic admin for
@@ -109,10 +111,24 @@ func NewServer(st *store.Store, hub *sse.Hub, snap *snapshot.Builder, baseURL st
 			return nil, err
 		}
 		s.emergencyToken = tok
-		log.Printf("Emergency admin URL (keep secret; rotates on every restart): %s/a/%s", baseURL, tok)
+		logURLWithQR("Emergency admin URL (keep secret; rotates on every restart): ", baseURL+"/a/"+tok)
 	}
 
 	return s, nil
+}
+
+// logURLWithQR logs prefix+url followed by a terminal-rendered QR code of
+// url, so an operator can scan it with a phone instead of typing a token URL
+// off the console. Rendered for dark-background terminals (the common case
+// for ssh/journalctl sessions). QR generation failure is non-fatal: the URL
+// line itself is what matters.
+func logURLWithQR(prefix, url string) {
+	q, err := qrcode.New(url, qrcode.Medium)
+	if err != nil {
+		log.Printf("%s%s", prefix, url)
+		return
+	}
+	log.Printf("%s%s\n%s", prefix, url, q.ToSmallString(false))
 }
 
 // randToken generates a URL-safe random token (driver login tokens, setup
