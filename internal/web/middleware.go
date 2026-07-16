@@ -68,6 +68,25 @@ func (s *Server) withAuth(next func(w http.ResponseWriter, r *http.Request, d st
 	}
 }
 
+// withAdmin requires a valid session belonging to an admin driver. It
+// mirrors withAuth but additionally checks Role, following the same
+// admin-check pattern already used for the SSE stream handler in Routes()
+// ("d.Role == \"admin\"").
+func (s *Server) withAdmin(next func(w http.ResponseWriter, r *http.Request, d store.Driver)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		d, ok := s.driverFromRequest(r)
+		if !ok {
+			writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		if d.Role != "admin" {
+			writeJSONError(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		next(w, r, d)
+	}
+}
+
 // withCSRFGuard rejects state-changing requests whose Sec-Fetch-Site header
 // (when the browser sends one) indicates the request originated from
 // another site. Same-origin requests send "same-origin" or omit the header

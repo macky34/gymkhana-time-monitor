@@ -1,7 +1,6 @@
 package web
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"timemon/internal/domain"
@@ -42,9 +41,8 @@ func (b adminVehicleBody) toVehicle(id int64) store.Vehicle {
 // vehicle can change which cars share a derived displacement class, so the
 // ranking snapshot is republished.
 func (s *Server) handleAdminVehicleCreate(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	var body adminVehicleBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	body, ok := decodeReqJSON[adminVehicleBody](w, r)
+	if !ok {
 		return
 	}
 
@@ -75,14 +73,12 @@ func (s *Server) handleAdminVehicleCreate(w http.ResponseWriter, r *http.Request
 // changes ripple into converted cc / displacement class / ranking, so the
 // ranking snapshot is republished.
 func (s *Server) handleAdminVehicleUpdate(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid id")
+	id, ok := requirePathID(w, r)
+	if !ok {
 		return
 	}
-	var body adminVehicleBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
+	body, ok := decodeReqJSON[adminVehicleBody](w, r)
+	if !ok {
 		return
 	}
 
@@ -105,9 +101,8 @@ func (s *Server) handleAdminVehicleUpdate(w http.ResponseWriter, r *http.Request
 // handleAdminVehicleDelete implements DELETE /api/admin/vehicles/{id}
 // (logical delete via store.DeleteVehicle).
 func (s *Server) handleAdminVehicleDelete(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid id")
+	id, ok := requirePathID(w, r)
+	if !ok {
 		return
 	}
 
@@ -126,29 +121,11 @@ func (s *Server) handleAdminVehicleDelete(w http.ResponseWriter, r *http.Request
 // handleAdminVehicleIcon implements POST /api/admin/vehicles/{id}/icon: sets
 // any vehicle's icon, symmetric to handleAdminUserIcon.
 func (s *Server) handleAdminVehicleIcon(w http.ResponseWriter, r *http.Request, admin store.Driver) {
-	id, err := parsePathInt64(r, "id")
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid id")
+	id, ok := requirePathID(w, r)
+	if !ok {
 		return
 	}
-	var body adminIconBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid body")
-		return
-	}
-	jpg, err := iconFromB64(body.IconB64)
-	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid icon")
-		return
-	}
-	if err := s.Store.SetVehicleIcon(id, jpg); err != nil {
-		writeErr(w, err)
-		return
-	}
-
-	s.publishAll()
-	s.publishDirectory()
-	s.audit(&admin.ID, "admin.vehicle.icon", map[string]any{"vehicle_id": id})
-
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	s.applyIcon(w, r, id, s.Store.SetVehicleIcon, func() {
+		s.audit(&admin.ID, "admin.vehicle.icon", map[string]any{"vehicle_id": id})
+	})
 }

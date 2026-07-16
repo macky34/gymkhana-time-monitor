@@ -36,22 +36,30 @@ func (s *Server) render(w http.ResponseWriter, name string, data PageData) {
 	}
 }
 
-func (s *Server) handleMonitorPage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "monitor.html", s.pageData(r))
+// pageRoute is one entry of pageRoutes: a mux pattern paired with the
+// template it renders.
+type pageRoute struct {
+	Pattern  string
+	Template string
 }
 
-func (s *Server) handleRankingPage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "ranking.html", s.pageData(r))
+// pageRoutes lists every server-rendered page whose handler is nothing more
+// than render(w, template, pageData(r)) - all per-page dynamic behavior
+// comes from client-side JS hitting the JSON APIs / SSE stream instead.
+// Registered in Routes() via pageHandler. Pages with extra logic (redirects,
+// token checks, ...) are registered directly instead.
+var pageRoutes = []pageRoute{
+	{"GET /{$}", "monitor.html"},
+	{"GET /ranking", "ranking.html"},
+	{"GET /register", "register.html"},
+	{"GET /mypage", "mypage.html"},
+	{"GET /admin", "admin.html"},
+	{"GET /archive", "archive.html"},
 }
 
-func (s *Server) handleRegisterPage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "register.html", s.pageData(r))
-}
-
-func (s *Server) handleMyPage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "mypage.html", s.pageData(r))
-}
-
-func (s *Server) handleAdminPage(w http.ResponseWriter, r *http.Request) {
-	s.render(w, "admin.html", s.pageData(r))
+// pageHandler builds the http.HandlerFunc for one pageRoutes entry.
+func (s *Server) pageHandler(template string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		s.render(w, template, s.pageData(r))
+	}
 }
