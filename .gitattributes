@@ -1,0 +1,5 @@
+# Force LF regardless of the checking-out machine's core.autocrlf. Without
+# this, a Windows checkout with autocrlf=true rewrites every text file to
+# CRLF, which gofmt then flags as unformatted (gofmt only emits/accepts LF)
+# even though no actual code changed — see CLAUDE.md's `gofmt -l .` rule.
+* text=auto eol=lf
