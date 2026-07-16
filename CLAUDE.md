@@ -2,6 +2,10 @@
 
 このファイルは本リポジトリで作業する際の開発運用ルールです。
 
+## ブランチ運用
+
+修正・機能追加は `main` に直接コミットせず、**必ず別ブランチを作成して実施すること**(例: `fix/...`, `feat/...`)。
+
 ## Wiki同期
 
 コード・仕様を変更した場合は、隣接リポジトリ `../gymkhana-time-monitor.wiki` の該当Wikiページ(Home / Server-Setup / Event-Guide / Pages / API / Architecture / CI / Sensor-Device / RPi-Direct-Sensor / Timing-Accuracy)も**常に**更新すること。ルート定義・DBスキーマ・SSEトピック・画面構成のいずれかを変えたら、対応するWikiページの記述が古くなっていないか必ず確認する。

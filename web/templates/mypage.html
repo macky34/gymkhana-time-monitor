@@ -72,6 +72,7 @@
   .hint{font-size:10.5px;color:var(--dim);margin-top:4px;line-height:1.5}
   .modal-bg{position:absolute;inset:0;background:rgba(5,7,10,.7);display:none;align-items:flex-end;z-index:30}
   .modal-bg.on{display:flex}
+  #cropmodal{z-index:40} /* 他モーダル(車両追加/編集)の上から開くため常に前面 */
   .modal{background:var(--panel);border-top:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;
          max-height:86%;overflow-y:auto;padding:16px 16px 24px;animation:up .22s ease-out}
   @keyframes up{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}
