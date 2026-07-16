@@ -19,6 +19,8 @@
            grid-template-areas:"header header" "nav main"}
     .avatar{width:46px;height:46px;font-size:18px}
     .avatar.sm{width:30px;height:30px;font-size:12px}
+    .avstack{width:54px;height:54px}
+    .avstack>.avatar:first-child{width:54px;height:54px;font-size:20px}
   }
   /* ---- monitor-specific ---- */
   .evbanner{background:#2c2718;border-bottom:1px solid #77771f;color:var(--amber);font-size:11.5px;
@@ -48,8 +50,11 @@
   .res .nm{min-width:0}
   .res .nm b{font-size:13px;font-weight:600;display:block}
   .res .nm span{font-size:10.5px;color:var(--mut)}
-  .res .tm{margin-left:auto;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px;font-weight:600}
+  .res .tm{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px;font-weight:600}
   .res .pt{font-size:9.5px;color:var(--amber);font-family:var(--mono)}
+  .res .rgt{margin-left:auto;text-align:right;flex:none}
+  .res .meta{display:flex;justify-content:flex-end;align-items:center;gap:5px;margin-top:2px}
+  .res .src{font-size:9.5px;color:var(--dim);font-family:var(--mono)}
   .res li.new{background:linear-gradient(90deg,rgba(58,208,127,.10),transparent);animation:fadein .5s}
   .res li.dead .tm{color:var(--dim);text-decoration:line-through}
   .res li.dead .badge{color:var(--red);border-color:#5a3038}
@@ -170,11 +175,13 @@ function renderCourse(){
     if (c.pt_count) vhChildren.push(h('span', { style: 'color:var(--amber)' }, ` ・PT${c.pt_count}`));
     const av = h('div', { class: 'avatar' });
     avatarInto(av, c.driver.id, c.driver.name, !!c.driver.has_icon);
+    const vAv = h('div', { class: 'avatar' });
+    vehicleAvatarInto(vAv, c.vehicle.id, c.vehicle.name, !!c.vehicle.has_icon);
     const tmText = armed ? '—:——' : (flash ? fmt3(c.finish.fin_ms) : (waitingOffset ? 'タイム取得中…' : fmt1(nowMs() - c.t_start_us / 1000)));
     const el = h('div', { class: cls, onclick: () => openFS(c.queue_id) },
       c.mc_flag ? h('div', { class: 'mcband' }, 'ミスコース') : null,
       h('div', { class: 'who' },
-        av,
+        h('div', { class: 'avstack' }, av, vAv),
         h('div', {},
           h('div', { class: 'nm' }, c.driver.name),
           h('div', { class: 'vh' }, vhChildren)
@@ -197,11 +204,13 @@ function renderNext(){
     return;
   }
   waitingQueue.slice(0, 3).forEach((q, i) => {
-    const av = h('div', { class: 'avatar sm' });
+    const av = h('div', { class: 'avatar' });
     avatarInto(av, q.driver.id, q.driver.name, !!q.driver.has_icon);
+    const vAv = h('div', { class: 'avatar' });
+    vehicleAvatarInto(vAv, q.vehicle.id, q.vehicle.name, !!q.vehicle.has_icon);
     nextEl.appendChild(h('li', {},
       h('span', { class: 'pos t' }, String(i + 1)),
-      av,
+      h('div', { class: 'avstack' }, av, vAv),
       h('div', { class: 'nm' }, h('b', {}, q.driver.name), h('span', {}, `#${q.vehicle.number} ${q.vehicle.name}`))
     ));
   });
@@ -220,19 +229,23 @@ function renderRecent(items){
   items.slice(0, 10).forEach(it => {
     const isNew = !recentFirstRender && !knownRecentIds.has(it.log_id);
     const liCls = (isNew ? 'new' : '') + (it.invalid ? ' dead' : '');
-    const nmSpanText = `#${it.vehicle.number} ${it.vehicle.name}` + (it.source === 'manual' ? ' ・✍️手計測' : '');
-    const av = h('div', { class: 'avatar sm' });
+    const nmSpanText = `#${it.vehicle.number} ${it.vehicle.name}`;
+    const av = h('div', { class: 'avatar' });
     avatarInto(av, it.driver.id, it.driver.name, !!it.driver.has_icon);
-    const vAv = h('div', { class: 'avatar xs' });
+    const vAv = h('div', { class: 'avatar' });
     vehicleAvatarInto(vAv, it.vehicle.id, it.vehicle.name, !!it.vehicle.has_icon);
     const li = h('li', { class: liCls.trim() },
       h('span', { class: 'hn' }, it.heat !== null && it.heat !== undefined ? ('H' + it.heat) : ''),
-      av,
-      vAv,
+      h('div', { class: 'avstack' }, av, vAv),
       h('div', { class: 'nm' }, h('b', {}, it.driver.name), h('span', {}, nmSpanText)),
-      it.is_mc ? h('span', { class: 'badge' }, 'MC') : null,
-      it.pt_count ? h('span', { class: 'pt' }, 'PT' + it.pt_count) : null,
-      h('span', { class: 'tm' }, it.invalid ? '—' : fmt3(it.final_ms))
+      h('div', { class: 'rgt' },
+        h('span', { class: 'tm' }, it.invalid ? '—' : fmt3(it.final_ms)),
+        h('div', { class: 'meta' },
+          it.is_mc ? h('span', { class: 'badge' }, 'MC') : null,
+          it.pt_count ? h('span', { class: 'pt' }, 'PT' + it.pt_count) : null,
+          h('span', { class: 'src' }, it.source === 'manual' ? '✍️手計測' : 'センサー')
+        )
+      )
     );
     recent.appendChild(li);
     if (isNew){

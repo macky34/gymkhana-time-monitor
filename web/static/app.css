@@ -57,6 +57,13 @@ nav a.on .ic{color:var(--amber)}
    .avatar.xs siblings, and avoiding the block-level stacking that a
    wrapping <div> around block-level .avatar.sm boxes would otherwise get. */
 .avpair{display:flex;align-items:center;gap:4px;flex:none}
+/* ドライバー大円の右下に車両アイコン(28px)を重ねるペア。サイズはここで
+   完結し、.sm/.xs やページ側メディアクエリの影響を受けない。box-shadow は
+   重なり部分の縁取り。 */
+.avstack{position:relative;flex:none;width:48px;height:48px}
+.avstack>.avatar:first-child{width:48px;height:48px;font-size:18px}
+.avstack>.avatar:last-child{position:absolute;right:-3px;bottom:-3px;margin:0;display:flex;vertical-align:baseline;
+                            width:28px;height:28px;font-size:11px;box-shadow:0 0 0 2px var(--bg)}
 .iconpair{display:inline-flex;align-items:center;gap:3px;vertical-align:-6px}
 .iconpair .avatar.xs{margin-right:0;vertical-align:baseline}
 .toast{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:#2b3a2f;border:1px solid var(--go);

@@ -16,6 +16,8 @@
            grid-template-areas:"header header" "nav main"}
     .avatar{width:46px;height:46px;font-size:18px}
     .avatar.sm{width:30px;height:30px;font-size:12px}
+    .avstack{width:54px;height:54px}
+    .avstack>.avatar:first-child{width:54px;height:54px;font-size:20px}
   }
   /* ---- ranking-specific ---- */
   .evbanner{background:#2c2718;border-bottom:1px solid #77771f;color:var(--amber);font-size:11.5px;
@@ -41,9 +43,9 @@
   .rk tr.row:active{background:var(--panel2)}
   .rk .pos{font-family:var(--mono);font-weight:700;font-size:14px;width:22px}
   .rk tr:nth-child(1) .pos{color:var(--amber)}
-  .rk td.av{width:64px;padding-right:0}
+  .rk td.av{width:54px;padding-right:0}
   .rk .nm b{display:block;font-weight:600}
-  .rk .nm span{font-size:10px;color:var(--mut)}
+  .rk .nm>span{display:block;font-size:10px;color:var(--mut)}
   .rk .best{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:14px}
   .rk .sub{font-family:var(--mono);font-size:10px;color:var(--mut)}
   .rk tr.dead td{opacity:.45}
@@ -63,6 +65,7 @@
   @media(min-width:900px){
     .rk{font-size:14px}
     .rk .best{font-size:16px}
+    .rk td.av{width:60px}
     .modal-bg{align-items:center;justify-content:center}
     .modal{width:560px;border-radius:18px;border:1px solid var(--line)}
   }
@@ -283,21 +286,24 @@ function drawRk(){
   rows.forEach(r => {
     const isDead = !!r.invalid;
     const p = isDead ? '—' : String(++pos);
-    const dAv = h('div', { class: 'avatar sm' });
+    const dAv = h('div', { class: 'avatar' });
     avatarInto(dAv, r.driver.id, r.driver.name, !!r.driver.has_icon);
-    const vAv = h('div', { class: 'avatar sm' });
+    const vAv = h('div', { class: 'avatar' });
     vehicleAvatarInto(vAv, r.vehicle.id, r.vehicle.name, !!r.vehicle.has_icon);
     const tr = h('tr', { class: 'row' + (isDead ? ' dead' : '') },
       h('td', { class: 'pos t' }, p),
-      h('td', { class: 'av' }, h('div', { class: 'avpair' }, dAv, vAv)),
+      h('td', { class: 'av' }, h('div', { class: 'avstack' }, dAv, vAv)),
       h('td', { class: 'nm' },
-        h('b', {}, r.driver.name + ' ', h('span', { style: 'font-weight:400;color:var(--dim)' }, r.driver_class || '')),
-        h('span', {}, `#${r.vehicle.number} ${r.vehicle.name} ・ ${r.vehicle.disp_class} / ${r.vehicle.dt_class}`)
+        h('b', {}, r.driver.name + ' ', h('span', { style: 'font-weight:400;font-size:10px;color:var(--dim)' }, r.driver_class || '')),
+        h('span', {}, `#${r.vehicle.number} ${r.vehicle.name}`),
+        h('span', {}, `${r.vehicle.disp_class} / ${r.vehicle.dt_class}`)
       ),
       h('td', { class: 'r' },
         h('span', { class: 'best' }, r.best_ms !== null && r.best_ms !== undefined ? fmt3(r.best_ms) : '—'),
         h('br'),
-        h('span', { class: 'sub' }, `2nd ${r.second_ms !== null && r.second_ms !== undefined ? fmt3(r.second_ms) : '—'} ・ ${r.runs}本`)
+        h('span', { class: 'sub' }, `2nd ${r.second_ms !== null && r.second_ms !== undefined ? fmt3(r.second_ms) : '—'}`),
+        h('br'),
+        h('span', { class: 'sub' }, `${r.runs}本`)
       )
     );
     tr.addEventListener('click', () => openDrilldown(r));
