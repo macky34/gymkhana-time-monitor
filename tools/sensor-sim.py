@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ESP32センサーシミュレータ (開発用)。
 
-CONTRACTS.md §4.5 のUDPワイヤーフォーマットで timemon (UDP :9999) にパケットを送る。
+Wiki「Sensor-Device」ページのUDPワイヤーフォーマットで timemon (UDP :9999) にパケットを送る。
 
 使い方:
   python tools/sensor-sim.py trigger start          # start打刻を3連送

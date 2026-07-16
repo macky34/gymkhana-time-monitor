@@ -243,29 +243,12 @@ func (s *Store) ListDriversByVehicle(vehicleID int64) ([]Driver, error) {
 // SetVehicleIcon stores a vehicle's icon JPEG bytes (already validated/
 // re-encoded to 128x128 by the caller).
 func (s *Store) SetVehicleIcon(id int64, jpeg []byte) error {
-	s.writeMu.Lock()
-	defer s.writeMu.Unlock()
-	_, err := s.db.Exec(`UPDATE vehicles SET icon = ? WHERE id = ?`, jpeg, id)
-	if err != nil {
-		return fmt.Errorf("store: set vehicle icon: %w", err)
-	}
-	return nil
+	return s.setIcon("vehicles", "set vehicle icon", id, jpeg)
 }
 
 // GetVehicleIcon returns a vehicle's icon bytes. ok=false covers both "no
 // such vehicle" and "vehicle has no icon" — either way there is nothing to
 // serve.
 func (s *Store) GetVehicleIcon(id int64) ([]byte, bool, error) {
-	var icon []byte
-	err := s.db.QueryRow(`SELECT icon FROM vehicles WHERE id = ?`, id).Scan(&icon)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, false, nil
-	}
-	if err != nil {
-		return nil, false, fmt.Errorf("store: get vehicle icon: %w", err)
-	}
-	if icon == nil {
-		return nil, false, nil
-	}
-	return icon, true, nil
+	return s.getIcon("vehicles", "get vehicle icon", id)
 }

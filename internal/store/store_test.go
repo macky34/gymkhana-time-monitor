@@ -1233,7 +1233,7 @@ func TestLogsCRUDAndListRuns(t *testing.T) {
 
 // TestQueueAndLogsScopedPerEvent verifies that two events on the same store
 // keep independent queue/logs: entries created for event A must never leak
-// into event B's ListQueue/ListRuns results (plan/DESIGN.md multi-event
+// into event B's ListQueue/ListRuns results (Architecture wiki multi-event
 // isolation requirement).
 func TestQueueAndLogsScopedPerEvent(t *testing.T) {
 	st := newTestStore(t)

@@ -1,8 +1,8 @@
 // Package store is the sole writer of the timemon event SQLite database.
 //
 // Concurrency model: all mutating methods acquire Store.writeMu before
-// touching the database, serializing every write (per plan/DESIGN.md §2 /
-// docs/CONTRACTS.md §2). Read-only methods do not take writeMu and may run
+// touching the database, serializing every write (see the
+// Architecture wiki page). Read-only methods do not take writeMu and may run
 // concurrently with each other and with an in-flight write transaction —
 // SQLite's WAL journal mode (enabled below) lets readers see the last
 // committed snapshot without blocking on the writer. The connection pool is

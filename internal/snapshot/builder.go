@@ -58,6 +58,14 @@ type refVehicleBasic struct {
 	HasIcon bool   `json:"has_icon"`
 }
 
+func newRefDriver(d store.Driver) refDriver {
+	return refDriver{ID: d.ID, Name: d.Name, HasIcon: d.HasIcon}
+}
+
+func newRefVehicle(v store.Vehicle) refVehicleBasic {
+	return refVehicleBasic{ID: v.ID, Number: v.Number, Name: v.Name, HasIcon: v.HasIcon}
+}
+
 func indexDrivers(drivers []store.Driver) map[int64]store.Driver {
 	m := make(map[int64]store.Driver, len(drivers))
 	for _, d := range drivers {

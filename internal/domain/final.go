@@ -1,6 +1,6 @@
 package domain
 
-// FinalMS applies the pit-touch penalty policy to one run (DESIGN.md §4.2).
+// FinalMS applies the pit-touch penalty policy to one run (Architecture wiki: FINALタイム).
 //
 //	invalid = isMC || (ptMode == "invalidate" && ptCount > 0)
 //	final   = ptMode == "add" ? rawMS + ptCount*ptPenaltyMS : rawMS

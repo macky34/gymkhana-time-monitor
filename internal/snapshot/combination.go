@@ -222,12 +222,12 @@ func (b *Builder) combinationLogsFor(ev store.EventRow, activeOK bool, driverID,
 
 	resp := combinationLogsResponse{Runs: runs}
 	if drv, ok := driverByID[driverID]; ok {
-		resp.Driver = refDriver{ID: drv.ID, Name: drv.Name, HasIcon: drv.HasIcon}
+		resp.Driver = newRefDriver(drv)
 	} else {
 		resp.Driver = refDriver{ID: driverID}
 	}
 	if veh, ok := vehicleByID[vehicleID]; ok {
-		resp.Vehicle = refVehicleBasic{ID: veh.ID, Number: veh.Number, Name: veh.Name, HasIcon: veh.HasIcon}
+		resp.Vehicle = newRefVehicle(veh)
 	} else {
 		resp.Vehicle = refVehicleBasic{ID: vehicleID}
 	}

@@ -1,7 +1,7 @@
 package store
 
 // schemaSQL is the event database schema. Originally embedded verbatim from
-// plan/DESIGN.md §2 ("データベース") for the "1 DB = 1 event" design; it has
+// the Architecture wiki page (DBスキーマ); it has
 // since been reworked for the multi-event design (one server/DB can hold
 // several events, at most one of which is ever 'active' at a time).
 // drivers/vehicles/entries/class_defs remain event-independent, global

@@ -93,7 +93,7 @@ func (b *Builder) buildRanking(ev store.EventRow) (rankingResponse, error) {
 			ccPtr = &cc
 		}
 		rows = append(rows, rankingRow{
-			Driver:      refDriver{ID: drv.ID, Name: drv.Name, HasIcon: drv.HasIcon},
+			Driver:      newRefDriver(drv),
 			DriverClass: driverClassLabel[drv.DriverClassID],
 			Vehicle: rankVehicle{
 				ID:          veh.ID,

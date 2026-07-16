@@ -4,7 +4,7 @@ import "sort"
 
 // HeatNumbers assigns a 1-based, gap-free heat number to every run within
 // each (driver,vehicle) combination, ordered by timestamp_ms then LogID
-// (DESIGN.md §4.4). MC runs still consume a number.
+// (Architecture wiki: ヒート番号). MC runs still consume a number.
 func HeatNumbers(runs []RunRow) map[int64]int {
 	byCombo := make(map[ComboKey][]RunRow, len(runs))
 	for _, r := range runs {

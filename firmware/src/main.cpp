@@ -1,6 +1,6 @@
 // timemon sensor firmware (ESP32 + Arduino framework).
 //
-// Lifecycle (DESIGN.md §11):
+// Lifecycle (see the Sensor-Device wiki page):
 //   WiFi connect -> SNTP sync against chrony@RPi -> fetch lockout config ->
 //   ready. Trigger sending is inhibited until the clock is synced; the status
 //   LED blinks while unsynced and is solid once ready.
@@ -9,7 +9,7 @@
 // with esp_timer_get_time() and pushed to a ring buffer; the main loop drains
 // it, applies the debounce lockout (first edge wins), and sends the trigger
 // as a 3-packet UDP burst (50 ms apart) so a single lost datagram does not
-// lose the timing. The wire format matches docs/CONTRACTS.md §4.5.
+// lose the timing. The wire format matches the Sensor-Device wiki page.
 #include <Arduino.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>

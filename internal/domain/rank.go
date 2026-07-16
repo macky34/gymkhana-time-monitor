@@ -3,7 +3,7 @@ package domain
 import "sort"
 
 // ComboKey identifies a (driver,vehicle) combination — the ranking unit
-// (DESIGN.md §4.3: "集計単位 = (driver_id, vehicle_id) の組み合わせ").
+// ("集計単位 = (driver_id, vehicle_id) の組み合わせ" — Architecture wiki).
 type ComboKey struct{ DriverID, VehicleID int64 }
 
 // RunRow is one non-deleted logs row (is_deleted=0), as fed into heat
@@ -38,7 +38,7 @@ type Standing struct {
 }
 
 // Rank sorts every (driver,vehicle) combination found in runs per the full
-// order defined in DESIGN.md §4.3 (this is the single place ranking order
+// order documented on the Architecture wiki page (this is the single place ranking order
 // is computed; web/CSV layers only filter+renumber the result).
 //
 // Standing.Runs / ValidRuns / PTTotal always reflect each combo's complete
@@ -54,9 +54,9 @@ type Standing struct {
 //
 // Combos with no qualifying valid run (Invalid=true) sort last, ordered
 // deterministically by ComboKey (DriverID, then VehicleID ascending) per
-// DESIGN.md §4.3's "有効タイムを1本も持たない組み合わせは末尾グループ".
+// the documented rule "有効タイムを1本も持たない組み合わせは末尾グループ".
 // The same ComboKey order is used as a final fallback tie-break among valid
-// rows too (not called for explicitly by DESIGN.md, since real timestamps
+// rows too (not part of the documented order, since real timestamps
 // make a full 4-way tie practically impossible) purely so the result never
 // depends on Go's randomized map iteration order.
 func Rank(runs []RunRow, meta map[ComboKey]ComboMeta, ptMode string, ptPenaltyMS int, heat int) []Standing {
@@ -143,7 +143,7 @@ func applyOverallBest(st *Standing, rs []RunRow, ptMode string, ptPenaltyMS int)
 			return finals[i].ms < finals[j].ms
 		}
 		// Deterministic pick among a combo's own equal-time runs: earliest
-		// timestamp, then LogID. Not separately specified by DESIGN.md,
+		// timestamp, then LogID. Not separately specified by the documented order,
 		// but consistent with the front-runner ("先出し") tie-break
 		// philosophy already used one level up.
 		if finals[i].atMS != finals[j].atMS {
@@ -170,7 +170,7 @@ func lessCombo(a, b ComboKey) bool {
 	return a.VehicleID < b.VehicleID
 }
 
-// lessStanding implements the DESIGN.md §4.3 total order.
+// lessStanding implements the documented ranking total order (Architecture wiki).
 func lessStanding(a, b Standing, meta map[ComboKey]ComboMeta) bool {
 	if a.Invalid != b.Invalid {
 		return !a.Invalid // valid rows sort before the trailing invalid group
