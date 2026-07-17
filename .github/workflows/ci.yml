@@ -15,7 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -37,7 +37,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -61,7 +61,7 @@ jobs:
             -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }}" \
             -o "timemon-linux-${{ matrix.goarch }}" ./cmd/timemon
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: timemon-linux-${{ matrix.goarch }}
           path: timemon-linux-${{ matrix.goarch }}
@@ -79,7 +79,7 @@ jobs:
             firmware:
               - 'firmware/**'
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         if: steps.filter.outputs.firmware == 'true'
         with:
           python-version: '3.12'
@@ -98,7 +98,7 @@ jobs:
           cd firmware
           pio run
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: steps.filter.outputs.firmware == 'true'
         with:
           name: firmware-binaries
@@ -112,7 +112,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v6
         with:
           path: artifacts
 
@@ -122,6 +122,6 @@ jobs:
           find artifacts -type f -name 'timemon-linux-*' -exec cp {} release/ \;
           ls -l release
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: release/*
