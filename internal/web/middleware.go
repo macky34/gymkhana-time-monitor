@@ -36,12 +36,23 @@ func (s *Server) driverFromRequest(r *http.Request) (store.Driver, bool) {
 // The synthetic driver has no drivers row (ID 0): it exists to reach the
 // admin user-management APIs and reissue tokens / promote a real admin, not
 // to run an event (handlers that INSERT the acting driver's id into FK
-// columns, e.g. queue.created_by, will fail for it).
+// columns, e.g. queue.created_by, will fail for it). Restricted accordingly:
+// withAdmin rejects it outright (403) on every route, and only the four
+// user-management routes wrapped in withUserAdmin instead of withAdmin admit
+// it - GET/POST /api/admin/users, POST /api/admin/users/{id}/reissue, and PUT
+// /api/admin/users/{id}/role (see Routes()).
 func (s *Server) emergencyDriver(tok string) (store.Driver, bool) {
 	if tok == "" || s.emergencyToken == "" || tok != s.emergencyToken {
 		return store.Driver{}, false
 	}
 	return store.Driver{ID: 0, Name: "emergency-admin", Role: "admin"}, true
+}
+
+// isEmergency reports whether d is the synthetic emergency-admin identity
+// returned by emergencyDriver. It is the only identity with ID 0: real
+// drivers rows are SQLite AUTOINCREMENT and start at 1.
+func isEmergency(d store.Driver) bool {
+	return d.ID == 0
 }
 
 // setSessionCookie sets the tm_session auth cookie. Secure is only set when
@@ -104,7 +115,37 @@ func (s *Server) withAuth(next func(w http.ResponseWriter, r *http.Request, d st
 // mirrors withAuth but additionally checks Role, following the same
 // admin-check pattern already used for the SSE stream handler in Routes()
 // ("d.Role == \"admin\"").
+//
+// The emergency-admin identity (see emergencyDriver) is rejected here too,
+// even though its Role is "admin": its sole purpose is user management /
+// token recovery, not running an event, so every admin route defaults to
+// denying it (default-deny) unless the route is explicitly wrapped in
+// withUserAdmin instead.
 func (s *Server) withAdmin(next func(w http.ResponseWriter, r *http.Request, d store.Driver)) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		d, ok := s.driverFromRequest(r)
+		if !ok {
+			writeJSONError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		if d.Role != "admin" {
+			writeJSONError(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		if isEmergency(d) {
+			writeJSONError(w, http.StatusForbidden, "forbidden")
+			return
+		}
+		next(w, r, d)
+	}
+}
+
+// withUserAdmin is withAdmin but additionally admits the emergency-admin
+// identity. It exists only for the handful of routes that are the emergency
+// admin's entire reason to exist - user management (list/create/reissue/role)
+// - and must not be used for anything else; every other admin route should
+// stay on withAdmin so it denies the emergency identity by default.
+func (s *Server) withUserAdmin(next func(w http.ResponseWriter, r *http.Request, d store.Driver)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		d, ok := s.driverFromRequest(r)
 		if !ok {

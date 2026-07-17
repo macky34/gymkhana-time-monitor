@@ -159,15 +159,19 @@
   <section class="screen on" id="sc-admin">
 {{if .IsAdmin}}
     <div class="atabs">
+      {{if not .IsEmergency}}
       <button type="button" class="on" data-p="a-run">出走</button>
       <button type="button" data-p="a-log">ログ</button>
-      <button type="button" data-p="a-usr">ユーザ</button>
+      {{end}}
+      <button type="button" class="{{if .IsEmergency}}on{{end}}" data-p="a-usr">ユーザ</button>
+      {{if not .IsEmergency}}
       <button type="button" data-p="a-veh">車両</button>
       <button type="button" data-p="a-set">設定</button>
+      {{end}}
     </div>
 
     <!-- 出走管理 -->
-    <div class="apane on" id="a-run">
+    <div class="apane{{if not .IsEmergency}} on{{end}}" id="a-run">
       <div class="grid2">
         <div>
           <div class="modebar">
@@ -217,7 +221,7 @@
     </div>
 
     <!-- ユーザ管理 -->
-    <div class="apane" id="a-usr">
+    <div class="apane{{if .IsEmergency}} on{{end}}" id="a-usr">
       <button type="button" class="btn primary" style="width:100%;margin-bottom:12px" id="usr-new">＋ ユーザを運営登録</button>
       <div class="card">
         <ul class="ulist" id="usr-list"></ul>
@@ -432,6 +436,7 @@
 <script>
 'use strict';
 const IS_ADMIN = {{.IsAdmin}};
+const IS_EMERGENCY = {{.IsEmergency}};
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -1182,16 +1187,23 @@ function renderUsers(){
     avatarInto(av, u.id, u.name, !!u.has_icon);
     const mainV = vehiclesList.find(v => v.id === u.main_vehicle_id);
     const sub = (u.driver_class || '') + (mainV ? ` ・ ＃${mainV.number}` : '');
-    const ren = h('button', { type: 'button', class: 'mini', title: 'リネーム' }, '✏️');
-    ren.addEventListener('click', () => openRename(u));
+    // Emergency-admin cannot reach PUT /api/admin/users/{id} (rename) - the
+    // server returns 403, so its only permitted button here is omitted.
+    const btns = [];
+    if (!IS_EMERGENCY){
+      const ren = h('button', { type: 'button', class: 'mini', title: 'リネーム' }, '✏️');
+      ren.addEventListener('click', () => openRename(u));
+      btns.push(ren);
+    }
     const rei = h('button', { type: 'button', class: 'mini', title: 'トークン再発行' }, '再発行');
     rei.addEventListener('click', () => openReissue(u));
     const adm = h('button', { type: 'button', class: 'mini adm' + (u.role === 'admin' ? ' on' : ''), title: '運営権限 (タップで切替)' }, '運営');
     adm.addEventListener('click', () => toggleRole(u));
+    btns.push(rei, adm);
     list.appendChild(h('li', {},
       av,
       h('div', { class: 'nm' }, h('b', {}, u.name), h('span', {}, sub)),
-      ren, rei, adm
+      btns
     ));
   });
   if (!users.length){
@@ -1628,6 +1640,19 @@ async function reloadAdminSettings(){
     S = (r && r.event === null) ? null : r; // {"event":null} = no active event (stage 2: between events)
   } catch (err) { toast('設定の取得に失敗: ' + err.message); }
 }
+// Emergency-admin only: GET /api/admin/settings is 403 for it, so S stays
+// null (see init()). But pub - the public subset that driverClasses()/
+// dtClasses() read from - would otherwise only ever arrive via the
+// 'settings' SSE topic, and SSE is skipped entirely for the emergency
+// session (server-side rejected for it, see the SSE authz callback in
+// Routes()). Fetch the public settings API once instead, so the new-user
+// modal's class picker (driverClasses()) has data.
+async function reloadPublicSettings(){
+  try {
+    const r = await apiGet('/api/settings');
+    pub = (r && r.event === null) ? null : r;
+  } catch (err) { toast('設定の取得に失敗: ' + err.message); }
+}
 async function reloadUsers(){
   try {
     const r = await apiGet('/api/admin/users');
@@ -1722,81 +1747,95 @@ async function init(){
   document.getElementById('set-save').addEventListener('click', saveSettings);
   document.getElementById('btn-reg-toggle').addEventListener('click', toggleRegistration);
 
-  await Promise.all([reloadAdminSettings(), reloadUsers(), reloadVehicles(), reloadDrivers(), reloadEvents()]);
+  // Emergency-admin is restricted to user management: GET /api/admin/settings
+  // and GET /api/admin/events are both 403 for it, so skip them (reloadUsers/
+  // reloadVehicles/reloadDrivers are all either its own allowed route or a
+  // public API, and reloadPublicSettings covers the one public-API gap - see
+  // its own comment above).
+  if (IS_EMERGENCY){
+    await Promise.all([reloadPublicSettings(), reloadUsers(), reloadVehicles(), reloadDrivers()]);
+  } else {
+    await Promise.all([reloadAdminSettings(), reloadUsers(), reloadVehicles(), reloadDrivers(), reloadEvents()]);
+  }
   fillSettingsForm();
   renderModeUI();
   renderNoEventState();
-  reloadLogs();
+  if (!IS_EMERGENCY) reloadLogs(); // GET /api/admin/logs is 403 for the emergency session
   renderSensors();
 
-  /* SSE — all topics */
-  openStream(['ranking', 'on_course', 'queue', 'sensor_status', 'orphan', 'settings', 'time', 'directory'], {
-    on_course: d => {
-      onCourseCars = d.cars || [];
-      renderCourse();
-      renderGoButtons();
-    },
-    queue: d => {
-      waitingQueue = d.items || [];
-      renderQueue();
-    },
-    ranking: onRankingChanged,
-    sensor_status: d => {
-      sensors = d.sensors || [];
-      renderSensors();
-    },
-    orphan: d => {
-      orphanItems = d.items || [];
-      renderOrphan();
-    },
-    settings: data => {
-      if (data.event === null){
-        // No active event (stage 2: between events) — reload the event list
-        // so the management card can offer "create new event", and drop the
-        // stale admin-settings snapshot.
-        pub = null;
-        S = null;
-        reloadEvents();
-      } else {
-        pub = data;
-        if (S){
-          S.timing_mode = pub.timing_mode;
-          S.registration_open = pub.registration_open;
-          S.registration_mode = pub.registration_mode;
-          S.heat_ranking = pub.heat_ranking;
-          S.pt_mode = pub.pt_mode;
-          S.pt_penalty_ms = pub.pt_penalty_ms;
-          S.queue_self_entry = pub.queue_self_entry;
-          S.max_course_time_sec = pub.max_course_time_sec;
+  /* SSE — all topics. Skipped for the emergency session: the server rejects
+     it (see the SSE authz callback in Routes()), and none of its allowed
+     surface (user management) needs realtime push - reissue/role-toggle
+     already refresh via reloadUsers() after the request completes. */
+  if (!IS_EMERGENCY){
+    openStream(['ranking', 'on_course', 'queue', 'sensor_status', 'orphan', 'settings', 'time', 'directory'], {
+      on_course: d => {
+        onCourseCars = d.cars || [];
+        renderCourse();
+        renderGoButtons();
+      },
+      queue: d => {
+        waitingQueue = d.items || [];
+        renderQueue();
+      },
+      ranking: onRankingChanged,
+      sensor_status: d => {
+        sensors = d.sensors || [];
+        renderSensors();
+      },
+      orphan: d => {
+        orphanItems = d.items || [];
+        renderOrphan();
+      },
+      settings: data => {
+        if (data.event === null){
+          // No active event (stage 2: between events) — reload the event list
+          // so the management card can offer "create new event", and drop the
+          // stale admin-settings snapshot.
+          pub = null;
+          S = null;
+          reloadEvents();
+        } else {
+          pub = data;
+          if (S){
+            S.timing_mode = pub.timing_mode;
+            S.registration_open = pub.registration_open;
+            S.registration_mode = pub.registration_mode;
+            S.heat_ranking = pub.heat_ranking;
+            S.pt_mode = pub.pt_mode;
+            S.pt_penalty_ms = pub.pt_penalty_ms;
+            S.queue_self_entry = pub.queue_self_entry;
+            S.max_course_time_sec = pub.max_course_time_sec;
+          }
         }
-      }
-      renderModeUI();
-      renderRegToggle();
-      renderNoEventState();
-      renderCourse(); // card buttons depend on timing_mode; cards no longer rebuild on a timer
-    },
-    directory: d => {
-      const rev = d.rev;
-      if (directoryRev === null){
-        // First event on this connection is just the current snapshot echoed
-        // back (or, on a reconnect, the value we already had) — init() already
-        // fetched users/vehicles via REST moments ago, so there is nothing new
-        // to fetch yet. Only a rev that differs from one we've already seen
-        // means something actually changed.
+        renderModeUI();
+        renderRegToggle();
+        renderNoEventState();
+        renderCourse(); // card buttons depend on timing_mode; cards no longer rebuild on a timer
+      },
+      directory: d => {
+        const rev = d.rev;
+        if (directoryRev === null){
+          // First event on this connection is just the current snapshot echoed
+          // back (or, on a reconnect, the value we already had) — init() already
+          // fetched users/vehicles via REST moments ago, so there is nothing new
+          // to fetch yet. Only a rev that differs from one we've already seen
+          // means something actually changed.
+          directoryRev = rev;
+          return;
+        }
+        if (rev === directoryRev) return;
         directoryRev = rev;
-        return;
+        iconRev = Date.now(); // master data (incl. icons) changed — bust icon cache on next draws
+        if (anyModalOpen()){
+          directoryPending = true;
+          return;
+        }
+        reloadUsers();
+        reloadVehicles();
       }
-      if (rev === directoryRev) return;
-      directoryRev = rev;
-      iconRev = Date.now(); // master data (incl. icons) changed — bust icon cache on next draws
-      if (anyModalOpen()){
-        directoryPending = true;
-        return;
-      }
-      reloadUsers();
-      reloadVehicles();
-    }
-  });
+    });
+  }
 
   /* running clocks at ~10Hz + sensor age at 1Hz */
   let lastTick = 0, lastSensorTick = 0;
@@ -1816,7 +1855,7 @@ async function init(){
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible'){
       renderCourse(); renderQueue(); renderSensors(); renderOrphan();
-      reloadLogs();
+      if (!IS_EMERGENCY) reloadLogs(); // GET /api/admin/logs is 403 for the emergency session
     }
   });
 }

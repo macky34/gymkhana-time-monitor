@@ -6,11 +6,12 @@ import "net/http"
 // per-page dynamic behavior (ranking table contents, queue state, etc.) is
 // fetched client-side from the JSON APIs / SSE stream.
 type PageData struct {
-	EventName string
-	Authed    bool
-	IsAdmin   bool
-	MyID      int64
-	SetupMode bool
+	EventName   string
+	Authed      bool
+	IsAdmin     bool
+	IsEmergency bool
+	MyID        int64
+	SetupMode   bool
 
 	// Active is which bottom-nav item (if any) this page highlights: one of
 	// "monitor"/"ranking"/"mypage"/"admin"/"archive", or "" for pages with no
@@ -30,6 +31,7 @@ func (s *Server) pageData(r *http.Request) PageData {
 		pd.Authed = true
 		pd.MyID = d.ID
 		pd.IsAdmin = d.Role == "admin"
+		pd.IsEmergency = isEmergency(d)
 	}
 	return pd
 }
