@@ -158,6 +158,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /setup", s.handleSetupPage)
 	mux.Handle("GET /static/", s.staticHandler())
 	mux.HandleFunc("GET /a/{token}", s.withRateLimit(s.handleTokenLogin))
+	mux.HandleFunc("POST /api/logout", s.withRateLimit(s.withCSRFGuard(s.handleLogout)))
 
 	// ---- Setup ----
 	mux.HandleFunc("POST /api/setup", s.withCSRFGuard(s.handleAPISetup))

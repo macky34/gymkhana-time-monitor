@@ -55,6 +55,12 @@ func isEmergency(d store.Driver) bool {
 	return d.ID == 0
 }
 
+// sessionCookieMaxAge makes tm_session a persistent cookie so drivers stay
+// logged in across browser restarts. The backing token in drivers.token never
+// expires, so the cookie lifetime is the only expiry in play; when it lapses,
+// re-visiting the login URL / QR issues a fresh one.
+const sessionCookieMaxAge = 365 * 24 * 3600
+
 // setSessionCookie sets the tm_session auth cookie. Secure is only set when
 // the request actually arrived over TLS (directly or via a trusted proxy
 // header), so local/plain-HTTP LAN deployments keep working.
@@ -64,10 +70,34 @@ func (s *Server) setSessionCookie(w http.ResponseWriter, r *http.Request, token 
 		Name:     "tm_session",
 		Value:    token,
 		Path:     "/",
+		MaxAge:   sessionCookieMaxAge,
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   secure,
 	})
+}
+
+// clearSessionCookie expires the tm_session cookie immediately (MaxAge<0
+// serializes as Max-Age=0, which browsers treat as "delete now"). Attributes
+// other than Name/Path don't matter for deletion.
+func (s *Server) clearSessionCookie(w http.ResponseWriter) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     "tm_session",
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// handleLogout implements POST /api/logout: drop the session cookie and
+// return 204. No auth required - logging out an already-logged-out browser is
+// a harmless no-op, and requiring auth would just make a half-broken cookie
+// impossible to clear.
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	s.clearSessionCookie(w)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // handleTokenLogin implements GET /a/{token}: exchange a driver's permanent
