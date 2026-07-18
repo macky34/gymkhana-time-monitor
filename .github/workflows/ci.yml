@@ -67,43 +67,8 @@ jobs:
           path: timemon-linux-${{ matrix.goarch }}
           retention-days: 30
 
-  firmware:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: dorny/paths-filter@v4
-        id: filter
-        with:
-          filters: |
-            firmware:
-              - 'firmware/**'
-
-      - uses: actions/setup-python@v6
-        if: steps.filter.outputs.firmware == 'true'
-        with:
-          python-version: '3.12'
-
-      - name: Install PlatformIO
-        if: steps.filter.outputs.firmware == 'true'
-        run: pip install platformio
-
-      - name: Prepare config.h
-        if: steps.filter.outputs.firmware == 'true'
-        run: cp firmware/src/config.h.example firmware/src/config.h
-
-      - name: Build firmware (all envs)
-        if: steps.filter.outputs.firmware == 'true'
-        run: |
-          cd firmware
-          pio run
-
-      - uses: actions/upload-artifact@v6
-        if: steps.filter.outputs.firmware == 'true'
-        with:
-          name: firmware-binaries
-          path: firmware/.pio/build/*/firmware.bin
-          retention-days: 30
+  # NOTE: ファームウェア(firmware/)のCIビルドは意図的に無し。実機センサーが
+  # まだ手元に無く検証できないため、ハードウェア検証が可能になるまでCI対象外。
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

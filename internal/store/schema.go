@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS events (
   registration_mode TEXT NOT NULL DEFAULT 'public',-- 'public' | 'staff'
   registration_open INTEGER NOT NULL DEFAULT 1,    -- bool (受付終了で0)
   queue_self_entry INTEGER NOT NULL DEFAULT 1,     -- bool
-  max_course_time_sec INTEGER NOT NULL DEFAULT 180,
+  max_course_time_sec INTEGER NOT NULL DEFAULT 300,
   sensor_lockout_ms INTEGER NOT NULL DEFAULT 800,
   coefficients TEXT NOT NULL,                      -- JSON: {"turbo_gasoline":1.7,"turbo_diesel":1.5,"rotary":1.7,"supercharger":1.7}
   displacement_classes TEXT NOT NULL               -- JSON: [{"label":"~660cc","max_cc":660},{"label":"~1600cc","max_cc":1600},{"label":"無制限","max_cc":null}]

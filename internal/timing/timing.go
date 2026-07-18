@@ -330,9 +330,26 @@ func (d *dispatcher) handleTrigger(p packet) {
 		return
 	case errors.Is(pairErr, ErrNoTarget):
 		if d.deps.OnOrphan != nil {
-			d.deps.OnOrphan(orphanKind, fmt.Sprintf("%s trigger with no waiting car (ts=%d)", p.SensorID, p.TimestampUS))
+			d.deps.OnOrphan(orphanKind, orphanDetail(p.SensorID, p.TimestampUS))
 		}
 	default:
 		log.Printf("timing: %s pairing error (ts=%d): %v", p.SensorID, p.TimestampUS, pairErr)
+	}
+}
+
+// orphanDetail renders a human-readable orphan warning for a trigger with no
+// pairing target. In practice only sensorID=="goal" reaches this today (the
+// web package's course manager queues start-orphans as adoptable "orphan
+// runs" instead of returning ErrNoTarget), but the start-side message is
+// kept as a defensive fallback for any future/alternate CourseController.
+func orphanDetail(sensorID string, tsUS int64) string {
+	when := time.UnixMicro(tsUS).Local().Format("15:04:05")
+	switch sensorID {
+	case "start":
+		return fmt.Sprintf("スタートセンサー反応 %s — 対象なし", when)
+	case "goal":
+		return fmt.Sprintf("ゴールセンサー反応 %s — 走行中の車両なし", when)
+	default:
+		return fmt.Sprintf("%s trigger with no waiting car (ts=%d)", sensorID, tsUS)
 	}
 }

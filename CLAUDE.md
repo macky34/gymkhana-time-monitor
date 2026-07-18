@@ -30,6 +30,14 @@ go test ./...
 gofmt -l .   # 出力が空であること
 ```
 
+## E2E動作確認
+
+UIに影響する変更(web/templates/・web/static/・internal/web のハンドラやSSEペイロード)の動作確認は、`/event-sim`(一時DBサーバー + sensor-sim.py)によるAPIレベル検証に加えて、**Playwright MCP で実ブラウザを操作して行うこと**。トークンURLでログイン → 画面遷移 → ボタン/モーダルの実操作 → 各段階のスクリーンショット確認まで行い、SSEによるライブ更新も目視で確認する。
+
+## コミット前の実データ起動確認 (人間による確認)
+
+**コミットする前に必ず `/live-check` スキルを実行すること**。ビルドしたバイナリを本番 `event.sqlite3` の一時コピー+別ポートで起動し、ログインURLをユーザーに提示して、**ユーザー自身に実データでの動作を確認してもらう**。Claude の自動E2E(Playwright)はこれの代わりにならない — 必ず人間の確認を得てからコミットする(本番DB・本番バイナリ・稼働中プロセスには触れない)。実DBはマイグレーションされない設計のため、新しい列・既定値に依存した変更が実DBで効かないケースをここで人間の目でも検出する。
+
 ## Claude Code 自動化設定 (.claude/)
 
 このリポジトリには以下のフック・スキル・エージェントが設定されている。規約と重複するものはフックが機械的に強制するので、Claude側で意識する必要はないが、存在は把握しておくこと。
@@ -39,7 +47,7 @@ gofmt -l .   # 出力が空であること
   - `gofmt.py` — Edit/Write された .go を自動整形
   - `block_vendored.py` — ベンダー配布物 (`*.min.js` / `*.min.css`) の直接編集をブロック
   - `go_verify.py` — 応答終了時、.go に変更があれば `go build` / `go vet` を検証し失敗なら差し戻す
-- **スキル**: `/release`(リリースタグ作成)、`/wiki-sync`(Wiki同期)、`/event-sim`(シミュレータE2E動作確認)、`/new-admin-api`(管理API追加チェックリスト)
+- **スキル**: `/release`(リリースタグ作成)、`/wiki-sync`(Wiki同期)、`/event-sim`(シミュレータE2E動作確認)、`/new-admin-api`(管理API追加チェックリスト)、`/live-check`(コミット前の実データ起動確認)
 - **エージェント**: `implementer`(指示書ベースの実装)、`web-security-reviewer`(XSS・認可監査)、`concurrency-reviewer`(排他・レース監査)。internal/web や web/ を変更したら web-security-reviewer、store/sse/timing の並行性に触れたら concurrency-reviewer でのレビューを検討する。
 
 ## 補足

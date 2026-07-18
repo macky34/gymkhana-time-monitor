@@ -6,7 +6,7 @@
     "heat_ranking": false,
     "registration_mode": "public",
     "queue_self_entry": true,
-    "max_course_time_sec": 180,
+    "max_course_time_sec": 300,
     "sensor_lockout_ms": 800
   },
   "coefficients": {

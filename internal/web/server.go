@@ -212,6 +212,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/admin/course/{id}/undo-goal", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseUndoGoal)))
 	mux.HandleFunc("PUT /api/admin/course/{id}/pt", s.withCSRFGuard(s.withAdmin(s.handleAdminCoursePT)))
 	mux.HandleFunc("PUT /api/admin/course/{id}/mc", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseMC)))
+	mux.HandleFunc("POST /api/admin/course/adopt-orphan", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseAdoptOrphan)))
+	mux.HandleFunc("DELETE /api/admin/course/orphan-runs/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseDismissOrphanRun)))
+	mux.HandleFunc("DELETE /api/admin/orphans/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminOrphanDismiss)))
+	mux.HandleFunc("DELETE /api/admin/orphans", s.withCSRFGuard(s.withAdmin(s.handleAdminOrphanClear)))
 
 	// ---- Admin: queue management (W3) ----
 	mux.HandleFunc("POST /api/admin/queue", s.withCSRFGuard(s.withAdmin(s.handleAdminQueueAdd)))

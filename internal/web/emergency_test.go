@@ -240,6 +240,10 @@ func TestEmergencyAdmin_ForbiddenRoutes(t *testing.T) {
 		{http.MethodPut, "/api/admin/settings", `{}`},
 		{http.MethodGet, "/api/admin/logs", ""},
 		{http.MethodPost, "/api/admin/course", `{}`},
+		{http.MethodPost, "/api/admin/course/adopt-orphan", `{"orphan_id":1}`},
+		{http.MethodDelete, "/api/admin/course/orphan-runs/1", ""},
+		{http.MethodDelete, "/api/admin/orphans/1", ""},
+		{http.MethodDelete, "/api/admin/orphans", ""},
 		{http.MethodGet, "/api/admin/export", ""},
 	}
 	for _, c := range cases {

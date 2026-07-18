@@ -44,8 +44,15 @@ func (s *Server) handleMyLaunch(w http.ResponseWriter, r *http.Request, d store.
 	}
 	row := waiting[0]
 
-	if err := s.Store.SetQueueStatus(row.ID, "on_course"); err != nil {
+	// Compare-and-set: if a concurrent launch/adopt already moved this row
+	// out of "waiting", answer 409 instead of double-launching it.
+	claimed, err := s.Store.ClaimQueueRow(row.ID, "waiting", "on_course")
+	if err != nil {
 		writeErr(w, err)
+		return
+	}
+	if !claimed {
+		writeJSONError(w, http.StatusConflict, "queue head changed, retry")
 		return
 	}
 	// READY: t_start stays NULL until the start sensor fires.

@@ -24,14 +24,26 @@ type pendingFinish struct {
 	timer   *time.Timer
 }
 
+// orphanRun is a start-sensor trigger that had no READY car to pair with: an
+// unassigned run presumed in progress until a goal trigger, admin adoption,
+// or expiry (SensorStart/SensorGoal.pruneOrphanRunsLocked) consumes it.
+type orphanRun struct {
+	ID       int64 // monotonic, for adopt/dismiss APIs
+	TStartUS int64 // sensor-timescale timestamp (µs)
+	AtMS     int64 // wall-clock receipt time, for display
+}
+
 // courseManager owns the finish-confirmation grace window bookkeeping that
 // sits on top of the plain waiting/on_course/done/canceled queue state
-// machine persisted in SQLite via store.Store.
+// machine persisted in SQLite via store.Store, plus the FIFO of orphan start
+// triggers awaiting a goal pairing or admin resolution.
 type courseManager struct {
-	mu      sync.Mutex
-	pending map[int64]*pendingFinish
-	s       *Server
-	graceMS int64
+	mu         sync.Mutex
+	pending    map[int64]*pendingFinish
+	orphanRuns []orphanRun // FIFO, oldest first
+	orphanSeq  int64
+	s          *Server
+	graceMS    int64
 }
 
 // newCourseManager builds a courseManager wired to s. graceMS defaults to
@@ -45,6 +57,67 @@ func newCourseManager(s *Server) *courseManager {
 		s:       s,
 		graceMS: 3000,
 	}
+}
+
+// pruneOrphanRunsLocked removes orphanRuns entries whose elapsed time (from
+// TStartUS to refUS, both in the sensor microsecond timescale - never mixed
+// with wall-clock time) exceeds maxCourseTimeSec, and returns the removed
+// entries so the caller can turn them into orphan warnings once cm.mu is
+// released. Callers must already hold cm.mu.
+func (cm *courseManager) pruneOrphanRunsLocked(refUS int64, maxCourseTimeSec int) []orphanRun {
+	maxUS := int64(maxCourseTimeSec) * 1_000_000
+	var expired []orphanRun
+	kept := cm.orphanRuns[:0]
+	for _, e := range cm.orphanRuns {
+		if refUS-e.TStartUS > maxUS {
+			expired = append(expired, e)
+		} else {
+			kept = append(kept, e)
+		}
+	}
+	cm.orphanRuns = kept
+	return expired
+}
+
+// takeOrphanRun removes and returns the orphan run with the given id (used
+// by both the adopt-orphan and dismiss-orphan-run admin APIs). ok=false if
+// id is not currently queued: already paired with a goal trigger, expired,
+// or never existed.
+func (cm *courseManager) takeOrphanRun(id int64) (orphanRun, bool) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	for i, e := range cm.orphanRuns {
+		if e.ID == id {
+			cm.orphanRuns = append(cm.orphanRuns[:i], cm.orphanRuns[i+1:]...)
+			return e, true
+		}
+	}
+	return orphanRun{}, false
+}
+
+// restoreOrphanRun reinserts run, keeping the FIFO ordered by ID. Used to
+// roll back a takeOrphanRun when the admin adopt-orphan flow fails partway
+// through (the store write after the take errors out).
+func (cm *courseManager) restoreOrphanRun(run orphanRun) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	i := 0
+	for i < len(cm.orphanRuns) && cm.orphanRuns[i].ID < run.ID {
+		i++
+	}
+	cm.orphanRuns = append(cm.orphanRuns, orphanRun{})
+	copy(cm.orphanRuns[i+1:], cm.orphanRuns[i:])
+	cm.orphanRuns[i] = run
+}
+
+// orphanRunsSnapshot returns a copy of the current orphan-run FIFO, for the
+// "orphan" SSE topic (see Server.publishOrphans).
+func (cm *courseManager) orphanRunsSnapshot() []orphanRun {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	out := make([]orphanRun, len(cm.orphanRuns))
+	copy(out, cm.orphanRuns)
+	return out
 }
 
 // finishProvider reports the in-flight finish (if any) for queueID. It is

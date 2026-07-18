@@ -5,6 +5,7 @@ package web
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -78,8 +79,15 @@ func (s *Server) handleAdminCourseLaunch(w http.ResponseWriter, r *http.Request,
 	}
 	row := waiting[0]
 
-	if err := s.Store.SetQueueStatus(row.ID, "on_course"); err != nil {
+	// Compare-and-set: if a concurrent launch/adopt already moved this row
+	// out of "waiting", answer 409 instead of double-launching it.
+	claimed, err := s.Store.ClaimQueueRow(row.ID, "waiting", "on_course")
+	if err != nil {
 		writeErr(w, err)
+		return
+	}
+	if !claimed {
+		writeJSONError(w, http.StatusConflict, "queue head changed, retry")
 		return
 	}
 
@@ -259,6 +267,137 @@ func (s *Server) handleAdminCourseUndoGoal(w http.ResponseWriter, r *http.Reques
 
 type ptBody struct {
 	Delta int `json:"delta"`
+}
+
+type adoptOrphanBody struct {
+	OrphanID int64 `json:"orphan_id"`
+}
+
+// handleAdminCourseAdoptOrphan implements POST /api/admin/course/adopt-orphan:
+// pairs a stray start-sensor trigger (queued as an "orphan run" because no
+// READY car was waiting when it fired - typically the operator forgot to
+// launch before the sensor triggered) with the driver at the head of the
+// waiting queue, exactly as if that car had been launched in sensor mode and
+// immediately stamped by the sensor.
+func (s *Server) handleAdminCourseAdoptOrphan(w http.ResponseWriter, r *http.Request, admin store.Driver) {
+	body, ok := decodeReqJSON[adoptOrphanBody](w, r)
+	if !ok {
+		return
+	}
+
+	ev, ok := s.requireActiveEvent(w)
+	if !ok {
+		return
+	}
+
+	waiting, err := s.Store.ListQueue(ev.ID, "waiting")
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if len(waiting) == 0 {
+		writeJSONError(w, http.StatusConflict, "queue is empty")
+		return
+	}
+	row := waiting[0]
+
+	run, ok := s.course.takeOrphanRun(body.OrphanID)
+	if !ok {
+		writeJSONError(w, http.StatusConflict, "orphan run already consumed or expired")
+		return
+	}
+
+	// Compare-and-set so a concurrent launch/adopt that already moved this
+	// row out of "waiting" loses cleanly (409 + orphan run restored) instead
+	// of double-writing the row and silently losing a start timestamp.
+	claimed, err := s.Store.ClaimQueueRow(row.ID, "waiting", "on_course")
+	if err != nil {
+		s.course.restoreOrphanRun(run)
+		s.publishOrphans()
+		writeErr(w, err)
+		return
+	}
+	if !claimed {
+		s.course.restoreOrphanRun(run)
+		s.publishOrphans()
+		writeJSONError(w, http.StatusConflict, "queue head changed, retry")
+		return
+	}
+	start := run.TStartUS
+	if err := s.Store.SetStart(row.ID, &start); err != nil {
+		// Best-effort rollback of the claim; the orphan run itself is always
+		// restored so the stamp cannot be lost.
+		if _, rbErr := s.Store.ClaimQueueRow(row.ID, "on_course", "waiting"); rbErr != nil {
+			log.Printf("web: adopt-orphan rollback failed queue=%d: %v", row.ID, rbErr)
+		}
+		s.course.restoreOrphanRun(run)
+		s.publishOrphans()
+		writeErr(w, err)
+		return
+	}
+
+	s.publishQueue()
+	s.publishOnCourse()
+	s.publishOrphans()
+
+	s.audit(&admin.ID, "course.adopt_orphan", map[string]any{
+		"queue_id":   row.ID,
+		"orphan_id":  body.OrphanID,
+		"t_start_us": run.TStartUS,
+	})
+
+	writeJSON(w, http.StatusOK, map[string]any{"queue_id": row.ID})
+}
+
+// handleAdminCourseDismissOrphanRun implements DELETE
+// /api/admin/course/orphan-runs/{id}: discards a queued orphan start trigger
+// (e.g. a false sensor detection) without ever pairing it with a car.
+func (s *Server) handleAdminCourseDismissOrphanRun(w http.ResponseWriter, r *http.Request, admin store.Driver) {
+	id, ok := requirePathID(w, r)
+	if !ok {
+		return
+	}
+
+	if _, ok := s.course.takeOrphanRun(id); !ok {
+		writeJSONError(w, http.StatusConflict, "orphan run already consumed or expired")
+		return
+	}
+
+	s.publishOrphans()
+	s.audit(&admin.ID, "course.dismiss_orphan", map[string]any{"orphan_id": id})
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleAdminOrphanDismiss implements DELETE /api/admin/orphans/{id}:
+// dismisses a single orphan warning from the admin-facing list, without
+// touching any underlying log/queue/orphan-run state.
+func (s *Server) handleAdminOrphanDismiss(w http.ResponseWriter, r *http.Request, admin store.Driver) {
+	id, ok := requirePathID(w, r)
+	if !ok {
+		return
+	}
+
+	if !s.orphans.remove(id) {
+		writeJSONError(w, http.StatusNotFound, "not found")
+		return
+	}
+
+	s.publishOrphans()
+	s.audit(&admin.ID, "admin.orphan.dismiss", map[string]any{"id": id})
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// handleAdminOrphanClear implements DELETE /api/admin/orphans: dismisses
+// every orphan warning at once.
+func (s *Server) handleAdminOrphanClear(w http.ResponseWriter, r *http.Request, admin store.Driver) {
+	n := s.orphans.clear()
+
+	s.publishOrphans()
+	s.audit(&admin.ID, "admin.orphan.clear", map[string]any{"count": n})
+
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // handleAdminCoursePT implements PUT /api/admin/course/{id}/pt.

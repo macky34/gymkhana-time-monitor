@@ -212,6 +212,25 @@ func (s *Store) SetQueueStatus(id int64, status string) error {
 	return nil
 }
 
+// ClaimQueueRow transitions a queue row's status only if it currently has
+// the expected status, as a single compare-and-set UPDATE. claimed=false
+// means a concurrent writer moved the row first (e.g. two operators
+// launching/adopting the same waiting-queue head at once) - handlers turn
+// that lost race into a 409 instead of silently double-writing the row.
+func (s *Store) ClaimQueueRow(id int64, from, to string) (bool, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	res, err := s.db.Exec(`UPDATE queue SET status = ? WHERE id = ? AND status = ?`, to, id, from)
+	if err != nil {
+		return false, fmt.Errorf("store: claim queue row: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("store: claim queue row: %w", err)
+	}
+	return n > 0, nil
+}
+
 // SetStart writes (or, with tStartUS=nil, clears) a queue row's start
 // timestamp.
 func (s *Store) SetStart(id int64, tStartUS *int64) error {

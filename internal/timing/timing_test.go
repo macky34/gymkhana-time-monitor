@@ -222,18 +222,18 @@ func TestOrphanCallbacks(t *testing.T) {
 	h.send(triggerJSON("goal", 11, 2, 222))
 
 	for _, want := range []struct {
-		kind, tsFrag string
+		kind, detailFrag string
 	}{
-		{"orphan_start", "ts=111"},
-		{"orphan_goal", "ts=222"},
+		{"orphan_start", "スタートセンサー反応"},
+		{"orphan_goal", "ゴールセンサー反応"},
 	} {
 		select {
 		case got := <-orphans:
 			if got[0] != want.kind {
 				t.Fatalf("orphan kind = %q, want %q", got[0], want.kind)
 			}
-			if !strings.Contains(got[1], want.tsFrag) {
-				t.Fatalf("orphan detail %q does not contain %q", got[1], want.tsFrag)
+			if !strings.Contains(got[1], want.detailFrag) {
+				t.Fatalf("orphan detail %q does not contain %q", got[1], want.detailFrag)
 			}
 		case <-time.After(time.Second):
 			t.Fatalf("timed out waiting for %s", want.kind)

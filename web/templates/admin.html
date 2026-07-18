@@ -203,7 +203,7 @@
     <!-- ログ -->
     <div class="apane" id="a-log">
       <div class="orphan" id="orphan-band" style="display:none">
-        <b id="orphan-title">⚠ 警告</b>
+        <div id="orphan-title-row" style="display:flex;align-items:center;gap:8px"></div>
         <div id="orphan-items"></div>
       </div>
       <div class="card" style="padding:4px 8px">
@@ -538,7 +538,8 @@ let vehiclesList = [];    // GET /api/vehicles
 let waitingQueue = [];    // queue SSE
 let onCourseCars = [];    // on_course SSE
 let sensors = [];         // sensor_status SSE
-let orphanItems = [];     // orphan SSE
+let orphanItems = [];     // orphan SSE (log-tab warnings)
+let orphanRuns = [];      // orphan SSE (unassigned on-course runs, pre-goal)
 let events = [];          // GET /api/admin/events
 let logsPage = 1;
 let logsData = { logs: [], total: 0, unassigned: [] };
@@ -585,10 +586,28 @@ function renderCourse(){
   const admC = document.getElementById('adm-course');
   clear(admC);
   courseClocks = [];
-  if (!onCourseCars.length){
+  if (!onCourseCars.length && !orphanRuns.length){
     admC.appendChild(h('div', { class: 'empty-course' }, 'コース上に車両なし'));
     return;
   }
+  orphanRuns.forEach(run => {
+    const mini = (label, cls, fn) => {
+      const b = h('button', { type: 'button', class: 'mini' + (cls ? ' ' + cls : '') }, label);
+      b.addEventListener('click', fn);
+      return b;
+    };
+    const assignBtn = mini('キュー先頭を割当', '', () => courseAdoptOrphan(run));
+    assignBtn.disabled = !waitingQueue.length;
+    const tm = h('div', { class: 'tm' }, fmt1(nowMs() - run.t_start_us / 1000));
+    const card = h('div', { class: 'card oc-admin armed' },
+      tm,
+      h('div', { class: 'nm' }, '⚠ 未割当走行中',
+        h('span', {}, `スタート ${hhmmss(run.at_ms)}`)),
+      h('div', { class: 'acts' }, assignBtn, mini('削除', 'red', () => courseDiscardOrphan(run)))
+    );
+    courseClocks.push({ c: { t_start_us: run.t_start_us }, tm, card });
+    admC.appendChild(card);
+  });
   const m = mode();
   onCourseCars.forEach(c => {
     const armed = !c.t_start_us;
@@ -679,6 +698,24 @@ async function courseDNF(c){
   try {
     await api('DELETE', `/api/admin/course/${c.queue_id}`);
     toast(`${c.driver.name} 走行中止`);
+  } catch (err) { toast(err.message); }
+}
+
+/* unassigned on-course runs (start sensor fired with an empty queue slot) */
+async function courseAdoptOrphan(run){
+  const next = waitingQueue[0];
+  if (!next) return;
+  if (!confirm(`キュー先頭の ${next.driver.name}(＃${next.vehicle.number}) をこの走行に割り当てますか?`)) return;
+  try {
+    await api('POST', '/api/admin/course/adopt-orphan', { orphan_id: run.orphan_id });
+    toast('割り当てました');
+  } catch (err) { toast(err.message); }
+}
+async function courseDiscardOrphan(run){
+  if (!confirm('この未割当走行を破棄しますか? (誤反応・記録は残りません)')) return;
+  try {
+    await api('DELETE', '/api/admin/course/orphan-runs/' + run.orphan_id);
+    toast('未割当走行を破棄しました');
   } catch (err) { toast(err.message); }
 }
 
@@ -1028,19 +1065,39 @@ function renderLogs(){
 function renderOrphan(){
   const band = document.getElementById('orphan-band');
   const box = document.getElementById('orphan-items');
+  const titleRow = document.getElementById('orphan-title-row');
   clear(box);
+  clear(titleRow);
   if (!orphanItems.length){ band.style.display = 'none'; return; }
   band.style.display = 'block';
-  document.getElementById('orphan-title').textContent = `⚠ 警告 ${orphanItems.length}件`;
+  titleRow.appendChild(h('b', { id: 'orphan-title' }, `⚠ 警告 ${orphanItems.length}件`));
+  const clearAllBtn = h('button', { type: 'button', class: 'mini' }, 'すべて消す');
+  clearAllBtn.addEventListener('click', clearAllOrphans);
+  titleRow.appendChild(clearAllBtn);
   orphanItems.forEach(it => {
-    const p = h('p', {}, hhmmss(it.at_ms) + ' ・ ' + (it.detail || (it.kind === 'orphan_start' ? '孤児スタートトリガー' : '未割当ログ')));
-    box.appendChild(p);
+    const p = h('p', { style: 'display:flex;align-items:center;gap:6px' },
+      h('span', { style: 'flex:1' }, hhmmss(it.at_ms) + ' ・ ' + (it.detail || (it.kind === 'orphan_start' ? '孤児スタートトリガー' : '未割当ログ'))));
     if (it.kind === 'unassigned_log' && it.log_id){
       const btn = h('button', { type: 'button', class: 'mini' }, '走者を割り当てる');
       btn.addEventListener('click', () => openAssign({ id: it.log_id, timestamp_ms: it.at_ms }));
-      box.appendChild(btn);
+      p.appendChild(btn);
     }
+    const delBtn = h('button', { type: 'button', class: 'mini red' }, '✕');
+    delBtn.addEventListener('click', () => deleteOrphan(it.id));
+    p.appendChild(delBtn);
+    box.appendChild(p);
   });
+}
+async function deleteOrphan(id){
+  try {
+    await api('DELETE', '/api/admin/orphans/' + id);
+  } catch (err) { toast(err.message); }
+}
+async function clearAllOrphans(){
+  if (!confirm('警告をすべて消しますか?')) return;
+  try {
+    await api('DELETE', '/api/admin/orphans');
+  } catch (err) { toast(err.message); }
 }
 
 async function reloadLogs(){
@@ -1785,7 +1842,10 @@ async function init(){
       },
       orphan: d => {
         orphanItems = d.items || [];
+        orphanRuns = d.runs || [];
         renderOrphan();
+        renderCourse();
+        renderGoButtons();
       },
       settings: data => {
         if (data.event === null){

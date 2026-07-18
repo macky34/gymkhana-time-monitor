@@ -725,6 +725,53 @@ func TestAddEntryAutoSetsMainVehicleOnce(t *testing.T) {
 
 // --- queue ---------------------------------------------------------------
 
+// ClaimQueueRow is the compare-and-set used by the launch/adopt-orphan
+// handlers: only one of two concurrent claimants of the same waiting row
+// may win, and a claim against a row in the wrong state must be a no-op.
+func TestClaimQueueRow(t *testing.T) {
+	st := newTestStore(t)
+	seedMinimal(t, st)
+	eventID := activeEventID(t, st)
+	driverClasses, _ := st.ListClassDefs("driver")
+	dtClasses, _ := st.ListClassDefs("drivetrain")
+
+	did, err := st.CreateDriver("A", driverClasses[0].ID, "ta", "user")
+	if err != nil {
+		t.Fatalf("CreateDriver: %v", err)
+	}
+	cc := 1500
+	vid, err := st.CreateVehicle(Vehicle{Number: 1, Name: "V", Engine: "gasoline", DisplacementCC: &cc, DrivetrainClassID: dtClasses[0].ID})
+	if err != nil {
+		t.Fatalf("CreateVehicle: %v", err)
+	}
+	qid, err := st.Enqueue(eventID, did, vid, nil)
+	if err != nil {
+		t.Fatalf("Enqueue: %v", err)
+	}
+
+	claimed, err := st.ClaimQueueRow(qid, "waiting", "on_course")
+	if err != nil || !claimed {
+		t.Fatalf("first claim: claimed=%v err=%v, want true", claimed, err)
+	}
+	// Second claimant loses: the row is no longer "waiting".
+	claimed, err = st.ClaimQueueRow(qid, "waiting", "on_course")
+	if err != nil || claimed {
+		t.Fatalf("second claim: claimed=%v err=%v, want false", claimed, err)
+	}
+	row, ok, err := st.GetQueueRow(qid)
+	if err != nil || !ok {
+		t.Fatalf("GetQueueRow: ok=%v err=%v", ok, err)
+	}
+	if row.Status != "on_course" {
+		t.Fatalf("status = %q, want on_course", row.Status)
+	}
+	// Rollback direction used by adopt-orphan's failure path.
+	claimed, err = st.ClaimQueueRow(qid, "on_course", "waiting")
+	if err != nil || !claimed {
+		t.Fatalf("rollback claim: claimed=%v err=%v, want true", claimed, err)
+	}
+}
+
 func TestQueueEnqueueReorderAndStatus(t *testing.T) {
 	st := newTestStore(t)
 	seedMinimal(t, st)

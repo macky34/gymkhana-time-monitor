@@ -253,6 +253,9 @@ func (s *Server) handleAdminLogDelete(w http.ResponseWriter, r *http.Request, ad
 	}
 
 	s.publishRanking()
+	if s.orphans.removeByLogID(id) {
+		s.publishOrphans()
+	}
 	s.audit(&admin.ID, "admin.log.delete", map[string]any{"log_id": id})
 
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -296,6 +299,9 @@ func (s *Server) handleAdminLogAssign(w http.ResponseWriter, r *http.Request, ad
 	}
 
 	s.publishRanking()
+	if s.orphans.removeByLogID(id) {
+		s.publishOrphans()
+	}
 	s.audit(&admin.ID, "admin.log.assign", map[string]any{
 		"log_id":     id,
 		"driver_id":  body.DriverID,
