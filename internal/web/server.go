@@ -165,7 +165,7 @@ func (s *Server) Routes() http.Handler {
 	// ---- Realtime stream ----
 	mux.Handle("GET /api/stream", s.Hub.Handler(func(r *http.Request) bool {
 		d, ok := s.driverFromRequest(r)
-		return ok && d.Role == "admin"
+		return ok && d.Role == "admin" && !isEmergency(d)
 	}))
 
 	// ---- Public snapshot / read APIs ----
@@ -217,11 +217,14 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("PUT /api/admin/queue/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminQueueReorder)))
 	mux.HandleFunc("DELETE /api/admin/queue/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminQueueCancel)))
 	// ---- Admin: user management (W4) ----
-	mux.HandleFunc("GET /api/admin/users", s.withAdmin(s.handleAdminUsersList))
-	mux.HandleFunc("POST /api/admin/users", s.withCSRFGuard(s.withAdmin(s.handleAdminUserCreate)))
+	// The first four routes are also the emergency-admin's entire reason to
+	// exist (see emergencyDriver / withUserAdmin), so they alone use
+	// withUserAdmin; rename and icon stay on withAdmin (emergency-denied).
+	mux.HandleFunc("GET /api/admin/users", s.withUserAdmin(s.handleAdminUsersList))
+	mux.HandleFunc("POST /api/admin/users", s.withCSRFGuard(s.withUserAdmin(s.handleAdminUserCreate)))
 	mux.HandleFunc("PUT /api/admin/users/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminUserUpdate)))
-	mux.HandleFunc("POST /api/admin/users/{id}/reissue", s.withCSRFGuard(s.withAdmin(s.handleAdminUserReissue)))
-	mux.HandleFunc("PUT /api/admin/users/{id}/role", s.withCSRFGuard(s.withAdmin(s.handleAdminUserRole)))
+	mux.HandleFunc("POST /api/admin/users/{id}/reissue", s.withCSRFGuard(s.withUserAdmin(s.handleAdminUserReissue)))
+	mux.HandleFunc("PUT /api/admin/users/{id}/role", s.withCSRFGuard(s.withUserAdmin(s.handleAdminUserRole)))
 	mux.HandleFunc("POST /api/admin/users/{id}/icon", s.withCSRFGuard(s.withAdmin(s.handleAdminUserIcon)))
 	// ---- Admin: vehicle management (W4) ----
 	mux.HandleFunc("POST /api/admin/vehicles", s.withCSRFGuard(s.withAdmin(s.handleAdminVehicleCreate)))

@@ -14,10 +14,13 @@
 {{/* nav renders the bottom/side nav bar. .Active picks which item gets the
      "on" class ("monitor"/"ranking"/"mypage"/"admin"/"archive"/"" - see
      PageData.Active in pages.go). The 運営 (admin) link is gated on
-     .IsAdmin, matching monitor/ranking/mypage/admin's existing behavior. */}}
+     .IsAdmin, matching monitor/ranking/mypage/admin's existing behavior.
+     Mypage is additionally hidden for the synthetic emergency-admin identity
+     (.IsEmergency, see PageData.IsEmergency / isEmergency in middleware.go):
+     it has no drivers row, so /mypage has nothing to render for it. */}}
 {{define "nav"}}<nav id="nav">
     {{if eq .Active "monitor"}}<a href="/" class="on">{{else}}<a href="/">{{end}}<span class="ic">⏱</span>Monitor</a>
     {{if eq .Active "ranking"}}<a href="/ranking" class="on">{{else}}<a href="/ranking">{{end}}<span class="ic">🏆</span>Ranking</a>
-    {{if eq .Active "mypage"}}<a href="/mypage" class="on">{{else}}<a href="/mypage">{{end}}<span class="ic">👤</span>Mypage</a>
+    {{if not .IsEmergency}}{{if eq .Active "mypage"}}<a href="/mypage" class="on">{{else}}<a href="/mypage">{{end}}<span class="ic">👤</span>Mypage</a>{{end}}
     {{if .IsAdmin}}{{if eq .Active "admin"}}<a href="/admin" class="on">{{else}}<a href="/admin">{{end}}<span class="ic">🛠</span>運営</a>{{end}}
   </nav>{{end}}
