@@ -192,11 +192,11 @@ func (s *Server) handleAdminLogCreate(w http.ResponseWriter, r *http.Request, ad
 }
 
 type adminLogUpdateBody struct {
-	DriverID  int64 `json:"driver_id"`
-	VehicleID int64 `json:"vehicle_id"`
-	RawMS     int   `json:"raw_ms"`
-	PTCount   int   `json:"pt_count"`
-	IsMC      bool  `json:"is_mc"`
+	DriverID  *int64 `json:"driver_id"`
+	VehicleID *int64 `json:"vehicle_id"`
+	RawMS     int    `json:"raw_ms"`
+	PTCount   int    `json:"pt_count"`
+	IsMC      bool   `json:"is_mc"`
 }
 
 // handleAdminLogUpdate implements PUT /api/admin/logs/{id}: corrects a
@@ -221,10 +221,8 @@ func (s *Server) handleAdminLogUpdate(w http.ResponseWriter, r *http.Request, ad
 		return
 	}
 
-	driverID := body.DriverID
-	vehicleID := body.VehicleID
-	l.DriverID = &driverID
-	l.VehicleID = &vehicleID
+	l.DriverID = body.DriverID
+	l.VehicleID = body.VehicleID
 	l.RawMS = body.RawMS
 	l.PTCount = body.PTCount
 	l.IsMC = body.IsMC
