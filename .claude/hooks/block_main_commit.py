@@ -17,12 +17,16 @@ cmd = (data.get("tool_input") or {}).get("command", "")
 if "git commit" not in cmd:
     sys.exit(0)
 
-# このリポジトリが対象になりうるコマンドかを判定:
-# プロジェクトディレクトリがリポジトリ内、またはコマンド文字列がリポジトリに言及。
 # Wiki (gymkhana-time-monitor.wiki) は独立リポジトリで、GitHub Wiki はデフォルト
-# ブランチしか公開されないため直コミットが正規運用 — 言及扱いから除外する。
-proj = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
+# ブランチしか公開されないため直コミットが正規運用。Wikiだけを対象にした
+# コマンド(本体リポジトリへの言及なし)はブロック対象外とする。
 cmd_sans_wiki = cmd.replace("gymkhana-time-monitor.wiki", "")
+if "gymkhana-time-monitor.wiki" in cmd and "gymkhana-time-monitor" not in cmd_sans_wiki:
+    sys.exit(0)
+
+# このリポジトリが対象になりうるコマンドかを判定:
+# プロジェクトディレクトリがリポジトリ内、またはコマンド文字列がリポジトリに言及
+proj = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
 involved = proj.startswith(REPO) or "gymkhana-time-monitor" in cmd_sans_wiki
 if not involved:
     sys.exit(0)
