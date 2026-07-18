@@ -30,6 +30,18 @@ go test ./...
 gofmt -l .   # 出力が空であること
 ```
 
+## Claude Code 自動化設定 (.claude/)
+
+このリポジトリには以下のフック・スキル・エージェントが設定されている。規約と重複するものはフックが機械的に強制するので、Claude側で意識する必要はないが、存在は把握しておくこと。
+
+- **フック** (`.claude/settings.json` + `.claude/hooks/`):
+  - `block_main_commit.py` — main への直接コミットをブロック(ブランチ運用ルールの強制)
+  - `gofmt.py` — Edit/Write された .go を自動整形
+  - `block_vendored.py` — ベンダー配布物 (`*.min.js` / `*.min.css`) の直接編集をブロック
+  - `go_verify.py` — 応答終了時、.go に変更があれば `go build` / `go vet` を検証し失敗なら差し戻す
+- **スキル**: `/release`(リリースタグ作成)、`/wiki-sync`(Wiki同期)、`/event-sim`(シミュレータE2E動作確認)、`/new-admin-api`(管理API追加チェックリスト)
+- **エージェント**: `implementer`(指示書ベースの実装)、`web-security-reviewer`(XSS・認可監査)、`concurrency-reviewer`(排他・レース監査)。internal/web や web/ を変更したら web-security-reviewer、store/sse/timing の並行性に触れたら concurrency-reviewer でのレビューを検討する。
+
 ## 補足
 
 - 外部依存は `modernc.org/sqlite` と `github.com/skip2/go-qrcode` のみ。フロントエンドはVanilla JS/CSSでビルドツール不使用、CDN不使用(`web/static/` にセルフホスト)。

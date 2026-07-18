@@ -3,20 +3,20 @@
   "configurations": [
     {
       "name": "timemon",
-      "runtimeExecutable": "C:\\Program Files\\Go\\bin\\go.exe",
+      "runtimeExecutable": "go",
       "runtimeArgs": ["run", "./cmd/timemon", "-addr", ":8080", "-db", "./dev-event.sqlite3"],
       "port": 8080
     },
     {
       "name": "timemon-dev",
-      "runtimeExecutable": "C:\\Program Files\\Go\\bin\\go.exe",
+      "runtimeExecutable": "go",
       "runtimeArgs": ["run", "./cmd/timemon", "-addr", ":18081", "-udp", ":19998", "-db", "./dev-event.sqlite3"],
       "port": 18081
     },
     {
       "name": "mockup",
-      "runtimeExecutable": "python",
-      "runtimeArgs": ["-m", "http.server", "8931", "--directory", "plan"],
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8931", "--directory", "docs"],
       "port": 8931
     }
   ]
