@@ -104,7 +104,7 @@
       <ul class="plist">
         <li><div class="avatar" id="my-avatar">?</div>
           <div><b style="font-size:14px" id="my-name"></b><br><span style="font-size:10.5px;color:var(--mut)" id="my-class"></span></div>
-          <span class="ml"><button type="button" class="btn" id="btn-edit">編集</button><button type="button" class="btn" id="btn-qr">ログインQR</button></span></li>
+          <span class="ml"><button type="button" class="btn" id="btn-edit">編集</button><button type="button" class="btn" id="btn-qr">ログインQR</button><button type="button" class="btn" id="btn-logout">ログアウト</button></span></li>
       </ul>
     </div>
     <div class="sec">QUEUE — 出走キュー</div>
@@ -748,6 +748,13 @@ async function init(){
     document.getElementById('qrmodal').classList.add('on');
   });
   bindCopyable(document.getElementById('my-url'));
+  document.getElementById('btn-logout').addEventListener('click', async () => {
+    if (!confirm('ログアウトしますか?\n再ログインにはログインURL (QRコード) が必要です。')) return;
+    try {
+      await api('POST', '/api/logout');
+      location.reload();
+    } catch (err) { toast(err.message || 'ログアウトに失敗しました'); }
+  });
   document.getElementById('veh-add-btn').addEventListener('click', openVehModal);
   document.getElementById('vm-submit').addEventListener('click', vmSubmit);
   document.querySelectorAll('#vm-mode button').forEach(b => b.addEventListener('click', () => {
