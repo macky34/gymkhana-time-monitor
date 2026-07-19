@@ -20,6 +20,9 @@
            grid-template-areas:"header header" "nav main"}
     .avatar{width:46px;height:46px;font-size:18px}
     .avatar.sm{width:30px;height:30px;font-size:12px}
+    /* 出走タブ・設定タブは横に広い1カラムの方が扱いやすいため、共有の
+       .grid2 (2カラム) を無効化してこのページだけ縦積みに戻す。 */
+    .grid2{display:block}
   }
   /* ---- admin-specific ---- */
   .atabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin:-12px -12px 12px}
@@ -28,12 +31,10 @@
   .atabs button.on{color:var(--tx);border-bottom-color:var(--amber);font-weight:600}
   .apane{display:none}
   .apane.on{display:block}
-  .modebar{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-  .modebar .lb{font-size:10.5px;color:var(--mut);flex:none}
   /* queue-add filter-style rows (shared visual language with ranking filter) */
   .frow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
   .frow .ax{font-size:10px;color:var(--dim);width:64px;flex:none;letter-spacing:.03em}
-  .fsel{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);
+  .fsel{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);
         padding:8px 9px;font-size:12.5px;font-family:inherit}
   .fsel.on{border-color:var(--go);color:var(--go)}
   .seg{display:flex;gap:6px}
@@ -50,15 +51,37 @@
   .gobtn:active{transform:scale(.99)}
   .gobtn:disabled{filter:grayscale(.7);opacity:.6}
   .gobtn.manual{background:linear-gradient(160deg,#ffc23d,#e69a12);color:#241a03}
-  .gobtn.goal{background:linear-gradient(160deg,#4a90e2,#2f6cb8);color:#0a1420;font-size:17px;padding:16px 12px 18px}
+  .gobtn.goal{background:linear-gradient(160deg,#4a90e2,#2f6cb8);color:#0a1420;font-size:17px;padding:16px 12px 18px;margin-top:8px}
+  .gobtn-target{font-size:12.5px;font-weight:600;opacity:.85;margin-top:2px;letter-spacing:0}
+  /* 手計測モードで gobtn(スタート)+goalbtn(ゴール) が両方表示されるとき、
+     スマホは縦積み(goalbtn の margin-top:8px)のまま、PCは横に十分な余白が
+     あるので横並びにする。 */
+  @media(min-width:900px){
+    .startgoal-row{display:flex;gap:10px;align-items:stretch}
+    .startgoal-row .gobtn{width:auto;flex:1;margin-top:0}
+  }
+  /* センサーモードの予備操作 (手動スタート/ゴール打刻) — gobtn より低い中型ボタンを横並びに */
+  .fbrow{display:flex;gap:8px;margin-top:8px}
+  .fbbtn{flex:1;border:1px solid var(--line);border-radius:11px;background:var(--panel2);color:var(--mut);
+         font-size:12.5px;font-weight:600;padding:11px 8px;cursor:pointer;font-family:inherit}
+  .fbbtn:disabled{filter:grayscale(.7);opacity:.5;cursor:default}
+  /* tm sits after .nm in DOM order (not first) so .nm's flex:1 fills all
+     space up to it, pushing the clock to the row's right edge - same effect
+     as monitor.html's .clk{margin-left:auto} but without needing an extra
+     wrapper. .armed .acts breaks onto its own full-width line below (no
+     buttons make sense sharing a line with "センサー待ち" yet). */
   .oc-admin{padding:11px 12px;margin-top:9px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-  .oc-admin .tm{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:19px;font-weight:700;color:var(--go)}
+  .oc-admin .tm{flex:none;font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:19px;font-weight:700;color:var(--go)}
   .oc-admin.armed .tm{color:var(--dim);font-size:14px}
   .oc-admin.over .tm{color:var(--red);animation:pulse 1s infinite}
   .oc-admin.flash .tm{color:var(--amber)}
-  .oc-admin .nm{font-size:13px;font-weight:600}
-  .oc-admin .nm span{display:block;font-size:10px;color:var(--mut);font-weight:400}
+  .oc-admin .nm{min-width:0;flex:1;font-size:13px;font-weight:600}
+  /* direct-child + :last-child: both name and meta lines are wrapped in a
+     marq() span now, so a bare descendant `span` selector would also match
+     the marquee's own inner measuring span nested inside the name line. */
+  .oc-admin .nm > span:last-child{font-size:10px;color:var(--mut);font-weight:400}
   .oc-admin .acts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .oc-admin.armed .acts{flex:0 0 100%;margin-left:0}
   .empty-course{border:1px dashed var(--line);border-radius:14px;padding:18px;text-align:center;color:var(--dim);font-size:12px;margin-top:9px}
   .mini{font-size:10.5px;padding:6px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);
         color:var(--mut);cursor:pointer;font-family:inherit;white-space:nowrap}
@@ -78,17 +101,40 @@
   .q .pos{font-family:var(--mono);color:var(--dim);font-size:11px;width:18px;flex:none}
   .q .nm{min-width:0}
   .q .nm b{font-weight:600;display:block}
-  .q .nm span{font-size:10px;color:var(--mut)}
+  /* direct-child: the meta text is a marq() span wrapping nested spans; a
+     bare descendant `span` selector would also match the marquee's own inner
+     measuring span nested inside <b> for the name line. */
+  .q .nm > span{font-size:10px;color:var(--mut)}
   .q .acts{margin-left:auto;display:flex;gap:5px}
-  .lg{width:100%;border-collapse:collapse;font-size:11.5px}
-  .lg th{font-size:9px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);letter-spacing:.08em}
-  .lg td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
-  .lg .tm{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
-  .lg .src{font-size:12px}
-  .lg .acts{display:flex;gap:4px;flex-wrap:wrap}
-  .lg tr.lg-data td{border-bottom:none;padding-bottom:4px}
-  .lg tr.lg-acts td{padding-top:0}
-  .lg tr.deleted td{opacity:.4}
+  /* ログタブ: monitor.html の直近リザルト風 flex リスト (旧 <table class="lg"> から移行) */
+  .loglist{list-style:none}
+  .loglist li{display:flex;align-items:center;gap:8px;padding:9px 6px;border-bottom:1px solid var(--line);font-size:11.5px}
+  .loglist li:last-child{border:none}
+  .loglist li.deleted{opacity:.4}
+  .lg-id{font-family:var(--mono);color:var(--dim);font-size:10.5px;flex:none;width:20px}
+  /* content = row1 (name/vehicle + time) stacked above acts on mobile, a
+     single flex item spanning every line so li's align-items:center can
+     center #id/avstack against the full height including the button row. */
+  .lg-content{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+  .lg-row1{flex:1;min-width:0;display:flex;align-items:flex-start;gap:8px}
+  .lg-mid{min-width:0;flex:1}
+  .lg-mid b{font-weight:600;display:block}
+  .lg-meta{display:block;font-size:9.5px;color:var(--mut)}
+  .lg-rgt{flex:none;display:flex;align-items:center;gap:4px}
+  .lg-time{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
+  .lg-time .lg-pt{display:block;font-size:9px;color:var(--amber);font-weight:400}
+  .lg-src{flex:none;width:18px;text-align:center;font-size:12px}
+  .lg-acts{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+  @media(min-width:900px){
+    .lg-content{flex-direction:row;align-items:center}
+    .lg-acts{margin-left:8px}
+    /* センサー待ちカードのボタン折り返し(.armed .acts の flex-basis:100%、
+       上の .oc-admin.armed .acts で定義)はスマホ幅で詰まるのを避けるための
+       もの。PCは横幅に余裕があるので通常の他状態と同じくタイムと同じ行に
+       収める。この .oc-admin.armed .acts と同一詳細度(0,3,0)のルールなので、
+       ソース順で後にある必要がある(この@mediaブロックは基本ルールより後)。 */
+    .oc-admin.armed .acts{flex:none;margin-left:auto}
+  }
   .orphan{background:#2e2415;border:1px solid #5c4a1e;border-radius:10px;padding:10px 12px;margin-bottom:12px;font-size:11.5px}
   .orphan b{color:var(--amber);font-size:12px}
   .orphan p{color:var(--mut);margin:3px 0 8px}
@@ -109,6 +155,12 @@
        padding:6px 8px;font-size:12px;font-family:var(--mono);width:90px;text-align:right}
   .setrow select{font-family:inherit;text-align:left;width:auto}
   .setrow input.wide{width:170px;font-family:inherit;text-align:left}
+  /* setrow .ml doesn't stretch its children, so #modeseg otherwise shrinks
+     to its buttons' min-content width - give it a fixed width (sized for
+     the longer of the two labels, "センサー") + nowrap so both buttons render
+     at equal width on one line instead of wrapping/cramping. */
+  #modeseg{width:190px;flex:none}
+  #modeseg button{white-space:nowrap}
   .sensor{display:flex;gap:8px}
   .sensor .s{flex:1;padding:11px 12px}
   .sensor .s .id{font-size:10px;color:var(--mut);letter-spacing:.1em}
@@ -174,21 +226,21 @@
     <div class="apane{{if not .IsEmergency}} on{{end}}" id="a-run">
       <div class="grid2">
         <div>
-          <div class="modebar">
-            <span class="lb">計測モード</span>
-            <div class="seg warn" id="modeseg" style="flex:1">
-              <button type="button" data-m="sensor">センサー</button><button type="button" data-m="manual">手計測</button>
-            </div>
+          <div class="startgoal-row">
+            <button type="button" class="gobtn" id="gobtn"><span class="fill"></span><span id="go-label"></span><span class="marq gobtn-target"><span id="go-target"></span></span><small id="go-hint"></small></button>
+            <button type="button" class="gobtn goal" id="goalbtn" style="display:none"><span id="goal-label"></span><span class="marq gobtn-target"><span id="goal-target"></span></span><small>タップの瞬間がゴール打刻 (走行中の先頭車)</small></button>
           </div>
-          <button type="button" class="gobtn" id="gobtn"><span class="fill"></span><span id="go-label"></span><small id="go-hint"></small></button>
-          <button type="button" class="gobtn goal" id="goalbtn" style="display:none;margin-top:8px"><span id="goal-label"></span><small>タップの瞬間がゴール打刻 (走行中の先頭車)</small></button>
+          <div class="fbrow" id="fallback-row" style="display:none">
+            <button type="button" class="fbbtn" id="fallback-start">⏱ 手動スタート打刻</button>
+            <button type="button" class="fbbtn" id="fallback-goal">🏁 手動ゴール打刻</button>
+          </div>
           <div class="sec">ON COURSE</div>
           <div id="adm-course"></div>
         </div>
         <div>
-          <div class="sec" style="margin-top:0">WAITING — 出走キュー (ドラッグで並替)</div>
+          <div class="sec" style="margin-top:0">WAITING — 出走待ち列 (ドラッグで並替)</div>
           <div class="card"><ul class="q" id="adm-q"></ul></div>
-          <div class="sec">キューに追加</div>
+          <div class="sec">出走待ち列に追加</div>
           <div class="card" style="padding:12px">
             <div class="frow"><span class="ax">ドライバー</span>
               <select class="fsel" id="qa-driver"><option value="">ドライバーを選択…</option></select></div>
@@ -207,10 +259,7 @@
         <div id="orphan-items"></div>
       </div>
       <div class="card" style="padding:4px 8px">
-        <table class="lg">
-          <thead><tr><th>#</th><th>走者</th><th>TIME</th><th>SRC</th></tr></thead>
-          <tbody id="log-body"></tbody>
-        </table>
+        <ul class="loglist" id="log-body"></ul>
       </div>
       <div style="display:flex;gap:8px;margin-top:10px;align-items:center">
         <button type="button" class="btn" id="log-prev">← 前</button>
@@ -250,17 +299,20 @@
             <button type="button" class="btn" id="csv-combination">CSV: ドライバー・車両別</button>
             <button type="button" class="btn" id="csv-logs">CSV: 全ログ</button>
           </div>
-          <button type="button" class="btn danger" style="width:100%;margin-top:14px" id="btn-reg-toggle">🔒 参加受付を終了する</button>
         </div>
         <div>
           <div class="sec">EVENT MANAGEMENT</div>
           <div class="card" id="evt-mgmt-card"></div>
+          <button type="button" class="btn danger" style="width:100%;margin-top:10px" id="btn-reg-toggle">🔒 参加受付を終了する</button>
           <div class="sec">EVENT SETTINGS</div>
           <div class="card" id="evt-settings-card">
+            <div class="setrow">計測モード <span class="ml"><div class="seg warn" id="modeseg">
+              <button type="button" data-m="sensor">センサー</button><button type="button" data-m="manual">手計測</button>
+            </div></span></div>
             <div class="setrow">イベント名 <span class="ml"><input class="wide" id="set-event-name"></span></div>
-            <div class="setrow">PTペナルティ <span class="ml"><select id="set-pt-mode"><option value="add">加算</option><option value="invalidate">無効</option></select> <input id="set-pt-sec"> 秒</span></div>
+            <div class="setrow" title="PT=パイロンタッチ">PTペナルティ <span class="ml"><select id="set-pt-mode"><option value="add">加算</option><option value="invalidate">無効</option></select> <input id="set-pt-sec"> 秒</span></div>
             <div class="setrow">参加登録 <span class="ml"><select id="set-reg-mode"><option value="public">公開</option><option value="staff">運営のみ</option></select></span></div>
-            <div class="setrow">キュー自己投入 <span class="ml"><select id="set-self-entry"><option value="1">許可</option><option value="0">運営のみ</option></select></span></div>
+            <div class="setrow">出走待ち列 自己投入 <span class="ml"><select id="set-self-entry"><option value="1">許可</option><option value="0">運営のみ</option></select></span></div>
             <div class="setrow">ヒートランキング <span class="ml"><select id="set-heat-ranking"><option value="0">なし(自由走行)</option><option value="1">あり</option></select></span></div>
             <div class="setrow">コースタイム上限 <span class="ml"><input id="set-max-time"> 秒</span></div>
             <div class="setrow">センサーロックアウト <span class="ml"><input id="set-lockout"> ms</span></div>
@@ -297,7 +349,7 @@
       <div class="fld"><label>車両</label><select id="lm-vehicle"></select></div>
       <div class="fldrow">
         <div class="fld"><label>タイム (m:ss.mmm)</label><input class="t" id="lm-raw" placeholder="1:23.456"></div>
-        <div class="fld sm"><label>PT回数</label><input class="t" id="lm-pt" style="text-align:center" inputmode="numeric"></div>
+        <div class="fld sm"><label title="PT=パイロンタッチ">PT回数</label><input class="t" id="lm-pt" style="text-align:center" inputmode="numeric"></div>
       </div>
       <div class="fld"><label>ミスコース</label>
         <div class="seg" id="lm-mc"><button type="button" class="on" data-v="0">通常</button><button type="button" data-v="1">MC</button></div>
@@ -559,6 +611,7 @@ function renderModeUI(){
   document.querySelectorAll('#modeseg button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
   document.getElementById('gobtn').classList.toggle('manual', m === 'manual');
   document.getElementById('goalbtn').style.display = (m === 'manual') ? 'block' : 'none';
+  document.getElementById('fallback-row').style.display = (m === 'manual') ? 'none' : 'flex';
   renderGoButtons();
 }
 
@@ -566,15 +619,25 @@ function renderGoButtons(){
   const gb = document.getElementById('gobtn');
   const m = mode();
   const next = waitingQueue[0];
-  const nx = next ? `${next.driver.name}(＃${next.vehicle.number})` : 'キュー空';
-  document.getElementById('go-label').textContent = (m === 'manual' ? 'スタート ⏱ ' : '出走 ▶ ') + nx;
+  const nx = next ? `${next.driver.name}(＃${next.vehicle.number})` : '出走待ち列空';
+  document.getElementById('go-label').textContent = m === 'manual' ? 'スタート ⏱' : '出走 ▶';
+  document.getElementById('go-target').textContent = nx;
   document.getElementById('go-hint').textContent = m === 'manual'
     ? 'タップの瞬間が計測開始 (手計測)' : '長押し0.5秒で投入 / タイムはセンサー打刻';
   gb.disabled = !waitingQueue.length;
   const running = onCourseCars.filter(c => c.t_start_us && !c.finish);
   const gbt = document.getElementById('goalbtn');
   gbt.disabled = !running.length;
-  document.getElementById('goal-label').textContent = 'ゴール 🏁 ' + (running.length ? running[0].driver.name : '走行中なし');
+  document.getElementById('goal-label').textContent = 'ゴール 🏁';
+  document.getElementById('goal-target').textContent = running.length
+    ? `${running[0].driver.name}(＃${running[0].vehicle.number} ${running[0].vehicle.name})` : '走行中なし';
+  const armed = onCourseCars.filter(c => !c.t_start_us);
+  const fbStart = document.getElementById('fallback-start');
+  if (fbStart) fbStart.disabled = !armed.length;
+  const fbGoal = document.getElementById('fallback-goal');
+  if (fbGoal) fbGoal.disabled = !running.length;
+  startMarquees(gb);
+  startMarquees(gbt);
 }
 
 /* on_course admin cards — rebuilt only when the data changes (SSE). The
@@ -596,13 +659,13 @@ function renderCourse(){
       b.addEventListener('click', fn);
       return b;
     };
-    const assignBtn = mini('キュー先頭を割当', '', () => courseAdoptOrphan(run));
+    const assignBtn = mini('出走待ち列先頭を割当', '', () => courseAdoptOrphan(run));
     assignBtn.disabled = !waitingQueue.length;
     const tm = h('div', { class: 'tm' }, fmt1(nowMs() - run.t_start_us / 1000));
     const card = h('div', { class: 'card oc-admin armed' },
-      tm,
       h('div', { class: 'nm' }, '⚠ 未割当走行中',
         h('span', {}, `スタート ${hhmmss(run.at_ms)}`)),
+      tm,
       h('div', { class: 'acts' }, assignBtn, mini('削除', 'red', () => courseDiscardOrphan(run)))
     );
     courseClocks.push({ c: { t_start_us: run.t_start_us }, tm, card });
@@ -614,8 +677,10 @@ function renderCourse(){
     const flash = !!c.finish;
     const el = armed ? 0 : (nowMs() - c.t_start_us / 1000);
     const over = !armed && !flash && el > maxCourseMs();
-    const mini = (label, cls, fn) => {
-      const b = h('button', { type: 'button', class: 'mini' + (cls ? ' ' + cls : '') }, label);
+    const mini = (label, cls, fn, title) => {
+      const attrs = { type: 'button', class: 'mini' + (cls ? ' ' + cls : '') };
+      if (title) attrs.title = title;
+      const b = h('button', attrs, label);
       b.addEventListener('click', fn);
       return b;
     };
@@ -624,35 +689,38 @@ function renderCourse(){
     // duplicate per-card button here would be redundant.
     const acts = [];
     if (flash){
-      acts.push(mini('PT+', '', () => coursePT(c, 1)));
-      acts.push(mini('PT−', '', () => coursePT(c, -1)));
+      acts.push(mini('PT+', '', () => coursePT(c, 1), 'PT=パイロンタッチ加算'));
+      acts.push(mini('PT−', '', () => coursePT(c, -1), 'PT=パイロンタッチ取消'));
       acts.push(mini('ゴール取消', 'undo', () => courseUndoGoal(c)));
     } else if (armed){
-      acts.push(mini('ミスコース', c.mc_flag ? 'on' : '', () => courseMC(c)));
-      acts.push(mini('スタート取消', 'undo', () => courseUndoStartConfirm(c)));
+      // スタート前(センサー待ち)はまだ走行が始まっていないのでMC予約は不要。
+      // まだ何も打刻されていないので「取り消す」対象はスタートではなく
+      // 出走(投入)そのもの — ラベルも動作(出走待ち列先頭へ戻す)もそれに合わせる。
+      acts.push(mini('出走取消', 'undo', () => courseUndoStartConfirm(c)));
       acts.push(mini('走行中止', 'red', () => courseDNF(c)));
     } else {
-      acts.push(mini('PT+', '', () => coursePT(c, 1)));
-      acts.push(mini('PT−', '', () => coursePT(c, -1)));
-      acts.push(mini('ミスコース', c.mc_flag ? 'on' : '', () => courseMC(c)));
+      acts.push(mini('PT+', '', () => coursePT(c, 1), 'PT=パイロンタッチ加算'));
+      acts.push(mini('PT−', '', () => coursePT(c, -1), 'PT=パイロンタッチ取消'));
+      acts.push(mini('MC', c.mc_flag ? 'on' : '', () => courseMC(c), 'MC=ミスコース'));
       acts.push(mini('スタート取消', 'undo', () => courseUndoStartConfirm(c)));
       acts.push(mini('走行中止', 'red', () => courseDNF(c)));
     }
     const tm = h('div', { class: 'tm' }, armed ? 'センサー待ち' : (flash ? fmt3(c.finish.fin_ms) : fmt1(el)));
-    const av = h('div', { class: 'avatar sm' });
+    const av = h('div', { class: 'avatar' });
     avatarInto(av, c.driver.id, c.driver.name, !!c.driver.has_icon);
-    const vav = h('div', { class: 'avatar sm' });
+    const vav = h('div', { class: 'avatar' });
     vehicleAvatarInto(vav, c.vehicle.id, c.vehicle.name, !!c.vehicle.has_icon);
     const card = h('div', { class: 'card oc-admin' + (over ? ' over' : '') + (armed ? ' armed' : '') + (flash ? ' flash' : '') },
+      h('div', { class: 'avstack' }, av, vav),
+      h('div', { class: 'nm' }, marq(c.driver.name),
+        marq(`＃${c.vehicle.number} ${c.vehicle.name}` + (c.pt_count ? ` ・PT${c.pt_count}` : '') + (c.mc_flag ? ' ・MC' : ''))),
       tm,
-      h('div', { class: 'avpair' }, av, vav),
-      h('div', { class: 'nm' }, c.driver.name,
-        h('span', {}, `＃${c.vehicle.number} ${c.vehicle.name}` + (c.pt_count ? ` ・PT${c.pt_count}` : '') + (c.mc_flag ? ' ・MC' : ''))),
       h('div', { class: 'acts' }, acts)
     );
     if (!armed && !flash) courseClocks.push({ c, tm, card });
     admC.appendChild(card);
   });
+  startMarquees(admC);
 }
 
 /* in-place 10Hz clock refresh — never touches card structure or buttons */
@@ -684,13 +752,23 @@ async function courseUndoGoal(c){
   } catch (err) { toast(err.message); }
 }
 async function courseUndoStart(c){
+  const armed = !c.t_start_us;
+  const label = armed ? '出走取消' : 'スタート取消';
+  const dest = armed ? '出走待ち列先頭' : (mode() === 'sensor' ? 'センサー待ち' : '出走待ち列先頭');
   try {
     await api('POST', `/api/admin/course/${c.queue_id}/undo-start`, {});
-    toast(`↩ ${c.driver.name} スタート取消 → キュー先頭`);
+    toast(`↩ ${c.driver.name} ${label} → ${dest}`);
   } catch (err) { toast(err.message); }
 }
 function courseUndoStartConfirm(c){
-  if (!confirm(`${c.driver.name} のスタートを取り消しますか?\n(キュー先頭に戻ります)`)) return;
+  const armed = !c.t_start_us;
+  // armed(センサー待ち)はまだ何も打刻されていないので、取り消せば必ず
+  // 出走待ち列先頭へ戻る。走行中(RUNNING)の取消はモードにより挙動が異なる
+  // (センサーモードはその場でセンサー待ちに再アーム、手計測は出走待ち列先頭)。
+  const back = armed ? '出走待ち列先頭に戻ります'
+    : (mode() === 'sensor' ? 'センサー待ちに戻ります(コース上に残ります)' : '出走待ち列先頭に戻ります');
+  const verb = armed ? '出走' : 'スタート';
+  if (!confirm(`${c.driver.name} の${verb}を取り消しますか?\n(${back})`)) return;
   courseUndoStart(c);
 }
 async function courseDNF(c){
@@ -705,7 +783,7 @@ async function courseDNF(c){
 async function courseAdoptOrphan(run){
   const next = waitingQueue[0];
   if (!next) return;
-  if (!confirm(`キュー先頭の ${next.driver.name}(＃${next.vehicle.number}) をこの走行に割り当てますか?`)) return;
+  if (!confirm(`出走待ち列先頭の ${next.driver.name}(＃${next.vehicle.number}) をこの走行に割り当てますか?`)) return;
   try {
     await api('POST', '/api/admin/course/adopt-orphan', { orphan_id: run.orphan_id });
     toast('割り当てました');
@@ -735,25 +813,26 @@ function renderQueue(){
     const grip = h('span', { class: 'grip', title: 'ドラッグで並替' }, '≡');
     const cancel = h('button', { type: 'button', class: 'mini red' }, '出走中止');
     cancel.addEventListener('click', async () => {
-      if (!confirm(`${q.driver.name} をキューから外しますか?`)) return;
+      if (!confirm(`${q.driver.name} を出走待ち列から外しますか?`)) return;
       try { await api('DELETE', '/api/admin/queue/' + q.queue_id); toast(`${q.driver.name} 出走中止`); }
       catch (err) { toast(err.message); }
     });
     const acts = h('div', { class: 'acts' }, cancel);
-    const av = h('div', { class: 'avatar sm' });
+    const av = h('div', { class: 'avatar' });
     avatarInto(av, q.driver.id, q.driver.name, !!q.driver.has_icon);
-    const vav = h('div', { class: 'avatar sm' });
+    const vav = h('div', { class: 'avatar' });
     vehicleAvatarInto(vav, q.vehicle.id, q.vehicle.name, !!q.vehicle.has_icon);
     const li = h('li', { 'data-qid': String(q.queue_id) },
       grip,
       h('span', { class: 'pos t' }, String(i + 1)),
-      h('div', { class: 'avpair' }, av, vav),
-      h('div', { class: 'nm' }, h('b', {}, q.driver.name), h('span', {}, `＃${q.vehicle.number} ${q.vehicle.name}`)),
+      h('div', { class: 'avstack' }, av, vav),
+      h('div', { class: 'nm' }, h('b', {}, marq(q.driver.name)), h('span', {}, marq(`＃${q.vehicle.number} ${q.vehicle.name}`))),
       acts
     );
     qEl.appendChild(li);
   });
   renderGoButtons();
+  startMarquees(qEl);
 }
 // SortableJS init (called once from init()): drag is restricted to the .grip
 // handle, with a short delay so it coexists with touch-scrolling the list.
@@ -933,17 +1012,14 @@ function bindGoButtons(){
   });
   ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
     gb.addEventListener(ev, () => { clearTimeout(hold); gb.classList.remove('holding'); }));
-  document.getElementById('goalbtn').addEventListener('click', async () => {
-    try {
-      await api('POST', '/api/admin/course/finish', clientMsBody());
-      const running = onCourseCars.filter(c => c.t_start_us && !c.finish);
-      toast('🏁 ゴール打刻' + (running.length ? ` (${running[0].driver.name})` : ''));
-    } catch (err) { toast(err.message); }
-  });
+  document.getElementById('goalbtn').addEventListener('click', doFinish);
+  document.getElementById('fallback-goal').addEventListener('click', doFinish);
+  document.getElementById('fallback-start').addEventListener('click', doManualStart);
   document.querySelectorAll('#modeseg button').forEach(b => b.addEventListener('click', async () => {
     if (!S) return;
     const m = b.dataset.m;
     if (m === S.timing_mode) return;
+    if (!confirm('計測モードを「' + (m === 'manual' ? '手計測' : 'センサー') + '」に変更しますか?')) return;
     try {
       S.timing_mode = m;
       await api('PUT', '/api/admin/settings', S);
@@ -959,7 +1035,7 @@ function bindGoButtons(){
     if (!d || !v){ toast('ドライバーと車両を選択してください'); return; }
     try {
       await api('POST', '/api/admin/queue', { driver_id: Number(d), vehicle_id: Number(v) });
-      toast('キューに追加しました');
+      toast('出走待ち列に追加しました');
       document.getElementById('qa-driver').value = '';
       document.getElementById('qa-vehicle').value = '';
       renderQueueAddForm();
@@ -975,85 +1051,104 @@ async function doLaunch(){
       : `▶ ${next ? next.driver.name : ''} 投入 (センサー待ち)`);
   } catch (err) { toast(err.message); }
 }
+// センサーモードの予備ボタン: 手動スタート打刻 (最古のセンサー待ち車に打刻)
+async function doManualStart(){
+  try {
+    await api('POST', '/api/admin/course/start', clientMsBody());
+    const armed = onCourseCars.find(c => !c.t_start_us);
+    toast('⏱ 手動スタート打刻' + (armed ? ` (${armed.driver.name})` : ''));
+  } catch (err) { toast(err.message); }
+}
+// ゴール打刻 (走行中の先頭車を完走させる) — goalbtn (手計測) / fallback-goal (センサー予備) 共用
+async function doFinish(){
+  try {
+    await api('POST', '/api/admin/course/finish', clientMsBody());
+    const running = onCourseCars.filter(c => c.t_start_us && !c.finish);
+    toast('🏁 ゴール打刻' + (running.length ? ` (${running[0].driver.name})` : ''));
+  } catch (err) { toast(err.message); }
+}
 
 /* ============================================================
    ログタブ
    ============================================================ */
 function logDriverName(l){ return l.driver ? l.driver.name : null; }
 function renderLogs(){
-  const tb = document.getElementById('log-body');
-  clear(tb);
+  const list = document.getElementById('log-body');
+  clear(list);
   if (!logsData.logs.length){
-    tb.appendChild(h('tr', {}, h('td', { colspan: '4', style: 'text-align:center;color:var(--dim);padding:14px' }, 'ログなし')));
+    list.appendChild(h('li', { style: 'justify-content:center;color:var(--dim);padding:14px' }, 'ログなし'));
   }
   logsData.logs.forEach(l => {
     const deleted = !!l.is_deleted;
     const invalidView = l.is_mc; /* display-only strike-through for MC */
-    const who = h('td', {});
+    const stack = h('div', { class: 'avstack' });
+    const mid = h('div', { class: 'lg-mid' });
     if (l.driver){
-      const av = h('span', { class: 'avatar xs' });
+      const av = h('div', { class: 'avatar' });
       avatarInto(av, l.driver.id, l.driver.name, !!l.driver.has_icon);
+      stack.appendChild(av);
       if (l.vehicle){
-        const vav = h('span', { class: 'avatar xs' });
+        const vav = h('div', { class: 'avatar' });
         vehicleAvatarInto(vav, l.vehicle.id, l.vehicle.name, !!l.vehicle.has_icon);
-        who.appendChild(h('span', { class: 'iconpair' }, av, vav));
-      } else {
-        who.appendChild(av);
+        stack.appendChild(vav);
       }
-      who.appendChild(h('b', {}, l.driver.name));
+      mid.appendChild(h('b', {}, marq(l.driver.name)));
       const meta = [];
-      if (l.vehicle) meta.push(`＃${l.vehicle.number}`);
+      if (l.vehicle) meta.push(`＃${l.vehicle.number} ${l.vehicle.name}`);
       if (l.heat !== null && l.heat !== undefined) meta.push('H' + l.heat);
       let metaText = meta.join(' / ');
       if (l.edited_at) metaText += (metaText ? ' ・ ' : '') + '編集済 ' + hhmm(l.edited_at);
       if (deleted) metaText += (metaText ? ' ・ ' : '') + '削除済';
-      who.appendChild(h('br'));
-      who.appendChild(h('span', { style: 'font-size:9.5px;color:var(--mut)' }, metaText));
+      mid.appendChild(h('span', { class: 'lg-meta' }, marq(metaText)));
     } else {
-      who.appendChild(h('b', { style: 'color:var(--amber)' }, '未割当'));
-      who.appendChild(h('br'));
-      who.appendChild(h('span', { style: 'font-size:9.5px;color:var(--mut)' }, hhmmss(l.timestamp_ms) + (deleted ? ' ・ 削除済' : '')));
+      mid.appendChild(h('b', { style: 'color:var(--amber)' }, '未割当'));
+      mid.appendChild(h('span', { class: 'lg-meta' }, hhmmss(l.timestamp_ms) + (deleted ? ' ・ 削除済' : '')));
     }
     let acts = null;
     if (!deleted){
-      acts = h('div', { class: 'acts' });
-      const mini = (label, cls, fn) => {
-        const b = h('button', { type: 'button', class: 'mini' + (cls ? ' ' + cls : '') }, label);
+      acts = h('div', { class: 'lg-acts' });
+      const mini = (label, cls, fn, title) => {
+        const attrs = { type: 'button', class: 'mini' + (cls ? ' ' + cls : '') };
+        if (title) attrs.title = title;
+        const b = h('button', attrs, label);
         b.addEventListener('click', fn);
         return b;
       };
       if (l.driver){
-        acts.appendChild(mini('PT+', '', () => logPT(l, 1)));
-        acts.appendChild(mini('PT−', '', () => logPT(l, -1)));
-        acts.appendChild(mini('MC', l.is_mc ? 'on' : '', () => logMC(l)));
+        acts.appendChild(mini('PT+', '', () => logPT(l, 1), 'PT=パイロンタッチ加算'));
+        acts.appendChild(mini('PT−', '', () => logPT(l, -1), 'PT=パイロンタッチ取消'));
+        acts.appendChild(mini('MC', l.is_mc ? 'on' : '', () => logMC(l), 'MC=ミスコース'));
         acts.appendChild(mini('編集', '', () => openLogEdit(l)));
       } else {
         acts.appendChild(mini('走者を割り当てる', '', () => openAssign(l)));
       }
       acts.appendChild(mini('削除', 'red', () => logDelete(l)));
     }
-    const tmCell = h('td', { class: 'tm', style: invalidView && !deleted ? 'color:var(--dim);text-decoration:line-through' : '' }, fmt3(l.raw_ms));
+    const timeBlock = h('div', { class: 'lg-time' }, fmt3(l.raw_ms));
+    if (invalidView && !deleted) timeBlock.setAttribute('style', 'color:var(--dim);text-decoration:line-through');
     if (l.pt_count && !l.is_mc && S && S.pt_mode === 'add'){
-      tmCell.appendChild(h('br'));
-      tmCell.appendChild(h('span', { style: 'font-size:9px;color:var(--amber);text-decoration:none' },
+      timeBlock.appendChild(h('span', { class: 'lg-pt', title: 'PT=パイロンタッチ' },
         `PT${l.pt_count} +${fmt3(l.pt_count * (S.pt_penalty_ms || 0)).replace(/^0:/, '')}`));
     } else if (l.pt_count){
-      tmCell.appendChild(h('br'));
-      tmCell.appendChild(h('span', { style: 'font-size:9px;color:var(--amber)' }, `PT${l.pt_count}`));
+      timeBlock.appendChild(h('span', { class: 'lg-pt', title: 'PT=パイロンタッチ' }, `PT${l.pt_count}`));
     }
-    /* row 1: id / avatar+name+meta / time / src icon */
-    const dataRow = h('tr', { class: (deleted ? 'deleted ' : '') + (acts ? 'lg-data' : '') });
-    dataRow.appendChild(h('td', { class: 't', style: 'color:var(--dim)' }, String(l.id)));
-    dataRow.appendChild(who);
-    dataRow.appendChild(tmCell);
-    dataRow.appendChild(h('td', { class: 'src', title: l.source === 'manual' ? '手計測' : 'センサー計測' }, l.source === 'manual' ? '✍️' : '📡'));
-    tb.appendChild(dataRow);
-    /* row 2: action buttons, full width */
-    if (acts){
-      const actRow = h('tr', { class: 'lg-acts' }, h('td', { colspan: '4' }, acts));
-      tb.appendChild(actRow);
-    }
+    const srcSpan = h('span', { class: 'lg-src', title: l.source === 'manual' ? '手計測' : 'センサー計測' }, l.source === 'manual' ? '✍️' : '📡');
+    const rgt = h('div', { class: 'lg-rgt' }, timeBlock, srcSpan);
+    const idSpan = h('span', { class: 'lg-id t' }, String(l.id));
+    /* row1 = name/vehicle block + time, top-aligned so the name's first
+       line lines up with the time (not centered against each other's
+       possibly-different line counts). content stacks row1 above acts on
+       mobile (column) and lays them out side by side on desktop (row, see
+       @media 900px) - either way id/avstack center against content's full
+       height via the li's own align-items:center, since content is a single
+       flex item spanning every line including the button row. */
+    const row1 = h('div', { class: 'lg-row1' }, mid, rgt);
+    const content = h('div', { class: 'lg-content' }, row1);
+    if (acts) content.appendChild(acts);
+    const li = h('li', { class: deleted ? 'deleted' : '' }, idSpan, stack, content);
+    list.appendChild(li);
   });
+  startMarquees(list);
   /* pagination */
   const shown = logsData.logs.length;
   const pageSize = Math.max(shown, 1);
@@ -1628,7 +1723,7 @@ async function reloadEvents(){
 // the primary action buttons, no dedicated empty-state screens.
 function renderNoEventState(){
   const noEvent = !S;
-  ['gobtn', 'goalbtn', 'qa-add', 'qa-driver', 'qa-vehicle', 'set-save', 'btn-reg-toggle'].forEach(id => {
+  ['gobtn', 'goalbtn', 'fallback-start', 'fallback-goal', 'qa-add', 'qa-driver', 'qa-vehicle', 'set-save', 'btn-reg-toggle'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.disabled = noEvent;
   });

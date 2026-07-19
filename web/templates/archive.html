@@ -28,17 +28,27 @@
   .rk{width:100%;border-collapse:collapse;font-size:12.5px}
   .rk th{font-size:9.5px;color:var(--dim);font-weight:600;letter-spacing:.1em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
   .rk th.r,.rk td.r{text-align:right}
+  /* fixed layout: 長い名前 (nowrapのマーキー) がテーブル幅を押し広げないよう
+     列幅を thead 側で確定させる */
+  .rk{table-layout:fixed}
+  .rk th:first-child{width:30px}
+  .rk th:nth-child(2){width:72px}
+  .rk th.r{width:104px}
   .rk td{padding:8px;border-bottom:1px solid var(--line);vertical-align:middle}
   .rk .pos{font-family:var(--mono);font-weight:700;font-size:14px;width:22px}
   .rk tr:nth-child(1) .pos{color:var(--amber)}
   .rk td.av{width:64px;padding-right:0}
   .rk .nm b{display:block;font-weight:600}
-  .rk .nm span{font-size:10px;color:var(--mut)}
+  /* direct-child: the driver name (b) wraps its text in a marq() span, so a
+     bare descendant `span` selector would also match that nested span and
+     override the name's styling with the vehicle sub-line's. */
+  .rk .nm > span{font-size:10px;color:var(--mut)}
   .rk .best{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:14px}
   .rk .sub{font-family:var(--mono);font-size:10px;color:var(--mut)}
   .rk tr.dead td{opacity:.45}
   .rk tr.dead .best{text-decoration:line-through}
-  .lg{width:100%;border-collapse:collapse;font-size:11.5px}
+  .lg{width:100%;border-collapse:collapse;font-size:11.5px;table-layout:fixed}
+  .lg th:last-child{width:90px}
   .lg th{font-size:9px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line);letter-spacing:.08em}
   .lg td{padding:8px 6px;border-bottom:1px solid var(--line);vertical-align:middle}
   .lg .tm{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600}
@@ -170,8 +180,8 @@ function drawRanking(rows){
       h('td', { class: 'pos t' }, p),
       h('td', { class: 'av' }, h('div', { class: 'avpair' }, dAv, vAv)),
       h('td', { class: 'nm' },
-        h('b', {}, r.driver.name + ' ', h('span', { style: 'font-weight:400;color:var(--dim)' }, r.driver_class || '')),
-        h('span', {}, `#${r.vehicle.number} ${r.vehicle.name} ・ ${r.vehicle.disp_class} / ${r.vehicle.dt_class}`)
+        h('b', {}, marq(r.driver.name + ' ', h('span', { style: 'font-weight:400;color:var(--dim)' }, r.driver_class || ''))),
+        h('span', {}, marq(`#${r.vehicle.number} ${r.vehicle.name} ・ ${r.vehicle.disp_class} / ${r.vehicle.dt_class}`))
       ),
       h('td', { class: 'r' },
         h('span', { class: 'best' }, r.best_ms !== null && r.best_ms !== undefined ? fmt3(r.best_ms) : '—'),
@@ -180,6 +190,7 @@ function drawRanking(rows){
       )
     ));
   });
+  startMarquees(tb);
 }
 
 function drawRecent(items){
@@ -192,13 +203,14 @@ function drawRecent(items){
   items.forEach(it => {
     const tr = h('tr', {});
     tr.appendChild(h('td', {},
-      h('b', {}, it.driver.name), h('br'),
-      h('span', { style: 'font-size:9.5px;color:var(--mut)' }, `#${it.vehicle.number} ${it.vehicle.name}`)
+      h('b', {}, marq(it.driver.name)),
+      h('span', { style: 'font-size:9.5px;color:var(--mut)' }, marq(`#${it.vehicle.number} ${it.vehicle.name}`))
     ));
     const tmCell = h('td', { class: 'tm', style: it.invalid ? 'color:var(--dim);text-decoration:line-through' : '' }, fmt3(it.final_ms));
     tr.appendChild(tmCell);
     tb.appendChild(tr);
   });
+  startMarquees(tb);
 }
 
 document.getElementById('back-btn').addEventListener('click', () => showScreen('sc-list'));

@@ -60,7 +60,7 @@
   .runs th{font-size:9px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
   .runs td{padding:8px 6px;border-bottom:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums}
   .runs td:first-child{color:var(--mut)}
-  .runs tr.dead td{color:var(--dim);text-decoration:line-through}
+  .runs tr.dead td{color:var(--dim)} /* MC/無効走行はグレーのみ (取り消し線なし) */
   .fld{margin-bottom:13px}
   .fld label{display:block;font-size:11px;color:var(--mut);margin-bottom:5px}
   .fld input,.fld select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;
@@ -110,15 +110,15 @@
           <span class="ml"><button type="button" class="btn" id="btn-edit">編集</button><button type="button" class="btn" id="btn-qr" title="ログインQR" aria-label="ログインQR"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 3h8v8H3V3zm2 2v4h4V5H5zm1 1h2v2H6V6zm7-3h8v8h-8V3zm2 2v4h4V5h-4zm1 1h2v2h-2V6zM3 13h8v8H3v-8zm2 2v4h4v-4H5zm1 1h2v2H6v-2zm7-3h3v3h-3v-3zm5 0h3v3h-3v-3zm-3 3h3v3h-3v-3zm-2 3h3v3h-3v-3zm5 0h3v3h-3v-3z"/></svg></button></span></li>
       </ul>
     </div>
-    <div class="sec">QUEUE — 出走キュー</div>
+    <div class="sec">QUEUE — 出走待ち列</div>
     <div class="card myq" id="my-queue"><div class="pos">読み込み中…</div></div>
     <div class="sec">MY VEHICLES — 紐づけ車両 (メインを1台選択)</div>
     <ul id="my-veh" style="list-style:none;display:flex;flex-direction:column;gap:8px"></ul>
     <button type="button" class="btn" style="width:100%;margin-top:8px" id="veh-add-btn">＋ 車両を追加</button>
-    <div class="sec">MY RUNS — 走行履歴</div>
+    <div class="sec">MY RUNS — 走行履歴 <span class="sechint push">MC=ミスコース PT=パイロンタッチ</span></div>
     <div class="card" style="padding:4px 10px">
       <table class="runs">
-        <thead><tr><th>HEAT</th><th>RAW</th><th>PT</th><th>FINAL</th></tr></thead>
+        <thead><tr><th>HEAT</th><th>RAW</th><th title="PT=パイロンタッチ。MCの場合はミスコース">PT</th><th>FINAL</th></tr></thead>
         <tbody id="my-runs"></tbody>
       </table>
     </div>
@@ -128,6 +128,7 @@
       <div style="font-size:32px">🔑</div>
       <h2>ログインが必要です</h2>
       <p>マイページを使うには、登録時に発行されたログインURL (QRコード) からアクセスしてください。</p>
+      <p style="margin-top:10px">すでに登録済みでログインURL/QRコードが分からなくなった場合は、運営 (受付) にお声がけください。その場でログインURL/QRコードを再発行できます。</p>
       <p style="margin-top:10px">初めての方は参加登録からどうぞ。</p>
       <a class="btn primary" href="/register" style="display:inline-block;margin-top:16px;text-decoration:none">参加登録へ</a>
     </div>
@@ -346,8 +347,8 @@ function renderVehicles(){
     vehicleAvatarInto(vav, v.id, v.name, !!v.has_icon);
     const li = h('li', { class: 'vcard' + (isMain ? ' sel' : '') },
       vav,
-      h('div', { class: 'vinfo' }, h('b', {}, `＃${v.number} ${v.name}`), h('br'),
-        h('span', { style: 'font-size:10px;color:var(--mut)' }, vehicleSpecText(v))),
+      h('div', { class: 'vinfo' }, h('b', {}, marq(`＃${v.number} ${v.name}`)),
+        h('span', { style: 'font-size:10px;color:var(--mut)' }, marq(vehicleSpecText(v)))),
       ml
     );
     li.addEventListener('click', async () => {
@@ -360,6 +361,7 @@ function renderVehicles(){
     });
     list.appendChild(li);
   });
+  startMarquees(list);
 }
 
 /* ---------- runs ---------- */
@@ -381,7 +383,7 @@ function renderRuns(){
     tb.appendChild(h('tr', { class: dead ? 'dead' : '' },
       heatCell,
       h('td', {}, fmt3(r.raw_ms)),
-      h('td', {}, r.is_mc ? 'MC' : String(r.pt_count)),
+      h('td', { title: r.is_mc ? 'MC=ミスコース' : 'PT=パイロンタッチ' }, r.is_mc ? 'MC' : String(r.pt_count)),
       h('td', {}, dead ? '—' : h('b', {}, fmt3(r.final_ms)))
     ));
   });
@@ -405,7 +407,7 @@ function renderMyQ(){
 
   if (myCar && !myCar.t_start_us && !myCar.finish){
     box.appendChild(h('div', { class: 'pos' }, '投入済み — ', h('b', { style: 'font-size:14px' }, 'スタートセンサー通過待ち')));
-    const btn = h('button', { class: 'btn danger', style: 'margin-top:10px', type: 'button' }, '出走取消 (キュー先頭に戻る)');
+    const btn = h('button', { class: 'btn danger', style: 'margin-top:10px', type: 'button' }, '出走取消 (出走待ち列先頭に戻る)');
     btn.addEventListener('click', () => qAction(async () => {
       await api('DELETE', '/api/mypage/queue/launch');
       toast('出走を取り消しました');
@@ -420,19 +422,19 @@ function renderMyQ(){
   }
   const idx = queueItems.findIndex(q => q.driver && q.driver.id === MY_ID);
   if (idx < 0){
-    box.appendChild(h('div', { class: 'pos' }, '現在キューに並んでいません'));
+    box.appendChild(h('div', { class: 'pos' }, '現在出走待ち列に並んでいません'));
     if (selfEntry){
       const mainV = (myData.vehicles || []).find(v => v.id === myData.main_vehicle_id);
       const btn = h('button', { class: 'selfgo plain', type: 'button' },
-        '出走キューに並ぶ' + (mainV ? ` (＃${mainV.number} ${mainV.name})` : ''));
+        '出走待ち列に並ぶ' + (mainV ? ` (＃${mainV.number} ${mainV.name})` : ''));
       btn.addEventListener('click', () => qAction(async () => {
         await api('POST', '/api/mypage/queue', {});
-        toast('キュー末尾に追加');
+        toast('出走待ち列末尾に追加');
       }));
       box.appendChild(btn);
       box.appendChild(h('div', { class: 'note' }, 'メイン車両で末尾に追加されます。取り下げは出走前まで可能。'));
     } else {
-      box.appendChild(h('div', { class: 'note' }, 'キュー投入は運営が行います。スタート地点でお声がけください。'));
+      box.appendChild(h('div', { class: 'note' }, '出走待ち列への投入は運営が行います。スタート地点でお声がけください。'));
     }
     return;
   }
@@ -459,7 +461,7 @@ function renderMyQ(){
   const leave = h('button', { class: 'btn danger', style: 'margin-top:10px', type: 'button' }, '出走中止 (取り下げ)');
   leave.addEventListener('click', () => qAction(async () => {
     await api('DELETE', '/api/mypage/queue');
-    toast('キューから取り下げ');
+    toast('出走待ち列から取り下げ');
   }));
   box.appendChild(leave);
 }

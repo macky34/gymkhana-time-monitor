@@ -243,6 +243,27 @@ func (s *Store) SetStart(id int64, tStartUS *int64) error {
 	return nil
 }
 
+// SetStartIfUnset stamps t_start_us on a queue row only if it is still
+// on_course with no start yet - a compare-and-set both the manual-start
+// handler and the sensor-trigger path use, so whichever of them (manual tap
+// or sensor pulse) reaches the row first wins and the other cleanly loses
+// the race instead of silently overwriting it. The status check also closes
+// a narrower race where the row was canceled between being selected as a
+// candidate and this write. Returns whether the row was updated.
+func (s *Store) SetStartIfUnset(id int64, tStartUS int64) (bool, error) {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	res, err := s.db.Exec(`UPDATE queue SET t_start_us = ? WHERE id = ? AND status = 'on_course' AND t_start_us IS NULL`, tStartUS, id)
+	if err != nil {
+		return false, fmt.Errorf("store: set start if unset: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("store: set start if unset: %w", err)
+	}
+	return n > 0, nil
+}
+
 // SetPT adds delta to a queue row's pt_count. If current+delta would be
 // negative, the row is left unchanged and (current, ErrPTBelowZero) is
 // returned; otherwise the row is updated and (newValue, nil) is returned.

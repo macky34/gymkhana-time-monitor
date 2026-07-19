@@ -256,10 +256,25 @@ func (cm *courseManager) undoGoal(queueID int64) error {
 	return nil
 }
 
-// undoStart reverses a launch: the car leaves the course and returns to
-// the front of the waiting queue with PT/MC reset to zero/false. Valid for
-// any on_course row (READY or RUNNING) as long as it is not currently in
-// the finish grace window.
+// undoStart reverses a launch, resetting PT/MC to zero/false. Valid for any
+// on_course row (READY or RUNNING) as long as it is not currently in the
+// finish grace window.
+//
+// A row that was still READY (t_start unset - never actually started, only
+// launched/armed) always goes back to the front of the waiting queue: with
+// nothing to "re-arm", cancelling the launch is the only sensible outcome.
+// This is also the path handleMyLaunchUndo relies on (mypage's self-launch
+// cancel only ever calls undoStart while READY), so it must stay
+// mode-independent.
+//
+// A row that had already started (t_start set - RUNNING) behaves
+// differently depending on the mode: in sensor mode it re-arms in place
+// (stays on_course, t_start cleared back to READY) rather than returning to
+// the queue, since a false or early sensor trigger shouldn't cost the
+// driver their spot on course and the sensor firing again is exactly what's
+// expected to happen next. Manual mode has no such false-trigger scenario
+// (the operator typed the start themselves), so there undo still means
+// "put this car back at the head of the waiting queue".
 func (cm *courseManager) undoStart(row store.QueueRow) error {
 	if row.Status != "on_course" {
 		return conflictf("queue row %d is not on course", row.ID)
@@ -267,10 +282,33 @@ func (cm *courseManager) undoStart(row store.QueueRow) error {
 	if cm.isPending(row.ID) {
 		return conflictf("queue row %d has a finish pending, undo the goal first", row.ID)
 	}
+	wasArmed := row.TStartUS == nil
 
 	if err := cm.s.Store.SetStart(row.ID, nil); err != nil {
 		return err
 	}
+	if row.PTCount != 0 {
+		if _, err := cm.s.Store.SetPT(row.ID, -row.PTCount); err != nil {
+			return err
+		}
+	}
+	if row.MCFlag {
+		if err := cm.s.Store.SetMC(row.ID, false); err != nil {
+			return err
+		}
+	}
+
+	if !wasArmed {
+		ev, ok, err := cm.s.Store.GetEvent(row.EventID)
+		if err != nil {
+			return err
+		}
+		if ok && ev.TimingMode == "sensor" {
+			cm.s.publishOnCourse()
+			return nil
+		}
+	}
+
 	if err := cm.s.Store.SetQueueStatus(row.ID, "waiting"); err != nil {
 		return err
 	}
@@ -281,17 +319,6 @@ func (cm *courseManager) undoStart(row store.QueueRow) error {
 	}
 	if err := cm.s.Store.Reorder(row.ID, pos); err != nil {
 		return err
-	}
-
-	if row.PTCount != 0 {
-		if _, err := cm.s.Store.SetPT(row.ID, -row.PTCount); err != nil {
-			return err
-		}
-	}
-	if row.MCFlag {
-		if err := cm.s.Store.SetMC(row.ID, false); err != nil {
-			return err
-		}
 	}
 
 	cm.s.publishQueue()

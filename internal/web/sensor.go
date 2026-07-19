@@ -69,8 +69,18 @@ func (cm *courseManager) SensorStart(tUS int64) error {
 			continue // already running
 		}
 		start := tUS
-		if err := cm.s.Store.SetStart(row.ID, &start); err != nil {
+		// CAS instead of an unconditional write: a manual-start tap (the
+		// fallback UI for a flaky start sensor) may have stamped this same
+		// row between the ListQueue snapshot above and this write. Losing
+		// the race here means the row is no longer a valid READY target, so
+		// fall through and try the next candidate rather than clobbering
+		// whichever timestamp got there first.
+		updated, err := cm.s.Store.SetStartIfUnset(row.ID, start)
+		if err != nil {
 			return err
+		}
+		if !updated {
+			continue
 		}
 		cm.s.publishOnCourse()
 		return nil

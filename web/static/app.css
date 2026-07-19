@@ -36,7 +36,13 @@ nav a{flex:1;background:none;border:none;color:var(--dim);font-size:10.5px;paddi
 nav a .ic{font-size:16px;line-height:1}
 nav a.on{color:var(--tx)}
 nav a.on .ic{color:var(--amber)}
-.sec{font-size:10.5px;color:var(--mut);letter-spacing:.14em;margin:16px 2px 7px;font-weight:600}
+.sec{font-size:10.5px;color:var(--mut);letter-spacing:.14em;margin:16px 2px 7px;font-weight:600;
+     display:flex;align-items:baseline;flex-wrap:wrap;gap:6px}
+/* small always-visible explainer text appended to a .sec heading (e.g. "MC=
+   ミスコース"), as opposed to a hover-only title= tooltip - this app is
+   mostly viewed on phones, which have no hover. */
+.sechint{font-size:9.5px;color:var(--dim);letter-spacing:0;font-weight:400;white-space:nowrap}
+.sechint.push{margin-left:auto}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
 .t{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .btn{background:var(--panel2);border:1px solid var(--line);color:var(--tx);border-radius:8px;
@@ -58,14 +64,28 @@ nav a.on .ic{color:var(--amber)}
    wrapping <div> around block-level .avatar.sm boxes would otherwise get. */
 .avpair{display:flex;align-items:center;gap:4px;flex:none}
 /* ドライバー大円の右下に車両アイコン(28px)を重ねるペア。サイズはここで
-   完結し、.sm/.xs やページ側メディアクエリの影響を受けない。box-shadow は
-   重なり部分の縁取り。 */
+   完結し、.sm/.xs やページ側メディアクエリの影響を受けない。縁取りは
+   .avatar 既定の 1px グレー枠のみ。 */
 .avstack{position:relative;flex:none;width:48px;height:48px}
 .avstack>.avatar:first-child{width:48px;height:48px;font-size:18px}
 .avstack>.avatar:last-child{position:absolute;right:-3px;bottom:-3px;margin:0;display:flex;vertical-align:baseline;
-                            width:28px;height:28px;font-size:11px;box-shadow:0 0 0 2px var(--bg)}
+                            width:28px;height:28px;font-size:11px}
 .iconpair{display:inline-flex;align-items:center;gap:3px;vertical-align:-6px}
 .iconpair .avatar.xs{margin-right:0;vertical-align:baseline}
+/* 長い名前を折り返さず横自動スクロールで見せる枠。外側 .marq がクリップ枠、
+   内側 span が実測幅。DOM挿入後に startMarquees() (app.js) がはみ出しを検知
+   して .run と --marq-x / --marq-dur を付与する。往復アニメで両端に停止時間
+   を持たせている。flex 子として使う場合は親側に min-width:0 が必要。 */
+.marq{display:block;overflow:hidden;white-space:nowrap;min-width:0;max-width:100%}
+.marq>span{display:inline-block}
+/* one-way loop, not a bounce: hold at the start, scroll to the end, hold,
+   then snap straight back to the start and repeat in the same direction
+   (no `alternate` - reversing direction reads as an unpleasant back-and-forth). */
+.marq.run>span{animation:marq-slide var(--marq-dur,6s) linear infinite}
+@keyframes marq-slide{
+  0%,12%{transform:translateX(0)}
+  88%,100%{transform:translateX(var(--marq-x,0))}
+}
 .toast{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:#2b3a2f;border:1px solid var(--go);
        color:var(--go);font-size:12px;padding:9px 18px;border-radius:99px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:40;white-space:nowrap}
 .toast.on{opacity:1}
@@ -90,6 +110,11 @@ nav a.on .ic{color:var(--amber)}
   nav a .ic{font-size:15px}
   header .ev{font-size:15px}
   .screen{padding:20px 28px 32px}
-  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}
+  /* minmax(0,1fr) rather than a bare 1fr: a plain 1fr track's automatic
+     minimum size is based on its content's min-content width, so a column
+     holding an unbreakable long name (nowrap marquee) would grow past 50%
+     and squeeze the other column. minmax(0,...) caps that floor at 0 so
+     both columns split exactly in half regardless of content. */
+  .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:26px;align-items:start}
   .toast{bottom:auto;top:70px}
 }

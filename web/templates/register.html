@@ -77,6 +77,13 @@
       <div class="fld"><label>区分</label>
         <div class="seg" id="reg-class-seg"></div>
       </div>
+      <div class="fld"><label>アイコン (任意)</label>
+        <div class="card" style="padding:14px;display:flex;align-items:center;gap:12px">
+          <div class="avatar" style="width:52px;height:52px;font-size:20px" id="reg-avatar-preview">?</div>
+          <button type="button" class="btn" id="reg-icon-btn">写真を選んで切り抜き</button>
+          <input type="file" accept="image/*" id="reg-icon-file" style="display:none">
+        </div>
+      </div>
       <div class="sec">VEHICLE — 車両</div>
       <div class="fld">
         <select id="reg-vsel"><option value="">新規登録する</option></select>
@@ -105,12 +112,12 @@
         <div class="fld"><label>駆動方式</label>
           <div class="seg" id="reg-dt"></div>
         </div>
-      </div>
-      <div class="fld"><label>アイコン (任意)</label>
-        <div class="card" style="padding:14px;display:flex;align-items:center;gap:12px">
-          <div class="avatar" style="width:52px;height:52px;font-size:20px" id="reg-avatar-preview">?</div>
-          <button type="button" class="btn" id="reg-icon-btn">写真を選んで切り抜き</button>
-          <input type="file" accept="image/*" id="reg-icon-file" style="display:none">
+        <div class="fld"><label>車両アイコン (任意)</label>
+          <div class="card" style="padding:14px;display:flex;align-items:center;gap:12px">
+            <div class="avatar" style="width:52px;height:52px;font-size:20px" id="reg-veh-avatar-preview">?</div>
+            <button type="button" class="btn" id="reg-veh-icon-btn">写真を選んで切り抜き</button>
+            <input type="file" accept="image/*" id="reg-veh-icon-file" style="display:none">
+          </div>
         </div>
       </div>
       <button type="button" class="btn primary" style="width:100%;padding:13px;font-size:15px" id="reg-submit">登録してはじめる</button>
@@ -168,6 +175,8 @@ let currentEngine = 'gasoline';
 let currentFI = false;
 let currentDtClassId = null;
 let iconB64 = null;
+let vehIconB64 = null;
+let cropTarget = 'driver';
 let cropper = null;
 
 function segBind(containerId, dataAttr, onSelect){
@@ -308,11 +317,21 @@ async function submitRegister(getDriverClassId){
       drivetrain_class_id: currentDtClassId
     };
   }
+  const isNewVehicle = vsel.value === '';
   const body = { name, driver_class_id: driverClassId, icon_b64: iconB64 || null, vehicle };
   const btn = document.getElementById('reg-submit');
   btn.disabled = true;
   try {
-    await api('POST', '/api/register', body);
+    const res = await api('POST', '/api/register', body);
+    // Vehicle icons aren't part of /api/register itself (mirrors mypage's
+    // own "add vehicle" flow): upload as a best-effort follow-up now that
+    // the register response has set the session cookie and linked this
+    // driver to the new vehicle. Failure here shouldn't block registration
+    // - the icon can always be added later from mypage.
+    if (isNewVehicle && vehIconB64 && res && res.vehicle_id){
+      try { await api('POST', '/api/mypage/vehicles/' + res.vehicle_id + '/icon', { icon_b64: vehIconB64 }); }
+      catch (err) { /* non-fatal */ }
+    }
     location.href = '/mypage';
   } catch (e) {
     toast(e.message || '登録に失敗しました');
@@ -320,11 +339,15 @@ async function submitRegister(getDriverClassId){
   }
 }
 
-/* ---------- icon crop flow (Cropper.js, self-hosted) ---------- */
-document.getElementById('reg-icon-btn').addEventListener('click', () => {
-  document.getElementById('reg-icon-file').click();
-});
-document.getElementById('reg-icon-file').addEventListener('change', (e) => {
+/* ---------- icon crop flow (Cropper.js, self-hosted) ----------
+   Shared by the driver icon and the new-vehicle icon: cropTarget records
+   which one is being edited so a single crop modal/apply button can serve
+   both pickers. */
+function pickIconFor(target, fileInputId){
+  cropTarget = target;
+  document.getElementById(fileInputId).click();
+}
+function onIconFileChosen(e){
   const file = e.target.files && e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
@@ -339,7 +362,11 @@ document.getElementById('reg-icon-file').addEventListener('change', (e) => {
   };
   reader.readAsDataURL(file);
   e.target.value = '';
-});
+}
+document.getElementById('reg-icon-btn').addEventListener('click', () => pickIconFor('driver', 'reg-icon-file'));
+document.getElementById('reg-icon-file').addEventListener('change', onIconFileChosen);
+document.getElementById('reg-veh-icon-btn').addEventListener('click', () => pickIconFor('vehicle', 'reg-veh-icon-file'));
+document.getElementById('reg-veh-icon-file').addEventListener('change', onIconFileChosen);
 document.getElementById('crop-cancel').addEventListener('click', () => {
   if (cropper) { cropper.destroy(); cropper = null; }
   document.getElementById('cropmodal').classList.remove('on');
@@ -348,8 +375,10 @@ document.getElementById('crop-apply').addEventListener('click', () => {
   if (!cropper) return;
   const canvas = cropper.getCroppedCanvas({ width: 128, height: 128 });
   const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-  iconB64 = dataUrl.split(',')[1];
-  const preview = document.getElementById('reg-avatar-preview');
+  const b64 = dataUrl.split(',')[1];
+  const previewId = cropTarget === 'vehicle' ? 'reg-veh-avatar-preview' : 'reg-avatar-preview';
+  if (cropTarget === 'vehicle') vehIconB64 = b64; else iconB64 = b64;
+  const preview = document.getElementById(previewId);
   clear(preview);
   preview.appendChild(h('img', { src: dataUrl, alt: '' }));
   cropper.destroy(); cropper = null;

@@ -52,7 +52,8 @@ func TestRegisterHappyPath(t *testing.T) {
 	}
 
 	out := decodeJSON[struct {
-		DriverID int64 `json:"driver_id"`
+		DriverID  int64 `json:"driver_id"`
+		VehicleID int64 `json:"vehicle_id"`
 	}](t, rec.Body.Bytes())
 
 	driver, ok, err := srv.Store.GetDriver(out.DriverID)
@@ -68,6 +69,9 @@ func TestRegisterHappyPath(t *testing.T) {
 	}
 	if len(entries) != 1 || entries[0].Name != "登録車両" {
 		t.Fatalf("entries = %+v, want 1 entry named 登録車両", entries)
+	}
+	if out.VehicleID != entries[0].ID {
+		t.Fatalf("response vehicle_id = %d, want %d (the created vehicle)", out.VehicleID, entries[0].ID)
 	}
 }
 

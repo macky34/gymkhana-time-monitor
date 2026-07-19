@@ -98,6 +98,33 @@ function vehicleAvatarInto(el, vehicleId, name, hasIcon){
   }
 }
 
+/* ---------- overflow marquee ----------
+   marq(...) wraps children in a `.marq` clip frame (see app.css). Because
+   scrollWidth is 0 until the element is laid out, activation is a separate
+   step: after attaching the rendered list to the document, call
+   startMarquees(root) - it measures every .marq under root and turns on the
+   back-and-forth slide only where the content actually overflows. Re-render
+   + re-call is the expected lifecycle (SSE redraws rebuild the elements). */
+function marq(...children){
+  return h('span', { class: 'marq' }, h('span', {}, ...children));
+}
+function startMarquees(root){
+  requestAnimationFrame(() => {
+    root.querySelectorAll('.marq').forEach(el => {
+      const inner = el.firstChild;
+      if (!inner) return;
+      const over = inner.scrollWidth - el.clientWidth;
+      if (over > 4){
+        el.style.setProperty('--marq-x', -over + 'px');
+        el.style.setProperty('--marq-dur', Math.max(4, over / 20) + 's');
+        el.classList.add('run');
+      } else {
+        el.classList.remove('run');
+      }
+    });
+  });
+}
+
 /* ---------- copy-to-clipboard token/URL boxes ---------- */
 function bindCopyable(el){
   el.addEventListener('click', async () => {

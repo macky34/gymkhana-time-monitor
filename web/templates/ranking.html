@@ -32,12 +32,18 @@
   .chip{font-size:11px;padding:5px 11px;border-radius:99px;border:1px solid var(--line);background:var(--panel);
         color:var(--mut);cursor:pointer;font-family:inherit}
   .chip.on{background:#2b3a2f;border-color:var(--go);color:var(--go)}
-  .fsel{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);
+  .fsel{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);
         padding:6px 9px;font-size:11.5px;font-family:inherit}
   .fsel.on{border-color:var(--go);color:var(--go)}
   .rk{width:100%;border-collapse:collapse;font-size:12.5px}
   .rk th{font-size:9.5px;color:var(--dim);font-weight:600;letter-spacing:.1em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
   .rk th.r,.rk td.r{text-align:right}
+  /* fixed layout: 長い名前 (nowrapのマーキー) がテーブル幅を押し広げないよう
+     列幅を thead 側で確定させる */
+  .rk{table-layout:fixed}
+  .rk th:first-child{width:30px}
+  .rk th:nth-child(2){width:62px}
+  .rk th.r{width:100px}
   .rk td{padding:8px;border-bottom:1px solid var(--line);vertical-align:middle}
   .rk tr.row{cursor:pointer}
   .rk tr.row:active{background:var(--panel2)}
@@ -61,13 +67,17 @@
   .runs th{font-size:9px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
   .runs td{padding:8px 6px;border-bottom:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums}
   .runs td:first-child{color:var(--mut)}
-  .runs tr.dead td{color:var(--dim);text-decoration:line-through}
+  .runs tr.dead td{color:var(--dim)} /* MC/無効走行はグレーのみ (取り消し線なし) */
   @media(min-width:900px){
     .rk{font-size:14px}
     .rk .best{font-size:16px}
     .rk td.av{width:60px}
+    .rk th:nth-child(2){width:68px}
     .modal-bg{align-items:center;justify-content:center}
     .modal{width:560px;border-radius:18px;border:1px solid var(--line)}
+    /* FILTERカラムはRANKINGテーブルほど幅を必要としないので、共有の
+       .grid2 (50/50) ではなく約1:2の比率に狭める。 */
+    .grid2{grid-template-columns:minmax(0,1fr) minmax(0,2fr)}
   }
 </style>
 </head>
@@ -114,8 +124,9 @@
     <div class="modal">
       <h3 id="md-title"></h3>
       <p class="sub" id="md-sub"></p>
+      <p class="sechint" style="text-align:right">MC=ミスコース PT=パイロンタッチ</p>
       <table class="runs">
-        <thead><tr><th>HEAT</th><th>RAW</th><th>PT</th><th>FINAL</th><th>順位*</th></tr></thead>
+        <thead><tr><th>HEAT</th><th>RAW</th><th title="PT=パイロンタッチ。MCの場合はミスコース">PT</th><th>FINAL</th><th>順位*</th></tr></thead>
         <tbody id="md-runs"></tbody>
       </table>
       <p class="note">*順位 = 現在のフィルタ内でその1本を比較した順位 (CSVと同定義)</p>
@@ -294,9 +305,9 @@ function drawRk(){
       h('td', { class: 'pos t' }, p),
       h('td', { class: 'av' }, h('div', { class: 'avstack' }, dAv, vAv)),
       h('td', { class: 'nm' },
-        h('b', {}, r.driver.name + ' ', h('span', { style: 'font-weight:400;font-size:10px;color:var(--dim)' }, r.driver_class || '')),
-        h('span', {}, `#${r.vehicle.number} ${r.vehicle.name}`),
-        h('span', {}, `${r.vehicle.disp_class} / ${r.vehicle.dt_class}`)
+        h('b', {}, marq(r.driver.name + ' ', h('span', { style: 'font-weight:400;font-size:10px;color:var(--dim)' }, r.driver_class || ''))),
+        h('span', {}, marq(`#${r.vehicle.number} ${r.vehicle.name}`)),
+        h('span', {}, marq(`${r.vehicle.disp_class} / ${r.vehicle.dt_class}`))
       ),
       h('td', { class: 'r' },
         h('span', { class: 'best' }, r.best_ms !== null && r.best_ms !== undefined ? fmt3(r.best_ms) : '—'),
@@ -309,16 +320,20 @@ function drawRk(){
     tr.addEventListener('click', () => openDrilldown(r));
     tb.appendChild(tr);
   });
+  startMarquees(tb);
 }
 
 /* ---------- drilldown modal ---------- */
 async function openDrilldown(r){
-  document.getElementById('md-title').textContent = `${r.driver.name} × #${r.vehicle.number} ${r.vehicle.name}`;
+  const title = document.getElementById('md-title');
+  clear(title);
+  title.appendChild(marq(`${r.driver.name} × #${r.vehicle.number} ${r.vehicle.name}`));
   document.getElementById('md-sub').textContent = `${r.driver_class || ''} ・ ${r.vehicle.disp_class} / ${r.vehicle.dt_class} ・ ${r.runs}本走行`;
   const tbody = document.getElementById('md-runs');
   clear(tbody);
   tbody.appendChild(h('tr', {}, h('td', { colspan: '5', style: 'text-align:center;color:var(--dim)' }, '読み込み中…')));
   document.getElementById('modal').classList.add('on');
+  startMarquees(title);
   try {
     const qs = buildQuery();
     const data = await apiGet(`/api/combinations/${r.driver.id}/${r.vehicle.id}/logs` + (qs ? '?' + qs : ''));
@@ -329,7 +344,7 @@ async function openDrilldown(r){
       const tr = h('tr', { class: isDead ? 'dead' : '' },
         h('td', {}, String(run.heat)),
         h('td', {}, fmt3(run.raw_ms)),
-        h('td', {}, run.is_mc ? 'MC' : String(run.pt_count)),
+        h('td', { title: run.is_mc ? 'MC=ミスコース' : 'PT=パイロンタッチ' }, run.is_mc ? 'MC' : String(run.pt_count)),
         h('td', {}, run.rank_in_filter === 1 && !isDead ? h('b', {}, finalCell) : finalCell),
         h('td', {}, run.rank_in_filter !== null && run.rank_in_filter !== undefined ? String(run.rank_in_filter) : '—')
       );

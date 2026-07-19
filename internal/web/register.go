@@ -128,7 +128,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	s.publishDirectory()
 	s.audit(&driverID, "register", map[string]any{"vehicle_id": vehicleID})
 
-	resp := map[string]any{"driver_id": driverID}
+	resp := map[string]any{"driver_id": driverID, "vehicle_id": vehicleID}
 	if numberWarning {
 		resp["number_warning"] = true
 	}

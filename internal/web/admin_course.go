@@ -164,6 +164,62 @@ func (s *Server) handleAdminCourseFinishOldest(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]any{"queue_id": target.ID})
 }
 
+// handleAdminCourseStartOldest implements POST /api/admin/course/start:
+// stamps a manual t_start on the oldest READY (on_course, t_start not yet
+// set) car, for use when the start sensor is unavailable or misfires.
+func (s *Server) handleAdminCourseStartOldest(w http.ResponseWriter, r *http.Request, admin store.Driver) {
+	clientMS := decodeClientMs(r)
+
+	settings, ok := s.requireActiveEvent(w)
+	if !ok {
+		return
+	}
+
+	onCourse, err := s.Store.ListQueue(settings.ID, "on_course")
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+
+	var target *store.QueueRow
+	for i := range onCourse {
+		if onCourse[i].TStartUS == nil {
+			target = &onCourse[i]
+			break
+		}
+	}
+	if target == nil {
+		writeJSONError(w, http.StatusConflict, "no armed car on course")
+		return
+	}
+
+	tStartUS := correctedMs(clientMS) * 1000
+
+	// Compare-and-set: if a concurrent sensor trigger already stamped this
+	// row first, answer 409 instead of overwriting its start time.
+	updated, err := s.Store.SetStartIfUnset(target.ID, tStartUS)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if !updated {
+		writeJSONError(w, http.StatusConflict, "start already stamped")
+		return
+	}
+
+	s.publishQueue()
+	s.publishOnCourse()
+
+	s.audit(&admin.ID, "course.manual_start", map[string]any{
+		"queue_id":   target.ID,
+		"driver_id":  target.DriverID,
+		"vehicle_id": target.VehicleID,
+		"t_start_us": tStartUS,
+	})
+
+	writeJSON(w, http.StatusOK, map[string]any{"queue_id": target.ID})
+}
+
 // handleAdminCourseFinishByID implements POST /api/admin/course/{id}/finish:
 // finishes a specific car, which must currently be RUNNING.
 func (s *Server) handleAdminCourseFinishByID(w http.ResponseWriter, r *http.Request, admin store.Driver) {

@@ -1,7 +1,10 @@
 package web
 
 import (
+	"bytes"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"testing"
 	"time"
@@ -223,6 +226,68 @@ func TestUndoStart(t *testing.T) {
 	}
 }
 
+// TestUndoStartArmedAlwaysReturnsToQueue covers the READY (never-started)
+// case in sensor mode: unlike an already-RUNNING car (see
+// TestUndoStartSensorModeRearms, which re-arms in place), a car that was
+// only launched/armed and never actually started has nothing to "re-arm" -
+// undo must still send it back to the front of the waiting queue. This is
+// also the exact path mypage's self-launch cancel (handleMyLaunchUndo) goes
+// through, since that handler only ever calls undoStart on a READY row.
+func TestUndoStartArmedAlwaysReturnsToQueue(t *testing.T) {
+	srv, queueID, _, _ := newTestServer(t, "sensor")
+	row := armReady(t, srv, queueID)
+
+	if err := srv.course.undoStart(row); err != nil {
+		t.Fatalf("undoStart: %v", err)
+	}
+	qrow, ok, err := srv.Store.GetQueueRow(queueID)
+	if err != nil || !ok {
+		t.Fatalf("GetQueueRow: %v ok=%v", err, ok)
+	}
+	if qrow.Status != "waiting" {
+		t.Fatalf("status = %q, want waiting (armed cars have nothing to re-arm)", qrow.Status)
+	}
+	if qrow.TStartUS != nil {
+		t.Fatal("t_start should be cleared by undo-start")
+	}
+}
+
+// TestUndoStartSensorModeRearms covers the sensor-mode fallback: undoing a
+// start (e.g. a false/early sensor trigger) must re-arm the car in place
+// (stay on_course, t_start cleared) rather than sending it back to the
+// waiting queue - unlike manual mode (TestUndoStart), where there is no
+// false-trigger scenario and undo still means "back to the queue".
+func TestUndoStartSensorModeRearms(t *testing.T) {
+	srv, queueID, _, _ := newTestServer(t, "sensor")
+	row := armReady(t, srv, queueID)
+
+	tStartUS := time.Now().UnixMilli() * 1000
+	if err := srv.Store.SetStart(queueID, &tStartUS); err != nil {
+		t.Fatalf("SetStart: %v", err)
+	}
+	if _, err := srv.Store.SetPT(queueID, 2); err != nil {
+		t.Fatalf("SetPT: %v", err)
+	}
+	row, _, _ = srv.Store.GetQueueRow(queueID)
+
+	if err := srv.course.undoStart(row); err != nil {
+		t.Fatalf("undoStart: %v", err)
+	}
+	qrow, ok, err := srv.Store.GetQueueRow(queueID)
+	if err != nil || !ok {
+		t.Fatalf("GetQueueRow: %v ok=%v", err, ok)
+	}
+	if qrow.Status != "on_course" {
+		t.Fatalf("status = %q, want on_course (re-armed, not requeued)", qrow.Status)
+	}
+	if qrow.TStartUS != nil {
+		t.Fatal("t_start should be cleared by undo-start")
+	}
+	if qrow.PTCount != 0 {
+		t.Fatalf("pt_count = %d, want 0 after undo-start", qrow.PTCount)
+	}
+}
+
 // TestPTGuard confirms PT cannot be driven below zero through the store guard
 // the course handler relies on.
 func TestPTGuard(t *testing.T) {
@@ -235,5 +300,154 @@ func TestPTGuard(t *testing.T) {
 	qrow, _, _ := srv.Store.GetQueueRow(queueID)
 	if qrow.PTCount != 0 {
 		t.Fatalf("pt_count = %d, want 0", qrow.PTCount)
+	}
+}
+
+// armReady moves the seeded waiting row onto the course in READY state (as a
+// sensor-mode launch would): on_course but t_start_us still NULL, awaiting a
+// start trigger.
+func armReady(t *testing.T, srv *Server, queueID int64) store.QueueRow {
+	t.Helper()
+	if err := srv.Store.SetQueueStatus(queueID, "on_course"); err != nil {
+		t.Fatalf("SetQueueStatus: %v", err)
+	}
+	if err := srv.Store.SetStart(queueID, nil); err != nil {
+		t.Fatalf("SetStart(nil): %v", err)
+	}
+	row, ok, err := srv.Store.GetQueueRow(queueID)
+	if err != nil || !ok {
+		t.Fatalf("GetQueueRow: %v ok=%v", err, ok)
+	}
+	return row
+}
+
+// TestAdminCourseStartOldest covers POST /api/admin/course/start: a READY
+// (armed) car on course gets a manual t_start stamped from the corrected
+// client timestamp.
+func TestAdminCourseStartOldest(t *testing.T) {
+	srv, queueID, driverID, _ := newTestServer(t, "sensor")
+	admin, ok, err := srv.Store.GetDriver(driverID)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver: ok=%v err=%v", ok, err)
+	}
+	armReady(t, srv, queueID)
+
+	clientMS := time.Now().UnixMilli()
+	rec := callAdminEvents(t, srv.handleAdminCourseStartOldest, http.MethodPost, "/api/admin/course/start",
+		map[string]any{"client_ms": clientMS}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	out := decodeJSON[struct {
+		QueueID int64 `json:"queue_id"`
+	}](t, rec.Body.Bytes())
+	if out.QueueID != queueID {
+		t.Fatalf("queue_id = %d, want %d", out.QueueID, queueID)
+	}
+
+	row, ok, err := srv.Store.GetQueueRow(queueID)
+	if err != nil || !ok {
+		t.Fatalf("GetQueueRow: %v ok=%v", err, ok)
+	}
+	if row.TStartUS == nil || *row.TStartUS != clientMS*1000 {
+		t.Fatalf("t_start_us = %v, want %d", row.TStartUS, clientMS*1000)
+	}
+}
+
+// TestAdminCourseStartOldestNoReadyCar covers the case where nothing is on
+// course at all -> 409.
+func TestAdminCourseStartOldestNoReadyCar(t *testing.T) {
+	srv, queueID, driverID, _ := newTestServer(t, "sensor")
+	admin, ok, err := srv.Store.GetDriver(driverID)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver: ok=%v err=%v", ok, err)
+	}
+	emptyWaitingQueue(t, srv, queueID)
+
+	rec := callAdminEvents(t, srv.handleAdminCourseStartOldest, http.MethodPost, "/api/admin/course/start", nil, admin)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestAdminCourseStartOldestAlreadyRunning covers the case where the only
+// on_course car already has a start (RUNNING, not READY) -> 409, since there
+// is no armed car left to stamp.
+func TestAdminCourseStartOldestAlreadyRunning(t *testing.T) {
+	srv, queueID, driverID, _ := newTestServer(t, "manual")
+	admin, ok, err := srv.Store.GetDriver(driverID)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver: ok=%v err=%v", ok, err)
+	}
+	launchManual(t, srv, queueID, time.Now().UnixMilli()*1000)
+
+	rec := callAdminEvents(t, srv.handleAdminCourseStartOldest, http.MethodPost, "/api/admin/course/start", nil, admin)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409; body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestAdminCourseStartOldestThenSensorDoesNotOverwrite covers the fallback
+// scenario the manual-start API exists for: an operator manually stamps a
+// start after the sensor seemed unresponsive, but the sensor pulse actually
+// arrives moments later (delayed, not dead). SensorStart must lose that race
+// via the same t_start_us-IS-NULL CAS the manual path uses, rather than
+// silently clobbering the operator's stamp with its own timestamp.
+func TestAdminCourseStartOldestThenSensorDoesNotOverwrite(t *testing.T) {
+	srv, queueID, driverID, _ := newTestServer(t, "sensor")
+	admin, ok, err := srv.Store.GetDriver(driverID)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver: ok=%v err=%v", ok, err)
+	}
+	armReady(t, srv, queueID)
+
+	clientMS := time.Now().UnixMilli()
+	rec := callAdminEvents(t, srv.handleAdminCourseStartOldest, http.MethodPost, "/api/admin/course/start",
+		map[string]any{"client_ms": clientMS}, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("manual start status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	// A sensor pulse for the same car arrives just after the manual stamp
+	// (the flaky-sensor scenario this API is a fallback for).
+	if err := srv.course.SensorStart(clientMS*1000 + 1_000_000); err != nil {
+		t.Fatalf("SensorStart: %v", err)
+	}
+
+	row, ok, err := srv.Store.GetQueueRow(queueID)
+	if err != nil || !ok {
+		t.Fatalf("GetQueueRow: %v ok=%v", err, ok)
+	}
+	if row.TStartUS == nil || *row.TStartUS != clientMS*1000 {
+		t.Fatalf("t_start_us = %v, want manual stamp %d (sensor must not overwrite it)", row.TStartUS, clientMS*1000)
+	}
+}
+
+// TestAdminCourseStartOldestForbiddenForNonAdmin routes through Routes() so
+// withAdmin actually runs, mirroring TestAdminCourseAdoptOrphanForbiddenForNonAdmin.
+func TestAdminCourseStartOldestForbiddenForNonAdmin(t *testing.T) {
+	srv, queueID, _, _ := newTestServer(t, "sensor")
+	armReady(t, srv, queueID)
+
+	driverClasses, err := srv.Store.ListClassDefs("driver")
+	if err != nil || len(driverClasses) == 0 {
+		t.Fatalf("ListClassDefs: %v", err)
+	}
+	userID, err := srv.Store.CreateDriver("一般ユーザー", driverClasses[0].ID, "tok-user", "user")
+	if err != nil {
+		t.Fatalf("CreateDriver: %v", err)
+	}
+	user, ok, err := srv.Store.GetDriver(userID)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver: ok=%v err=%v", ok, err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/admin/course/start", &bytes.Buffer{})
+	req.AddCookie(&http.Cookie{Name: "tm_session", Value: user.Token})
+	rec := httptest.NewRecorder()
+	srv.Routes().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403; body=%s", rec.Code, rec.Body.String())
 	}
 }

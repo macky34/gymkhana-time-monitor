@@ -26,6 +26,11 @@
   .evbanner{background:#2c2718;border-bottom:1px solid #77771f;color:var(--amber);font-size:11.5px;
             padding:9px 12px;text-align:center}
   .evbanner a{color:var(--amber)}
+  .sechint .t-pc{display:none}
+  @media(min-width:900px){
+    .sechint .t-phone{display:none}
+    .sechint .t-pc{display:inline}
+  }
   .oncourse{border-radius:14px;padding:13px 14px;margin-bottom:9px;position:relative;overflow:hidden;cursor:pointer;
             background:linear-gradient(135deg,#1f2937,#1a222d);border:1px solid #3a4656}
   .oncourse.mc{border-color:#4a4a52;background:linear-gradient(135deg,#26262b,#1e1e23)}
@@ -37,7 +42,9 @@
   .oncourse.armed .clk .tm{color:var(--dim);font-size:22px}
   .oncourse.mc .clk .tm{color:var(--dim)}
   .oncourse .clk .tm.offsetwait{font-size:13px;color:var(--dim)}
-  .oncourse .clk .lb{font-size:9px;color:var(--dim);letter-spacing:.15em;margin-top:1px}
+  .oncourse .clk .lbrow{display:flex;align-items:center;justify-content:flex-end;gap:5px;margin-top:1px}
+  .oncourse .clk .lb{font-size:9px;color:var(--dim);letter-spacing:.15em}
+  .oncourse .clk .ptlb{font-size:9px;color:var(--amber);letter-spacing:.05em}
   .mcband{position:absolute;top:11px;right:-34px;background:#4d4d55;color:#c9c9d2;font-size:9px;letter-spacing:.12em;
           padding:3px 36px;transform:rotate(38deg)}
   .oncourse.flash{border-color:var(--amber)}
@@ -49,7 +56,10 @@
   .res .hn{font-family:var(--mono);font-size:10.5px;color:var(--dim);width:26px;flex:none}
   .res .nm{min-width:0}
   .res .nm b{font-size:13px;font-weight:600;display:block}
-  .res .nm span{font-size:10.5px;color:var(--mut)}
+  /* direct-child: the driver name (b) now wraps its text in a marq() span,
+     so a bare descendant `span` selector here would also match that nested
+     span and override the name's font-size with the vehicle sub-line's. */
+  .res .nm > span{font-size:10.5px;color:var(--mut)}
   .res .tm{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:15px;font-weight:600}
   .res .pt{font-size:9.5px;color:var(--amber);font-family:var(--mono)}
   .res .rgt{margin-left:auto;text-align:right;flex:none}
@@ -63,8 +73,11 @@
   .q li{display:flex;align-items:center;gap:9px;padding:10px 10px;border-bottom:1px solid var(--line);font-size:12.5px}
   .q li:last-child{border:none}
   .q .pos{font-family:var(--mono);color:var(--dim);font-size:11px;width:18px;flex:none}
+  .q .nm{min-width:0}
   .q .nm b{font-weight:600;display:block}
-  .q .nm span{font-size:10px;color:var(--mut)}
+  /* direct-child: see .res .nm > span above - the name (b) also wraps its
+     text in a marq() span now, which a bare descendant selector would match. */
+  .q .nm > span{font-size:10px;color:var(--mut)}
   #fsview{position:absolute;inset:0;background:#0a0c0f;z-index:60;display:none}
   #fsview.on{display:block}
   .fs-rot{position:absolute;top:50%;left:50%;display:flex;flex-direction:column;
@@ -103,13 +116,15 @@
   <section class="screen on" id="sc-monitor">
     <div class="grid2">
       <div>
-        <div class="sec">ON COURSE — 走行中</div>
+        <div class="sec">ON COURSE — 走行中
+          <span class="sechint push"><span class="t-phone">タップで全画面表示</span><span class="t-pc">クリックで全画面表示</span></span>
+        </div>
         <div id="mon-course"></div>
         <div class="sec">NEXT — 出走待ち</div>
         <div class="card"><ul class="q" id="mon-next"></ul></div>
       </div>
       <div>
-        <div class="sec">RECENT — 直近リザルト</div>
+        <div class="sec">RECENT — 直近リザルト <span class="sechint push">MC=ミスコース PT=パイロンタッチ</span></div>
         <div class="card"><ul class="res" id="mon-recent"></ul></div>
       </div>
     </div>
@@ -147,6 +162,12 @@ function toast(msg){
 let onCourseCars = [];
 let waitingQueue = [];
 let settings = null;
+// queue_id -> rendered .oncourse element, so the 10Hz tick can update a
+// running car's clock text in place instead of tearing the node down; a
+// click needs mousedown/mouseup on the SAME element, and a card that gets
+// rebuilt every ~100ms (as renderCourse() used to do on every tick) easily
+// straddles that window for a real mouse click, silently eating the click.
+let courseElByQid = new Map();
 
 /* ---------- no-active-event banner ---------- */
 function updateEventBanner(){
@@ -162,6 +183,7 @@ async function loadSettings(){
 function renderCourse(){
   const monC = document.getElementById('mon-course');
   clear(monC);
+  courseElByQid.clear();
   if (!onCourseCars.length){
     monC.appendChild(h('div', { class: 'empty-course' }, '走行待機中…'));
     return;
@@ -172,7 +194,6 @@ function renderCourse(){
     const waitingOffset = !armed && !flash && !offsetKnown;
     const cls = 'oncourse' + (c.mc_flag ? ' mc' : '') + (flash ? ' flash' : '') + (armed ? ' armed' : '');
     const vhChildren = [`#${c.vehicle.number} ${c.vehicle.name}`];
-    if (c.pt_count) vhChildren.push(h('span', { style: 'color:var(--amber)' }, ` ・PT${c.pt_count}`));
     const av = h('div', { class: 'avatar' });
     avatarInto(av, c.driver.id, c.driver.name, !!c.driver.has_icon);
     const vAv = h('div', { class: 'avatar' });
@@ -182,17 +203,40 @@ function renderCourse(){
       c.mc_flag ? h('div', { class: 'mcband' }, 'ミスコース') : null,
       h('div', { class: 'who' },
         h('div', { class: 'avstack' }, av, vAv),
-        h('div', {},
-          h('div', { class: 'nm' }, c.driver.name),
-          h('div', { class: 'vh' }, vhChildren)
+        h('div', { style: 'min-width:0;flex:1' },
+          h('div', { class: 'nm' }, marq(c.driver.name)),
+          h('div', { class: 'vh' }, marq(vhChildren))
         ),
         h('div', { class: 'clk' },
           h('div', { class: 'tm' + (waitingOffset ? ' offsetwait' : '') }, tmText),
-          h('div', { class: 'lb' }, armed ? 'READY' : (flash ? 'FINISH' : 'RUNNING'))
+          h('div', { class: 'lbrow' },
+            c.pt_count ? h('span', { class: 'ptlb', title: 'PT=パイロンタッチ' }, `PT${c.pt_count}`) : null,
+            h('span', { class: 'lb' }, armed ? 'READY' : (flash ? 'FINISH' : 'RUNNING'))
+          )
         )
       )
     );
     monC.appendChild(el);
+    courseElByQid.set(c.queue_id, el);
+  });
+  startMarquees(monC);
+}
+
+// Per-tick clock update for running cars: mutates the existing element's
+// .tm text in place rather than going through renderCourse()'s clear+rebuild,
+// so the card backing a click stays the same DOM node across the tick.
+function updateCourseClocks(){
+  onCourseCars.forEach(c => {
+    const armed = !c.t_start_us;
+    const flash = !!c.finish;
+    if (armed || flash) return;
+    const el = courseElByQid.get(c.queue_id);
+    if (!el) return;
+    const tmEl = el.querySelector('.clk .tm');
+    if (!tmEl) return;
+    const waitingOffset = !offsetKnown;
+    tmEl.classList.toggle('offsetwait', waitingOffset);
+    tmEl.textContent = waitingOffset ? 'タイム取得中…' : fmt1(nowMs() - c.t_start_us / 1000);
   });
 }
 
@@ -211,9 +255,10 @@ function renderNext(){
     nextEl.appendChild(h('li', {},
       h('span', { class: 'pos t' }, String(i + 1)),
       h('div', { class: 'avstack' }, av, vAv),
-      h('div', { class: 'nm' }, h('b', {}, q.driver.name), h('span', {}, `#${q.vehicle.number} ${q.vehicle.name}`))
+      h('div', { class: 'nm' }, h('b', {}, marq(q.driver.name)), h('span', {}, marq(`#${q.vehicle.number} ${q.vehicle.name}`)))
     ));
   });
+  startMarquees(nextEl);
 }
 
 /* ---------- RECENT results (from /api/recent, refetched on ranking SSE) ---------- */
@@ -237,12 +282,12 @@ function renderRecent(items){
     const li = h('li', { class: liCls.trim() },
       h('span', { class: 'hn' }, it.heat !== null && it.heat !== undefined ? ('H' + it.heat) : ''),
       h('div', { class: 'avstack' }, av, vAv),
-      h('div', { class: 'nm' }, h('b', {}, it.driver.name), h('span', {}, nmSpanText)),
+      h('div', { class: 'nm' }, h('b', {}, marq(it.driver.name)), h('span', {}, marq(nmSpanText))),
       h('div', { class: 'rgt' },
         h('span', { class: 'tm' }, it.invalid ? '—' : fmt3(it.final_ms)),
         h('div', { class: 'meta' },
-          it.is_mc ? h('span', { class: 'badge' }, 'MC') : null,
-          it.pt_count ? h('span', { class: 'pt' }, 'PT' + it.pt_count) : null,
+          it.is_mc ? h('span', { class: 'badge', title: 'MC=ミスコース' }, 'MC') : null,
+          it.pt_count ? h('span', { class: 'pt', title: 'PT=パイロンタッチ' }, 'PT' + it.pt_count) : null,
           h('span', { class: 'src' }, it.source === 'manual' ? '✍️手計測' : 'センサー')
         )
       )
@@ -255,6 +300,7 @@ function renderRecent(items){
   });
   knownRecentIds = currentIds;
   recentFirstRender = false;
+  startMarquees(recent);
 }
 async function refreshRecent(){
   try {
@@ -263,13 +309,18 @@ async function refreshRecent(){
   } catch (e) { /* transient network hiccup, next SSE tick will retry */ }
 }
 
-/* ---------- fullscreen pit-board ---------- */
+/* ---------- fullscreen time display ---------- */
 let fsQueueId = null, fsFlip = false, fsCloseTimer = null, lastFsCar = null;
 const fsview = document.getElementById('fsview');
 function fsLayout(){
   const rot = document.getElementById('fs-rot');
   const W = fsview.clientWidth, H = fsview.clientHeight;
-  const portrait = H > W;
+  // The 90°-rotate-to-landscape trick (and its flip button) is for a phone
+  // propped up in portrait at trackside; a PC screen never needs it, even
+  // one that happens to be mounted in portrait, so gate it on the same
+  // 900px phone/PC breakpoint the rest of the layout uses.
+  const isPC = window.matchMedia('(min-width:900px)').matches;
+  const portrait = !isPC && H > W;
   const w = portrait ? H : W, hh = portrait ? W : H;
   rot.style.width = w + 'px'; rot.style.height = hh + 'px';
   const base = portrait ? (fsFlip ? -90 : 90) : 0;
@@ -316,7 +367,9 @@ function renderFS(){
   const show = car || lastFsCar;
   if (!show) { closeFS(); return; }
   document.getElementById('fs-name').textContent = show.driver.name;
-  document.getElementById('fs-veh').textContent = `#${show.vehicle.number} ${show.vehicle.name}` + (show.pt_count ? ` ・PT${show.pt_count}` : '');
+  const fsVeh = document.getElementById('fs-veh');
+  fsVeh.textContent = `#${show.vehicle.number} ${show.vehicle.name}` + (show.pt_count ? ` ・PT${show.pt_count}` : '');
+  fsVeh.title = show.pt_count ? 'PT=パイロンタッチ' : '';
   t.classList.toggle('mc', !!show.mc_flag);
   if (!car){
     if (!fsCloseTimer) fsCloseTimer = setTimeout(closeFS, 3000);
@@ -337,7 +390,7 @@ let lastTick = 0;
 function tick(ts){
   if (ts - lastTick >= 100){
     lastTick = ts;
-    renderCourse();
+    updateCourseClocks();
     renderFS();
   }
   requestAnimationFrame(tick);

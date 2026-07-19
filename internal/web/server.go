@@ -205,6 +205,7 @@ func (s *Server) Routes() http.Handler {
 
 	// ---- Admin: course control (W3) ----
 	mux.HandleFunc("POST /api/admin/course", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseLaunch)))
+	mux.HandleFunc("POST /api/admin/course/start", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseStartOldest)))
 	mux.HandleFunc("POST /api/admin/course/finish", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseFinishOldest)))
 	mux.HandleFunc("POST /api/admin/course/{id}/finish", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseFinishByID)))
 	mux.HandleFunc("DELETE /api/admin/course/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminCourseCancel)))
