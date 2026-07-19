@@ -183,7 +183,7 @@
       </div>
       <div id="vm-new">
         <div class="fldrow">
-          <div class="fld sm"><label>号車番号</label><input class="t" id="vm-num" style="text-align:center" inputmode="numeric"></div>
+          <div class="fld sm"><label>ゼッケン番号</label><input class="t" id="vm-num" style="text-align:center" inputmode="numeric"></div>
           <div class="fld"><label>車両名</label><input id="vm-name" placeholder="例: スイフト"></div>
         </div>
         <div class="hint" id="vm-numwarn" style="display:none;color:var(--amber)">この番号は既に使用されています (登録は可能です)</div>
@@ -219,7 +219,7 @@
         <div class="hint">本人操作のみで即成立します。</div>
       </div>
       <button type="button" class="btn primary" style="width:100%;margin-top:6px" id="vm-submit">追加する</button>
-      <p class="note">※諸元・アイコンは追加後も「編集」から変更できます。号車番号のみ運営が管理します。</p>
+      <p class="note">※諸元・アイコンは追加後も「編集」から変更できます。ゼッケン番号のみ運営が管理します。</p>
     </div>
   </div>
 
@@ -228,7 +228,7 @@
       <h3>車両を編集</h3>
       <p class="sub">諸元・アイコンを変更できます</p>
       <div class="fldrow">
-        <div class="fld sm"><label>号車番号</label><input class="t" id="ve-num" style="text-align:center;opacity:.6" inputmode="numeric" disabled title="号車番号は運営のみ変更できます"></div>
+        <div class="fld sm"><label>ゼッケン番号</label><input class="t" id="ve-num" style="text-align:center;opacity:.6" inputmode="numeric" disabled title="ゼッケン番号は運営のみ変更できます"></div>
         <div class="fld"><label>車両名</label><input id="ve-name" placeholder="例: スイフト"></div>
       </div>
       <div class="fld"><label>エンジン方式</label>
@@ -641,7 +641,7 @@ async function vmSubmit(){
   if (isNew){
     const num = parseInt(document.getElementById('vm-num').value, 10);
     const name = document.getElementById('vm-name').value.trim();
-    if (!num){ toast('号車番号を入力してください'); return; }
+    if (!num){ toast('ゼッケン番号を入力してください'); return; }
     if (!name){ toast('車両名を入力してください'); return; }
     body = {
       number: num, name,

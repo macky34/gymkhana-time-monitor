@@ -102,9 +102,9 @@ func (s *Store) GetVehicle(id int64) (Vehicle, bool, error) {
 	return v, true, nil
 }
 
-// ListVehicles returns all non-deleted vehicles, ordered by id.
+// ListVehicles returns all non-deleted vehicles, ordered by ゼッケン番号 (number).
 func (s *Store) ListVehicles() ([]Vehicle, error) {
-	rows, err := s.db.Query(`SELECT ` + vehicleSelectCols + ` FROM vehicles WHERE is_deleted = 0 ORDER BY id`)
+	rows, err := s.db.Query(`SELECT ` + vehicleSelectCols + ` FROM vehicles WHERE is_deleted = 0 ORDER BY number, id`)
 	if err != nil {
 		return nil, fmt.Errorf("store: list vehicles: %w", err)
 	}
@@ -193,7 +193,7 @@ func (s *Store) ListEntriesByDriver(driverID int64) ([]Vehicle, error) {
 		FROM vehicles v
 		JOIN entries e ON e.vehicle_id = v.id
 		WHERE e.driver_id = ? AND v.is_deleted = 0
-		ORDER BY v.id`, driverID)
+		ORDER BY v.number, v.id`, driverID)
 	if err != nil {
 		return nil, fmt.Errorf("store: list entries by driver: %w", err)
 	}

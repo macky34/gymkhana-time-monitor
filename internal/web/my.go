@@ -260,7 +260,7 @@ func (s *Server) handleUpdateMyVehicle(w http.ResponseWriter, r *http.Request, d
 	if !ok {
 		return
 	}
-	// The 号車番号 is assigned/managed by event staff, not the driver — a
+	// The ゼッケン番号 is assigned/managed by event staff, not the driver — a
 	// participant editing their own vehicle from mypage may change the
 	// spec fields but never the number, regardless of what the request
 	// body contains.

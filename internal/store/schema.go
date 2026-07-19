@@ -58,7 +58,7 @@ CREATE TABLE IF NOT EXISTS drivers (
 
 CREATE TABLE IF NOT EXISTS vehicles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  number INTEGER NOT NULL,                         -- 号車番号 (表示「＃3 アルトワークス」)。重複はDB制約で禁止しない — 登録・編集UIで警告表示のみ (運用ミスだが登録を詰まらせない)
+  number INTEGER NOT NULL,                         -- ゼッケン番号 (表示「＃3 アルトワークス」)。重複はDB制約で禁止しない — 登録・編集UIで警告表示のみ (運用ミスだが登録を詰まらせない)
   name TEXT NOT NULL,
   engine_type TEXT NOT NULL,                       -- 'gasoline' | 'diesel' | 'rotary' | 'ev'
   displacement_cc INTEGER,                         -- EVはNULL
