@@ -117,7 +117,7 @@ func (s *Server) adminExportRanking(w http.ResponseWriter, eventID int64) {
 	adminWriteCSVHeader(w, "ranking.csv")
 	_, _ = w.Write([]byte{0xEF, 0xBB, 0xBF})
 	cw := csv.NewWriter(w)
-	_ = cw.Write([]string{"順位", "ドライバー", "区分", "号車", "車両", "換算cc", "排気量クラス", "駆動", "ベスト", "セカンド", "走行本数", "PT計", "状態"})
+	_ = cw.Write([]string{"順位", "ドライバー", "区分", "ゼッケン", "車両", "換算cc", "排気量クラス", "駆動", "ベスト", "セカンド", "走行本数", "PT計", "状態"})
 
 	rank := 0
 	for _, row := range resp.Rows {

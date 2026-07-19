@@ -429,7 +429,7 @@
       <h3 id="vm-title">車両を追加</h3>
       <p class="sub">諸元の変更は順位・クラスへ即時反映されます</p>
       <div class="fldrow">
-        <div class="fld sm"><label>号車番号</label><input class="t" id="vm-num" style="text-align:center" inputmode="numeric"></div>
+        <div class="fld sm"><label>ゼッケン番号</label><input class="t" id="vm-num" style="text-align:center" inputmode="numeric"></div>
         <div class="fld"><label>車両名</label><input id="vm-name" placeholder="例: スイフト"></div>
       </div>
       <div class="hint" id="vm-numwarn" style="display:none;color:var(--amber)">この番号は既に使用されています (登録は可能です)</div>
@@ -1580,7 +1580,7 @@ function openVehModal(v){
 async function saveVehModal(){
   const num = parseInt(document.getElementById('vm-num').value, 10);
   const name = document.getElementById('vm-name').value.trim();
-  if (!num){ toast('号車番号を入力してください'); return; }
+  if (!num){ toast('ゼッケン番号を入力してください'); return; }
   if (!name){ toast('車両名を入力してください'); return; }
   const body = {
     number: num, name,

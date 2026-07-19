@@ -90,7 +90,7 @@
       </div>
       <div id="reg-newv">
         <div class="fldrow">
-          <div class="fld sm"><label>号車番号</label><input class="t" id="reg-number" style="text-align:center" inputmode="numeric"></div>
+          <div class="fld sm"><label>ゼッケン番号</label><input class="t" id="reg-number" style="text-align:center" inputmode="numeric"></div>
           <div class="fld"><label>車両名</label><input id="reg-vname" placeholder="例: スイフト"></div>
         </div>
         <div class="hint" id="reg-numwarn" style="display:none;color:var(--amber)">この番号は既に使用されています (登録は可能です)</div>
@@ -306,7 +306,7 @@ async function submitRegister(getDriverClassId){
   } else {
     const num = parseInt(document.getElementById('reg-number').value, 10);
     const vname = document.getElementById('reg-vname').value.trim();
-    if (!num){ toast('号車番号を入力してください'); return; }
+    if (!num){ toast('ゼッケン番号を入力してください'); return; }
     if (!vname){ toast('車両名を入力してください'); return; }
     vehicle = {
       number: num,
