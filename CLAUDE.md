@@ -47,7 +47,7 @@ UIに影響する変更(web/templates/・web/static/・internal/web のハンド
   - `gofmt.py` — Edit/Write された .go を自動整形
   - `block_vendored.py` — ベンダー配布物 (`*.min.js` / `*.min.css`) の直接編集をブロック
   - `go_verify.py` — 応答終了時、.go に変更があれば `go build` / `go vet` を検証し失敗なら差し戻す
-- **スキル**: `/release`(リリースタグ作成)、`/wiki-sync`(Wiki同期)、`/event-sim`(シミュレータE2E動作確認)、`/new-admin-api`(管理API追加チェックリスト)、`/live-check`(コミット前の実データ起動確認)
+- **スキル**: `/release`(リリースタグ作成)、`/wiki-sync`(Wiki同期)、`/event-sim`(シミュレータE2E動作確認)、`/new-admin-api`(管理API追加チェックリスト)、`/live-check`(コミット前の実データ起動確認)、`/loadtest`(性能試験。検証用インスタンス限定、実行前にSKILL.mdの安全上の注意を必ず確認)
 - **エージェント**: `implementer`(指示書ベースの実装)、`web-security-reviewer`(XSS・認可監査)、`concurrency-reviewer`(排他・レース監査)。internal/web や web/ を変更したら web-security-reviewer、store/sse/timing の並行性に触れたら concurrency-reviewer でのレビューを検討する。
 
 ## 補足

@@ -21,7 +21,19 @@ func runRead(args []string) {
 	maxWorkers := fs.Int("workers", 300, "最大同時ワーカー数")
 	fs.Parse(args)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	// http.Client{}が使う既定のTransportはMaxIdleConnsPerHostが2しかなく、
+	// 同一ホストへの高並列アクセスではアイドル接続をほぼ使い回せずTLS
+	// ハンドシェイクを含む新規接続を張り直し続けることになる。ワーカー数
+	// 分のアイドル接続を許可し、この試験ツール自身がボトルネックになる
+	// のを防ぐ。
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		Transport: &http.Transport{
+			MaxIdleConns:        *maxWorkers * 2,
+			MaxIdleConnsPerHost: *maxWorkers * 2,
+			IdleConnTimeout:     90 * time.Second,
+		},
+	}
 
 	factory := func(id int) func() (time.Duration, bool) {
 		return func() (time.Duration, bool) {
