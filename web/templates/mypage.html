@@ -327,7 +327,7 @@ function renderProfile(){
   document.getElementById('my-name').textContent = myData.driver.name;
   const cls = ((settings && settings.driver_classes) || []).find(c => c.id === myData.driver.driver_class_id);
   document.getElementById('my-class').textContent = cls ? cls.label : '';
-  avatarInto(document.getElementById('my-avatar'), myData.driver.id, myData.driver.name, myData.driver.has_icon);
+  avatarInto(document.getElementById('my-avatar'), myData.driver);
 }
 
 /* ---------- vehicles ---------- */
@@ -346,7 +346,7 @@ function renderVehicles(){
       h('span', { class: 'badge main mainmark', style: isMain ? '' : 'visibility:hidden' }, 'メイン'),
       edit);
     const vav = h('div', { class: 'avatar sm' });
-    vehicleAvatarInto(vav, v.id, v.name, !!v.has_icon);
+    vehicleAvatarInto(vav, v);
     const li = h('li', { class: 'vcard' + (isMain ? ' sel' : '') },
       vav,
       h('div', { class: 'vinfo' }, h('b', {}, marq(`＃${v.number} ${v.name}`)),
@@ -548,7 +548,7 @@ function openEdit(){
     });
     seg.appendChild(btn);
   });
-  avatarInto(document.getElementById('ed-avatar-preview'), myData.driver.id, myData.driver.name, myData.driver.has_icon);
+  avatarInto(document.getElementById('ed-avatar-preview'), myData.driver);
   document.getElementById('editmodal').classList.add('on');
 }
 async function saveEdit(){
@@ -623,10 +623,9 @@ function bindCrop(){
     }
     try {
       await api('POST', cropTargetUrl, { icon_b64: b64 });
-      iconRev = Date.now();
       toast('アイコンを更新しました');
       if (cropOnSuccess) cropOnSuccess(dataUrl);
-      await reloadMy();
+      await reloadMy(); // re-fetch picks up the new icon_rev (see app.js avatarIntoKind)
     } catch (err) { toast(err.message || 'アップロードに失敗しました'); }
   });
 }
@@ -711,12 +710,11 @@ async function vmSubmit(){
     if (isNew && vmIconB64 && res && res.vehicle_id){
       try {
         await api('POST', '/api/mypage/vehicles/' + res.vehicle_id + '/icon', { icon_b64: vmIconB64 });
-        iconRev = Date.now();
       } catch (err) { iconFailed = true; }
     }
     vmIconB64 = null;
     toast(iconFailed ? 'アイコンの登録に失敗しました(後から編集可能)' : (isNew ? '車両を登録して紐づけました' : '相乗りしました'));
-    await reloadMy();
+    await reloadMy(); // re-fetch picks up the new icon_rev (see app.js avatarIntoKind)
   } catch (err) { toast(err.message || '追加に失敗しました'); }
 }
 
@@ -758,7 +756,7 @@ function openVehEdit(v){
     dtSeg.appendChild(btn);
     if (on) veDtClassId = c.id;
   });
-  vehicleAvatarInto(document.getElementById('ve-avatar-preview'), v.id, v.name, !!v.has_icon);
+  vehicleAvatarInto(document.getElementById('ve-avatar-preview'), v);
   veConvPreview();
   const isMain = v.id === myData.main_vehicle_id;
   const unlink = document.getElementById('ve-unlink');

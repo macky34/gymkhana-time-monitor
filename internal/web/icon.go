@@ -7,6 +7,7 @@ import (
 	"image"
 	"image/jpeg"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -46,6 +47,25 @@ func iconFromB64(b64 string) ([]byte, error) {
 // serveIcon implements the shared body of the driver/vehicle icon GET
 // handlers: resolve "id" from the path, fetch the stored icon bytes via
 // get, and serve them with ETag-based conditional GET support.
+//
+// Cache-Control depends on whether the request carries a valid "v" query
+// param (the client's icon_rev cache-buster, see
+// snapshot.refDriver/refVehicleBasic and app.js's avatarInto/
+// vehicleAvatarInto): a rev-qualified URL is content-addressed — the URL
+// itself changes whenever the icon does (see setIcon in
+// internal/store/helpers.go) — so it can be cached long-term without
+// revalidation, same as /static/. A bare (or malformed/non-numeric) "v" — a
+// direct hit, an older client, or a future output type that forgets to
+// populate icon_rev and ends up sending literally "?v=undefined" — keeps
+// the previous always-revalidate behavior instead: granting a 7-day cache
+// to a URL that never actually changes when the icon does would be a
+// silent, unrecoverable staleness bug (no reload fixes it), whereas
+// falling back to no-cache here only costs a redundant revalidation.
+//
+// ETag/Cache-Control are set *before* the conditional-GET check so a 304
+// response carries them too — otherwise a client's cached entry would never
+// have its freshness (max-age) refreshed and would fall back to revalidating
+// on every subsequent load regardless of the rev-based long cache above.
 func serveIcon(w http.ResponseWriter, r *http.Request, get func(int64) ([]byte, bool, error)) {
 	id, ok := pathID(w, r)
 	if !ok {
@@ -57,19 +77,40 @@ func serveIcon(w http.ResponseWriter, r *http.Request, get func(int64) ([]byte, 
 		return
 	}
 	if !ok {
+		// Explicit no-store (rather than relying on cacheControlExempt's
+		// blanket-no-store exemption for this path — which exists so this
+		// function's own Cache-Control always wins, but means nothing is set
+		// at all if this function doesn't set one itself): a 404 today (no
+		// icon yet, or before the driver/vehicle was even created) must not
+		// be cached, since either can turn into a 200 the moment an icon is
+		// uploaded.
+		w.Header().Set("Cache-Control", "no-store")
 		http.NotFound(w, r)
 		return
 	}
 
 	etag := etagFor(data)
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("ETag", etag)
+	if rev := r.URL.Query().Get("v"); isValidRev(rev) {
+		w.Header().Set("Cache-Control", "public, max-age=604800") // rev-qualified: content-addressed, 7 days like /static/
+	} else {
+		w.Header().Set("Cache-Control", "no-cache") // bare/malformed rev: always revalidate
+	}
 	if r.Header.Get("If-None-Match") == etag {
 		w.WriteHeader(http.StatusNotModified)
 		return
 	}
-	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("ETag", etag)
-	w.Header().Set("Cache-Control", "no-cache")
 	_, _ = w.Write(data)
+}
+
+// isValidRev reports whether rev looks like a real icon_rev value (a
+// positive integer) rather than a bare/missing/malformed "v" query param
+// (e.g. the literal string "undefined" from a client bug) — see the
+// Cache-Control decision in serveIcon.
+func isValidRev(rev string) bool {
+	n, err := strconv.ParseInt(rev, 10, 64)
+	return err == nil && n > 0
 }
 
 // setIconBody is the {"icon_b64": ...} JSON shape shared by every
@@ -80,11 +121,13 @@ type setIconBody struct {
 
 // applyIcon implements the shared tail of every icon-upload POST handler:
 // decode {"icon_b64":...}, validate+resize it via iconFromB64, persist it
-// via set(id, jpg), then publishAll+publishDirectory (an icon change
-// touches the driver/vehicle refs embedded in every public snapshot plus
-// the admin directory) and respond {"ok":true}. Callers perform their own
-// path/ownership resolution beforehand and their own audit call via
-// onSuccess (action name and payload differ per caller).
+// via set(id, jpg) (which also bumps icon_rev — see setIcon in
+// internal/store/helpers.go), then publishAll+publishDirectory (an icon
+// change touches the driver/vehicle refs embedded in every public snapshot
+// plus the admin directory, each carrying the new icon_rev) and respond
+// {"ok":true}. Callers perform their own path/ownership resolution
+// beforehand and their own audit call via onSuccess (action name and
+// payload differ per caller).
 func (s *Server) applyIcon(w http.ResponseWriter, r *http.Request, id int64, set func(int64, []byte) error, onSuccess func()) {
 	body, ok := decodeReqJSON[setIconBody](w, r)
 	if !ok {

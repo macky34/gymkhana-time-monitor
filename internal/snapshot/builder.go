@@ -42,10 +42,14 @@ func (b *Builder) SetFinishProvider(fn FinishProvider) {
 }
 
 // refDriver is the minimal driver reference embedded in every snapshot.
+// IconRev lets clients build a content-addressed icon URL
+// (?v=<icon_rev>) that caches indefinitely instead of revalidating on
+// every load — see internal/web/icon.go's serveIcon.
 type refDriver struct {
 	ID      int64  `json:"id"`
 	Name    string `json:"name"`
 	HasIcon bool   `json:"has_icon"`
+	IconRev int64  `json:"icon_rev"`
 }
 
 // refVehicleBasic is the minimal vehicle reference embedded in snapshots
@@ -56,14 +60,15 @@ type refVehicleBasic struct {
 	Number  int    `json:"number"`
 	Name    string `json:"name"`
 	HasIcon bool   `json:"has_icon"`
+	IconRev int64  `json:"icon_rev"`
 }
 
 func newRefDriver(d store.Driver) refDriver {
-	return refDriver{ID: d.ID, Name: d.Name, HasIcon: d.HasIcon}
+	return refDriver{ID: d.ID, Name: d.Name, HasIcon: d.HasIcon, IconRev: d.IconRev}
 }
 
 func newRefVehicle(v store.Vehicle) refVehicleBasic {
-	return refVehicleBasic{ID: v.ID, Number: v.Number, Name: v.Name, HasIcon: v.HasIcon}
+	return refVehicleBasic{ID: v.ID, Number: v.Number, Name: v.Name, HasIcon: v.HasIcon, IconRev: v.IconRev}
 }
 
 func indexDrivers(drivers []store.Driver) map[int64]store.Driver {

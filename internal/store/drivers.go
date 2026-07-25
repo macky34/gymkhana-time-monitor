@@ -16,15 +16,16 @@ type Driver struct {
 	Role          string
 	MainVehicleID *int64
 	HasIcon       bool
+	IconRev       int64
 }
 
-const driverSelectCols = `id, name, driver_class_id, token, role, main_vehicle_id, icon IS NOT NULL`
+const driverSelectCols = `id, name, driver_class_id, token, role, main_vehicle_id, icon IS NOT NULL, icon_rev`
 
 func scanDriver(row rowScanner) (Driver, error) {
 	var d Driver
 	var mainVehicleID sql.NullInt64
 	var hasIcon int
-	if err := row.Scan(&d.ID, &d.Name, &d.DriverClassID, &d.Token, &d.Role, &mainVehicleID, &hasIcon); err != nil {
+	if err := row.Scan(&d.ID, &d.Name, &d.DriverClassID, &d.Token, &d.Role, &mainVehicleID, &hasIcon, &d.IconRev); err != nil {
 		return Driver{}, err
 	}
 	if mainVehicleID.Valid {
@@ -184,7 +185,7 @@ func (s *Store) ReissueToken(id int64, newToken string) error {
 }
 
 // SetIcon stores a driver's icon JPEG bytes (already validated/re-encoded
-// to 128x128 by the caller).
+// to 128x128 by the caller) and bumps icon_rev (see setIcon in helpers.go).
 func (s *Store) SetIcon(id int64, jpeg []byte) error {
 	return s.setIcon("drivers", "set icon", id, jpeg)
 }

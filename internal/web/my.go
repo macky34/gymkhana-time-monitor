@@ -119,6 +119,7 @@ func (s *Server) handleGetMy(w http.ResponseWriter, r *http.Request, d store.Dri
 		DriverClassID int64  `json:"driver_class_id"`
 		Role          string `json:"role"`
 		HasIcon       bool   `json:"has_icon"`
+		IconRev       int64  `json:"icon_rev"`
 	}
 
 	coef, dispClasses, dtLabel, err := s.loadVehicleContext()
@@ -159,6 +160,7 @@ func (s *Server) handleGetMy(w http.ResponseWriter, r *http.Request, d store.Dri
 			DriverClassID: d.DriverClassID,
 			Role:          d.Role,
 			HasIcon:       d.HasIcon,
+			IconRev:       d.IconRev,
 		},
 		"main_vehicle_id": mainVehicleID,
 		"vehicles":        vehiclesOut,

@@ -77,6 +77,15 @@ func TestAdminUserIconRoundTrip(t *testing.T) {
 	if condRec.Code != http.StatusNotModified {
 		t.Fatalf("GET icon with If-None-Match: status = %d, want 304", condRec.Code)
 	}
+	// A 304 must still carry ETag/Cache-Control — a client's cached entry
+	// only gets its freshness (max-age) refreshed via these response
+	// headers, even on a not-modified response.
+	if got := condRec.Header().Get("ETag"); got != etag {
+		t.Errorf("304: ETag = %q, want %q", got, etag)
+	}
+	if got := condRec.Header().Get("Cache-Control"); got == "" {
+		t.Error("304: Cache-Control header missing")
+	}
 }
 
 // TestAdminVehicleIconRoundTrip is the vehicle-icon analogue of
@@ -122,6 +131,12 @@ func TestAdminVehicleIconRoundTrip(t *testing.T) {
 	srv.handleVehicleIcon(condRec, condReq)
 	if condRec.Code != http.StatusNotModified {
 		t.Fatalf("GET icon with If-None-Match: status = %d, want 304", condRec.Code)
+	}
+	if got := condRec.Header().Get("ETag"); got != etag {
+		t.Errorf("304: ETag = %q, want %q", got, etag)
+	}
+	if got := condRec.Header().Get("Cache-Control"); got == "" {
+		t.Error("304: Cache-Control header missing")
 	}
 }
 

@@ -65,6 +65,50 @@ func TestAdminUserCreate(t *testing.T) {
 	}
 }
 
+// TestAdminUsersListIncludesIconRev covers GET /api/admin/users: uploaded
+// icon bytes must actually thread through to icon_rev in the response, not
+// just leave has_icon true with a zero-value IconRev left unset by mistake.
+func TestAdminUsersListIncludesIconRev(t *testing.T) {
+	srv, _, driverID, _ := newTestServer(t, "sensor")
+	admin, ok, err := srv.Store.GetDriver(driverID)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver: ok=%v err=%v", ok, err)
+	}
+	if err := srv.Store.SetIcon(driverID, []byte{0x01}); err != nil {
+		t.Fatalf("SetIcon: %v", err)
+	}
+	admin, ok, err = srv.Store.GetDriver(driverID)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver (after SetIcon): ok=%v err=%v", ok, err)
+	}
+
+	rec := callAdminEvents(t, srv.handleAdminUsersList, http.MethodGet, "/api/admin/users", nil, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/admin/users: status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	out := decodeJSON[struct {
+		Users []struct {
+			ID      int64 `json:"id"`
+			HasIcon bool  `json:"has_icon"`
+			IconRev int64 `json:"icon_rev"`
+		} `json:"users"`
+	}](t, rec.Body.Bytes())
+
+	var found bool
+	for _, u := range out.Users {
+		if u.ID != driverID {
+			continue
+		}
+		found = true
+		if !u.HasIcon || u.IconRev != admin.IconRev {
+			t.Errorf("GET /api/admin/users user %d = %+v, want has_icon=true icon_rev=%d", driverID, u, admin.IconRev)
+		}
+	}
+	if !found {
+		t.Fatalf("GET /api/admin/users: driver %d not found in %+v", driverID, out.Users)
+	}
+}
+
 // TestAdminUserUpdate covers PUT /api/admin/users/{id}: rename and driver
 // class change both persist. newTestServer only seeds a single driver class
 // ("現役"), so a second class is added here (via a second SeedEvent, after

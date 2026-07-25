@@ -19,9 +19,10 @@ type Vehicle struct {
 	ForcedInduction   bool
 	DrivetrainClassID int64
 	HasIcon           bool
+	IconRev           int64
 }
 
-const vehicleSelectCols = `id, number, name, engine_type, displacement_cc, forced_induction, drivetrain_class_id, icon IS NOT NULL`
+const vehicleSelectCols = `id, number, name, engine_type, displacement_cc, forced_induction, drivetrain_class_id, icon IS NOT NULL, icon_rev`
 
 func scanVehicle(row rowScanner) (Vehicle, error) {
 	var v Vehicle
@@ -29,7 +30,7 @@ func scanVehicle(row rowScanner) (Vehicle, error) {
 	var dispCC sql.NullInt64
 	var fi int
 	var hasIcon int
-	if err := row.Scan(&v.ID, &v.Number, &v.Name, &engine, &dispCC, &fi, &v.DrivetrainClassID, &hasIcon); err != nil {
+	if err := row.Scan(&v.ID, &v.Number, &v.Name, &engine, &dispCC, &fi, &v.DrivetrainClassID, &hasIcon, &v.IconRev); err != nil {
 		return Vehicle{}, err
 	}
 	v.Engine = domain.EngineType(engine)
@@ -189,7 +190,13 @@ func (s *Store) DeleteEntry(driverID, vehicleID int64) error {
 // ListEntriesByDriver returns the active (non-deleted) vehicles linked to a
 // driver.
 func (s *Store) ListEntriesByDriver(driverID int64) ([]Vehicle, error) {
-	rows, err := s.db.Query(`SELECT v.id, v.number, v.name, v.engine_type, v.displacement_cc, v.forced_induction, v.drivetrain_class_id, v.icon IS NOT NULL
+	// Uses vehicleSelectCols unqualified rather than re-listing v.* columns by
+	// hand: entries only contributes driver_id/vehicle_id (referenced solely
+	// in the JOIN/WHERE clauses below), which never collide with a vehicles
+	// column name, so there is no ambiguity to alias away. Keeping this on
+	// the shared constant means a future column addition (like icon_rev)
+	// only has one place to change instead of silently missing this query.
+	rows, err := s.db.Query(`SELECT `+vehicleSelectCols+`
 		FROM vehicles v
 		JOIN entries e ON e.vehicle_id = v.id
 		WHERE e.driver_id = ? AND v.is_deleted = 0
@@ -216,7 +223,10 @@ func (s *Store) ListEntriesByDriver(driverID int64) ([]Vehicle, error) {
 // ListDriversByVehicle returns the active (non-deleted) drivers linked to a
 // vehicle.
 func (s *Store) ListDriversByVehicle(vehicleID int64) ([]Driver, error) {
-	rows, err := s.db.Query(`SELECT d.id, d.name, d.driver_class_id, d.token, d.role, d.main_vehicle_id, d.icon IS NOT NULL
+	// See the matching comment in ListEntriesByDriver: driverSelectCols is
+	// safe unqualified here for the same reason (entries contributes only
+	// driver_id/vehicle_id, never ambiguous with a drivers column).
+	rows, err := s.db.Query(`SELECT `+driverSelectCols+`
 		FROM drivers d
 		JOIN entries e ON e.driver_id = d.id
 		WHERE e.vehicle_id = ? AND d.is_deleted = 0
@@ -241,7 +251,8 @@ func (s *Store) ListDriversByVehicle(vehicleID int64) ([]Driver, error) {
 }
 
 // SetVehicleIcon stores a vehicle's icon JPEG bytes (already validated/
-// re-encoded to 128x128 by the caller).
+// re-encoded to 128x128 by the caller) and bumps icon_rev (see setIcon in
+// helpers.go).
 func (s *Store) SetVehicleIcon(id int64, jpeg []byte) error {
 	return s.setIcon("vehicles", "set vehicle icon", id, jpeg)
 }

@@ -173,9 +173,9 @@ function drawRanking(rows){
     const isDead = !!r.invalid;
     const p = isDead ? '—' : String(++pos);
     const dAv = h('div', { class: 'avatar sm' });
-    avatarInto(dAv, r.driver.id, r.driver.name, !!r.driver.has_icon);
+    avatarInto(dAv, r.driver);
     const vAv = h('div', { class: 'avatar sm' });
-    vehicleAvatarInto(vAv, r.vehicle.id, r.vehicle.name, !!r.vehicle.has_icon);
+    vehicleAvatarInto(vAv, r.vehicle);
     tb.appendChild(h('tr', { class: isDead ? 'dead' : '' },
       h('td', { class: 'pos t' }, p),
       h('td', { class: 'av' }, h('div', { class: 'avpair' }, dAv, vAv)),

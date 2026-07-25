@@ -298,9 +298,9 @@ function drawRk(){
     const isDead = !!r.invalid;
     const p = isDead ? '—' : String(++pos);
     const dAv = h('div', { class: 'avatar' });
-    avatarInto(dAv, r.driver.id, r.driver.name, !!r.driver.has_icon);
+    avatarInto(dAv, r.driver);
     const vAv = h('div', { class: 'avatar' });
-    vehicleAvatarInto(vAv, r.vehicle.id, r.vehicle.name, !!r.vehicle.has_icon);
+    vehicleAvatarInto(vAv, r.vehicle);
     const tr = h('tr', { class: 'row' + (isDead ? ' dead' : '') },
       h('td', { class: 'pos t' }, p),
       h('td', { class: 'av' }, h('div', { class: 'avstack' }, dAv, vAv)),
@@ -372,9 +372,8 @@ openStream(['ranking', 'time', 'directory', 'settings'], {
     if (FIL.heat) { refreshHeatRanking().then(drawRk); } else { drawRk(); }
   },
   directory: () => {
-    // directory change = user/vehicle master data (incl. icons) updated;
-    // bump the cache-buster so the next draw picks up new icon bytes.
-    iconRev = Date.now();
+    // directory change = user/vehicle master data (incl. icons) updated.
+    // rankingRowsAll's refs carry their own icon_rev (see app.js avatarIntoKind)
     if (FIL.heat) { refreshHeatRanking().then(drawRk); } else { drawRk(); }
   }
 });

@@ -26,12 +26,42 @@ type migration struct {
 }
 
 // migrations is the ordered list of schema steps beyond the shape baked
-// into schemaSQL. Empty for now — schemaSQL already describes the current
-// latest shape, so there is nothing to migrate yet. The first entry lands
-// with the feature that needs it (e.g. a new column on an existing table);
-// see applyMigrations and addColumnIfMissing for how such a step is
-// written.
-var migrations = []migration{}
+// into schemaSQL. Entries must have version == their 1-based index in this
+// slice (i.e. strictly 1, 2, 3, ...) — Open stamps a brand-new database
+// with len(migrations) directly (see Open's doc comment), so a gap or
+// out-of-order version here would make a fresh database's stamped version
+// disagree with what an upgraded database actually reaches. See
+// TestMigrationsVersionsAreSequential.
+var migrations = []migration{
+	{
+		version: 1,
+		name:    "add-icon-rev",
+		apply: func(tx *sql.Tx) error {
+			for _, t := range []string{"drivers", "vehicles"} {
+				if err := addColumnIfMissing(tx, t, "icon_rev", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+					return err
+				}
+				// Rows that already had an icon before this column existed
+				// need a rev too - this keeps "icon_rev > 0" equivalent to
+				// "icon IS NOT NULL" for every row, old or new, rather than
+				// only holding for icons uploaded after this migration. Using
+				// the current time here (the same source setIcon uses, see
+				// helpers.go) rather than a fixed placeholder like 1 means
+				// this backfill can never collide with a real setIcon rev
+				// from another point in time - restoring two different
+				// pre-migration backups of the same driver (each with a
+				// different icon already on it) still can't produce the same
+				// rev for different bytes, which the helpers.go setIcon
+				// doc comment's "never reused" guarantee otherwise wouldn't
+				// quite cover.
+				if _, err := tx.Exec(fmt.Sprintf(`UPDATE %s SET icon_rev = CAST(strftime('%%s','now') AS INTEGER) WHERE icon IS NOT NULL AND icon_rev = 0`, t)); err != nil {
+					return fmt.Errorf("backfill icon_rev on %s: %w", t, err)
+				}
+			}
+			return nil
+		},
+	},
+}
 
 // schemaVersion reads the database's current schema version from SQLite's
 // own user_version pragma (a plain integer slot SQLite reserves for

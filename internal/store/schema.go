@@ -14,6 +14,15 @@ package store
 // that already exists, so any change beyond a brand-new CREATE TABLE
 // (a new column, a new index, a data backfill) must be paired with one.
 // See Open's doc comment and the Server-Setup wiki (アップグレード手順).
+//
+// A column's position here is not authoritative for an existing database
+// that reached it via ALTER TABLE ADD COLUMN instead (a migration step
+// always appends, regardless of where schemaSQL lists the column) — e.g.
+// icon_rev sits right after icon below, but a migrated database has it
+// appended after is_deleted instead. This is harmless today (no query in
+// this package uses SELECT * or a column-count-implicit INSERT — every
+// SELECT lists columns by name, see driverSelectCols/vehicleSelectCols),
+// but keep it that way: never rely on column order matching this listing.
 const schemaSQL = `
 -- イベント (1行 = 1イベント)。作成 = この行のINSERT。status='active'は
 -- 部分ユニークインデックスにより常に高々1行 (同時に複数のアクティブイベント
@@ -54,6 +63,8 @@ CREATE TABLE IF NOT EXISTS drivers (
   name TEXT NOT NULL,
   driver_class_id INTEGER NOT NULL REFERENCES class_defs(id),
   icon BLOB,                                       -- 128x128 JPEG。NULL可
+  icon_rev INTEGER NOT NULL DEFAULT 0,             -- iconが変わるたび増加 (単調増加、巻き戻らない)。
+                                                   -- クライアントの ?v=<icon_rev> キャッシュバスターに使う
   token TEXT NOT NULL UNIQUE,                      -- ログイントークン平文 (base64url)。システム発行の使い捨てランダム値であり
                                                    -- ユーザー由来の秘密ではないため平文保存 (セッションID保存と同等の扱い)
   role TEXT NOT NULL DEFAULT 'user',               -- 'user' | 'admin'
@@ -70,6 +81,7 @@ CREATE TABLE IF NOT EXISTS vehicles (
   forced_induction INTEGER NOT NULL DEFAULT 0,     -- bool (EVは常に0)
   drivetrain_class_id INTEGER NOT NULL REFERENCES class_defs(id),
   icon BLOB,                                       -- 128x128 JPEG。NULL可
+  icon_rev INTEGER NOT NULL DEFAULT 0,             -- driversと同じ (iconが変わるたび増加)
   is_deleted INTEGER NOT NULL DEFAULT 0
 );
 
