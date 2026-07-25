@@ -34,6 +34,7 @@ description: コミット前の人間による最終確認用。バイナリを�
    ```sh
    "$TMP/timemon-check" -db "$TMP/live-copy.sqlite3" -addr 18081 -udp 19998 -base-url http://<ホストのLAN IP>:18081
    ```
+   起動ログに `store: migrated to version N (...)` の行が出ていないか確認する。スキーマ変更(新しい列・マイグレーション追加)を含む変更では、この行が**出ていること**、かつ `$TMP` 内に `snapshots/premigrate-*.sqlite3` が生成されていることを確認する(生成されていなければ、意図したマイグレーションが実行されていない)。スキーマ変更を含まない変更では、この行が出ない(適用対象なし)のが正常。
 4. **運営ログインURLの用意**: コピーDBから運営トークンを1件取得する:
    ```sh
    python3 -c "import sqlite3; print(sqlite3.connect('$TMP/live-copy.sqlite3').execute(\"SELECT token FROM drivers WHERE role='admin' AND is_deleted=0 LIMIT 1\").fetchone()[0])"
@@ -58,4 +59,4 @@ description: コミット前の人間による最終確認用。バイナリを�
 
 ## 補足
 
-- 実DBのスキーマは古い可能性がある(`CREATE TABLE IF NOT EXISTS` のみでマイグレーションしない設計)。新しい列や既定値に依存する変更は実DBでは効かないケースがあり、それを人間の目で発見するのもこのチェックの目的のひとつ。
+- 実DBのスキーマは起動時に `internal/store/migrate.go` の仕組み(`PRAGMA user_version` ベース)で自動的に前進する(`internal/store/schema.go` の `schemaSQL` は最新形のみを表し、既存DBへの反映はマイグレーションの役目)。適用前に `snapshots/premigrate-*.sqlite3` へバックアップが取られ、失敗時は起動自体が失敗する設計。新しい列や既定値に依存する変更が実データコピーで本当に効くかを人間の目で確認するのがこのチェックの目的のひとつ。

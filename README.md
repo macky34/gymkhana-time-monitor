@@ -48,6 +48,10 @@ Setup URL: http://192.168.1.10:8080/setup?t=<token>
 
 このURLを開くと、イベント名・計測ルール・換算係数・クラス構成・最初の運営者を設定できます。送信すると同時にこの端末が運営者としてログインし、`/admin` に遷移します。以後 `/setup` は常に404になります(運営が1人以上いる間は無効)。
 
+### アップグレード
+
+バイナリを新しいものに差し替えて再起動するだけで、DBスキーマは既存の `event.sqlite3` を保ったまま自動的に最新形へ前進します。適用対象があるときだけ `snapshots/` に前進前のバックアップ(`premigrate-<unix>-v<旧バージョン>.sqlite3`)を書き出し、起動ログに `store: migrated to version N (...)` と出力します。バックアップ自体が失敗した場合は起動せずエラーになります(原因を解消して再起動すれば、DBは変更されていない状態から再試行されます)。前進のみでロールバック機構はないため、問題があれば旧バイナリに戻し、該当する `premigrate-*.sqlite3` を `event.sqlite3` として復元してください。詳細は Wiki の [Server-Setup](https://github.com/macky34/gymkhana-time-monitor/wiki/Server-Setup) を参照してください。
+
 ### リバースプロキシ / Cloudflare 利用時の注意
 
 - SSE (`GET /api/stream`) はプロキシ側でレスポンスバッファリングを無効化しないと配信が滞ります(nginxなら `proxy_buffering off`)。

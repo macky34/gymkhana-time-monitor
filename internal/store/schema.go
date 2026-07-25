@@ -1,14 +1,19 @@
 package store
 
-// schemaSQL is the event database schema. Originally embedded verbatim from
-// the Architecture wiki page (DBスキーマ); it has
-// since been reworked for the multi-event design (one server/DB can hold
-// several events, at most one of which is ever 'active' at a time).
-// drivers/vehicles/entries/class_defs remain event-independent, global
-// assets; queue/logs/sensor_events/audit belong to (or, for the latter two,
-// may optionally reference) one event. CREATE TABLE is CREATE TABLE IF NOT
-// EXISTS so Open can apply this unconditionally on every startup; existing
-// databases are not migrated (fresh-DB assumption for this design revision).
+// schemaSQL is the event database schema, describing its latest shape.
+// Originally embedded verbatim from the Architecture wiki page
+// (DBスキーマ); it has since been reworked for the multi-event design (one
+// server/DB can hold several events, at most one of which is ever 'active'
+// at a time). drivers/vehicles/entries/class_defs remain event-independent,
+// global assets; queue/logs/sensor_events/audit belong to (or, for the
+// latter two, may optionally reference) one event. CREATE TABLE is CREATE
+// TABLE IF NOT EXISTS so Open can apply this unconditionally on every
+// startup, giving a brand-new database this shape directly. An existing
+// database that predates a change made here instead needs a migration step
+// (migrate.go) to reach it — schemaSQL by itself never touches a table
+// that already exists, so any change beyond a brand-new CREATE TABLE
+// (a new column, a new index, a data backfill) must be paired with one.
+// See Open's doc comment and the Server-Setup wiki (アップグレード手順).
 const schemaSQL = `
 -- イベント (1行 = 1イベント)。作成 = この行のINSERT。status='active'は
 -- 部分ユニークインデックスにより常に高々1行 (同時に複数のアクティブイベント
