@@ -66,6 +66,17 @@ type Deps struct {
 	// set this to a short duration to avoid slow tests.
 	StatusInterval time.Duration
 
+	// Control, if non-nil, lets external callers (admin HTTP handlers) issue
+	// commands to the dispatcher, such as ForgetSensor. Left nil in tests
+	// that don't exercise that behavior.
+	Control *Control
+
+	// UnresponsiveAfter overrides DefaultUnresponsiveAfter for how long a
+	// sensor may go without a heartbeat before ForgetSensor will drop it.
+	// Zero means DefaultUnresponsiveAfter. Tests may set this to a short
+	// duration to avoid slow tests.
+	UnresponsiveAfter time.Duration
+
 	// ActiveEventID reports the id of the currently active event, if any
 	// (ok=false when none is active). Every recorded sensor_events row
 	// carries this id (NULL when ok=false), and when ok=false incoming
@@ -140,7 +151,15 @@ func Listen(ctx context.Context, addr string, deps Deps) error {
 		statusInterval = defaultStatusInterval
 	}
 
-	d := &dispatcher{deps: deps, sensors: make(map[string]*sensorState)}
+	unresponsiveAfter := deps.UnresponsiveAfter
+	if unresponsiveAfter <= 0 {
+		unresponsiveAfter = DefaultUnresponsiveAfter
+	}
+	d := &dispatcher{
+		deps:              deps,
+		sensors:           make(map[string]*sensorState),
+		unresponsiveAfter: unresponsiveAfter,
+	}
 
 	work := make(chan packet, 64)
 	var wg sync.WaitGroup
@@ -239,13 +258,22 @@ func Listen(ctx context.Context, addr string, deps Deps) error {
 // ever touched from within run's goroutine (both the work-channel branch and
 // the ticker branch), so no locking is required.
 type dispatcher struct {
-	deps    Deps
-	sensors map[string]*sensorState
+	deps              Deps
+	sensors           map[string]*sensorState
+	unresponsiveAfter time.Duration
 }
 
 func (d *dispatcher) run(work <-chan packet, statusInterval time.Duration) {
 	ticker := time.NewTicker(statusInterval)
 	defer ticker.Stop()
+
+	// forgetCh is nil (and therefore permanently blocks in the select
+	// below) when no Control was configured, so this case is simply never
+	// selected in that mode.
+	var forgetCh chan forgetReq
+	if d.deps.Control != nil {
+		forgetCh = d.deps.Control.forget
+	}
 
 	for {
 		select {
@@ -256,6 +284,8 @@ func (d *dispatcher) run(work <-chan packet, statusInterval time.Duration) {
 			d.handle(p)
 		case <-ticker.C:
 			d.emitStatus()
+		case req := <-forgetCh:
+			req.reply <- d.forgetSensor(req.sensorID)
 		}
 	}
 }

@@ -3,6 +3,7 @@ package timing
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -448,5 +449,59 @@ func TestSensorConfigHandler(t *testing.T) {
 	}
 	if body := rr.Body.String(); body != `{"lockout_ms":800}` {
 		t.Fatalf("body = %q, want %q", body, `{"lockout_ms":800}`)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// (8) ForgetSensor: refuses a live sensor, drops an unresponsive one, emits
+// sensor_status immediately, and rejects an unknown sensor_id
+// ---------------------------------------------------------------------------
+
+func TestForgetSensor(t *testing.T) {
+	statuses := make(chan []byte, 64)
+	ctl := NewControl()
+	h := startListener(t, Deps{
+		Store:  newTestStore(t),
+		Course: newFakeCourse(false),
+		OnSensorStatus: func(data []byte) {
+			select {
+			case statuses <- data:
+			default:
+			}
+		},
+		StatusInterval:    50 * time.Millisecond,
+		Control:           ctl,
+		UnresponsiveAfter: 200 * time.Millisecond,
+	})
+
+	h.send(hbJSON("start", 1, 1, 0))
+	waitStatus(t, statuses, "start reports", func(s []map[string]any) bool {
+		return len(s) == 1 && s[0]["sensor_id"] == "start"
+	})
+
+	if err := ctl.ForgetSensor("start"); !errors.Is(err, ErrSensorAlive) {
+		t.Fatalf("ForgetSensor while live: err = %v, want ErrSensorAlive", err)
+	}
+
+	time.Sleep(250 * time.Millisecond) // exceed UnresponsiveAfter with no further hb
+
+	if err := ctl.ForgetSensor("start"); err != nil {
+		t.Fatalf("ForgetSensor after going quiet: err = %v, want nil", err)
+	}
+	waitStatus(t, statuses, "start forgotten", func(s []map[string]any) bool {
+		return len(s) == 0
+	})
+
+	if err := ctl.ForgetSensor("start"); !errors.Is(err, ErrSensorUnknown) {
+		t.Fatalf("ForgetSensor on already-forgotten sensor: err = %v, want ErrSensorUnknown", err)
+	}
+}
+
+func TestForgetSensorControlUnavailable(t *testing.T) {
+	// A Control never wired to a running dispatcher must fail fast rather
+	// than hang the caller (an admin HTTP handler) forever.
+	ctl := NewControl()
+	if err := ctl.ForgetSensor("start"); !errors.Is(err, ErrControlUnavailable) {
+		t.Fatalf("ForgetSensor with no dispatcher: err = %v, want ErrControlUnavailable", err)
 	}
 }

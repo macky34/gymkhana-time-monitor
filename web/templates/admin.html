@@ -1671,14 +1671,27 @@ function renderSensors(){
     if (age > 15){ dotCls = 'err'; stText = '無応答'; }
     else if ((sn.loss_rate || 0) >= 0.01){ dotCls = 'warn'; stText = 'ロス増'; }
     const off = sn.ntp_offset_ms || 0;
-    panel.appendChild(h('div', { class: 'card s' },
-      h('div', { class: 'id' }, String(sn.sensor_id || '').toUpperCase()),
+    const sensorID = String(sn.sensor_id || '');
+    const card = h('div', { class: 'card s' },
+      h('div', { class: 'id' }, sensorID.toUpperCase()),
       h('div', { class: 'st' }, h('span', { class: 'dot ' + dotCls }), stText),
       h('div', { class: 'kv' },
         `last ${age}s ago`, h('br'),
         `loss ${((sn.loss_rate || 0) * 100).toFixed(1)}%`, h('br'),
         `ntp ${off >= 0 ? '+' : '−'}${Math.abs(off).toFixed(1)}ms`)
-    ));
+    );
+    if (stText === '無応答'){
+      const del = h('button', { type: 'button', class: 'mini red' }, '削除');
+      del.addEventListener('click', async () => {
+        if (!confirm(`${sensorID.toUpperCase()} センサーを一覧から削除しますか?\n(ハートビートを再受信すると自動的に再表示されます)`)) return;
+        try {
+          await api('DELETE', '/api/admin/sensors/' + sensorID);
+          toast('削除しました');
+        } catch (err) { toast(err.message); }
+      });
+      card.appendChild(h('div', { style: 'margin-top:8px' }, del));
+    }
+    panel.appendChild(card);
   });
   renderHeaderStatus();
 }
