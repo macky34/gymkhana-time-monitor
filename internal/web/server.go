@@ -38,6 +38,11 @@ type Server struct {
 	course  *courseManager
 	orphans orphanTracker
 
+	// sensorControl, when set via SetSensorControl, lets admin handlers ask
+	// the timing dispatcher to forget a sensor's in-memory heartbeat state.
+	// Left nil in tests that don't exercise sensor ingest.
+	sensorControl *timing.Control
+
 	setupMu    sync.Mutex
 	setupToken string
 
@@ -255,6 +260,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("GET /api/admin/export", s.withAdmin(s.handleAdminExport))
 	// ---- Admin: sensors (W4) ----
 	mux.HandleFunc("GET /api/admin/sensors", s.withAdmin(s.handleAdminSensors))
+	mux.HandleFunc("DELETE /api/admin/sensors/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminSensorDelete)))
 
 	// ---- Internal (LAN only): ESP32 fetches its debounce lockout at boot ----
 	mux.Handle("GET /api/internal/sensor-config", timing.SensorConfigHandler(func() int {

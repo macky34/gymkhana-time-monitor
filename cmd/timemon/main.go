@@ -119,12 +119,15 @@ func main() {
 
 	// Sensor ingest (UDP): pairs start/goal triggers with cars on course and
 	// feeds orphan/sensor_status back to the SSE hub via the web server.
+	sensorCtl := timing.NewControl()
+	srv.SetSensorControl(sensorCtl)
 	go func() {
 		err := timing.Listen(ctx, *udpAddr, timing.Deps{
 			Store:          st,
 			Course:         srv.SensorController(),
 			OnOrphan:       srv.OnOrphan,
 			OnSensorStatus: srv.OnSensorStatus,
+			Control:        sensorCtl,
 			ActiveEventID: func() (int64, bool) {
 				ev, ok, err := st.GetActiveEvent()
 				if err != nil || !ok {

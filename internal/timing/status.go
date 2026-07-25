@@ -66,6 +66,26 @@ func (s *sensorState) lossRate() float64 {
 	return 1 - float64(received)/float64(expected)
 }
 
+// forgetSensor drops sensorID's in-memory heartbeat/health state, as if it
+// had never reported. It refuses with ErrSensorAlive if the sensor has
+// reported within d.unresponsiveAfter, and ErrSensorUnknown if the sensor
+// has never been seen (or was already forgotten). On success it re-emits
+// sensor_status immediately, rather than waiting for the next tick, so the
+// admin UI reflects the removal without delay.
+func (d *dispatcher) forgetSensor(sensorID string) error {
+	s := d.sensors[sensorID]
+	if s == nil {
+		return ErrSensorUnknown
+	}
+	age := time.Now().UnixMilli() - s.lastSeenMS
+	if age < d.unresponsiveAfter.Milliseconds() {
+		return ErrSensorAlive
+	}
+	delete(d.sensors, sensorID)
+	d.emitStatus()
+	return nil
+}
+
 func (d *dispatcher) handleHeartbeat(p packet) {
 	s := d.sensors[p.SensorID]
 	if s == nil {

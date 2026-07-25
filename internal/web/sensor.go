@@ -17,6 +17,12 @@ import (
 // (the Sensor-Device wiki page) live on the course manager below.
 func (s *Server) SensorController() timing.CourseController { return s.course }
 
+// SetSensorControl wires the timing.Control created alongside timing.Listen
+// so admin handlers (handleAdminSensorDelete) can ask the dispatcher to
+// forget a sensor's in-memory heartbeat state. Called once from main.go
+// before Listen's goroutine starts.
+func (s *Server) SetSensorControl(c *timing.Control) { s.sensorControl = c }
+
 // Orphan-run warning kinds recorded internally by SensorStart/SensorGoal
 // (distinct from timing.orphanKindStart/orphanKindGoal, which timing.go
 // still uses for the single remaining ErrNoTarget case: a goal trigger with
