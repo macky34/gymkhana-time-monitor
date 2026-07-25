@@ -25,8 +25,8 @@
   .seg{display:flex;gap:6px;flex-wrap:wrap}
   .seg button{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);
               padding:9px 4px;font-size:12px;cursor:pointer;font-family:inherit;min-width:64px}
-  .seg button.on{border-color:var(--go);color:var(--go);background:#22302a}
-  .hint{font-size:10.5px;color:var(--dim);margin-top:4px;line-height:1.5}
+  .seg button.on{border-color:var(--go);color:var(--go);background:var(--seg-on-bg)}
+  .hint{font-size:11.5px;color:var(--dim);margin-top:4px;line-height:1.5}
   .setrow{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);font-size:12.5px}
   .setrow:last-child{border:none}
   .setrow .ml{margin-left:auto;display:flex;gap:6px;align-items:center}
@@ -36,8 +36,8 @@
   .dcrow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
   .dcrow input{background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--tx);
        padding:9px 10px;font-size:13px;font-family:inherit}
-  .dcrow .lbl{flex:1}
-  .dcrow .cc{flex:0 0 110px;font-family:var(--mono);text-align:right}
+  .dcrow .lbl{flex:1;min-width:0}
+  .dcrow .cc{flex:0 1 110px;min-width:72px;font-family:var(--mono);text-align:right}
   .dcrow button{width:30px;height:30px;border-radius:50%;background:var(--panel2);border:1px solid var(--line);
        color:var(--dim);font-size:13px;cursor:pointer;flex:none;font-family:inherit}
   .dcrow button:hover{color:var(--red);border-color:#5a3038}
@@ -84,7 +84,7 @@
 
       <div class="sec">RULES — 計測・ルール</div>
       <div class="card">
-        <div class="setrow">計測モード <span class="ml"><select id="su-timing"><option value="sensor" selected>センサー</option><option value="manual">手計測</option></select></span></div>
+        <div class="setrow">センサー機材 <span class="ml"><select id="su-timing"><option value="sensor" selected>あり</option><option value="manual">なし</option></select></span></div>
         <div class="setrow" title="PT=パイロンタッチ">PTペナルティ <span class="ml"><select id="su-pt-mode"><option value="add" selected>加算</option><option value="invalidate">無効</option></select> <input id="su-pt-sec" value="5.000"> 秒</span></div>
         <div class="setrow">参加登録 <span class="ml"><select id="su-reg-mode"><option value="public" selected>公開</option><option value="staff">運営のみ</option></select></span></div>
         <div class="setrow">出走待ち列 自己投入 <span class="ml"><select id="su-self-entry"><option value="1" selected>許可</option><option value="0">運営のみ</option></select></span></div>

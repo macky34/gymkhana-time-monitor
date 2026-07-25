@@ -30,7 +30,7 @@
             border-radius:8px;padding:9px;word-break:break-all;color:var(--blue);margin-top:12px}
   .tokenurl.copyable{cursor:pointer;position:relative}
   .tokenurl.copyable:active{border-color:var(--go)}
-  .tokenurl .cp{display:block;font-family:inherit;font-size:9px;color:var(--dim);margin-top:5px;letter-spacing:.05em}
+  .tokenurl .cp{display:block;font-family:inherit;font-size:10.5px;color:var(--dim);margin-top:5px;letter-spacing:.05em}
   .tokenurl.copied{border-color:var(--go)}
   .tokenurl.copied .cp{color:var(--go)}
   .plist{list-style:none}
@@ -43,6 +43,8 @@
   .myq{padding:14px;text-align:center}
   .myq .pos{font-size:13px;color:var(--mut)}
   .myq .pos b{color:var(--tx);font-size:20px;font-family:var(--mono)}
+  .myq .pos.near{color:var(--amber);font-weight:600}
+  .myq .pos.active{color:var(--go);animation:pulse 1.6s infinite}
   .selfgo{width:100%;border:none;border-radius:12px;background:linear-gradient(160deg,#2ec973,#1fa35c);
           color:#07130c;font-size:16px;font-weight:800;padding:14px;cursor:pointer;font-family:inherit;margin-top:10px}
   .selfgo:active{transform:scale(.98)}
@@ -57,7 +59,7 @@
              border:1px solid #5a3038;color:var(--red);font-family:inherit;font-size:12.5px;cursor:pointer}
   .ve-unlink:hover{background:#3a2226}
   .runs{width:100%;border-collapse:collapse;font-size:12px}
-  .runs th{font-size:9px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
+  .runs th{font-size:10.5px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
   .runs td{padding:8px 6px;border-bottom:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums}
   .runs td:first-child{color:var(--mut)}
   .runs tr.dead td{color:var(--dim)} /* MC/無効走行はグレーのみ (取り消し線なし) */
@@ -71,8 +73,8 @@
   .seg{display:flex;gap:6px;flex-wrap:wrap}
   .seg button{flex:1;background:var(--panel2);border:1px solid var(--line);border-radius:9px;color:var(--mut);
               padding:9px 4px;font-size:12px;cursor:pointer;font-family:inherit;min-width:64px}
-  .seg button.on{border-color:var(--go);color:var(--go);background:#22302a}
-  .hint{font-size:10.5px;color:var(--dim);margin-top:4px;line-height:1.5}
+  .seg button.on{border-color:var(--go);color:var(--go);background:var(--seg-on-bg)}
+  .hint{font-size:11.5px;color:var(--dim);margin-top:4px;line-height:1.5}
   .modal-bg{position:absolute;inset:0;background:rgba(5,7,10,.7);display:none;align-items:flex-end;z-index:30}
   .modal-bg.on{display:flex}
   #cropmodal{z-index:40} /* 他モーダル(車両追加/編集)の上から開くため常に前面 */
@@ -397,6 +399,44 @@ async function qAction(fn){
   try { await fn(); } catch (err) { toast(err.message || '操作に失敗しました'); }
   busyQueue = false;
 }
+
+// lastMyQueueKey tracks the previous renderMyQ() state so notifyMyTurn() fires
+// only on a *transition* into "queue position 0" (SSE re-renders the same
+// state repeatedly - without this guard every re-render would re-notify).
+// null means "not yet rendered" - the very first render must not notify even
+// if the participant is already at the front when the page loads.
+let lastMyQueueKey = null;
+// AudioContext requires a user gesture to start (autoplay policy) - create it
+// lazily on the first tap/touch anywhere on the page so notifyMyTurn() can
+// use it later without needing its own click.
+let audioCtx = null;
+document.addEventListener('pointerdown', () => {
+  if (audioCtx) return;
+  try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
+}, { once: true });
+function notifyMyTurn(){
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+  if (audioCtx){
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.frequency.value = 880;
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.4);
+  }
+  if (!document.title.startsWith('🔔 ')){
+    const orig = document.title;
+    document.title = '🔔 ' + orig;
+    document.addEventListener('visibilitychange', function restoreTitle(){
+      if (document.visibilityState === 'visible'){
+        document.title = orig;
+        document.removeEventListener('visibilitychange', restoreTitle);
+      }
+    });
+  }
+}
 function renderMyQ(){
   const box = document.getElementById('my-queue');
   if (!myData){ return; }
@@ -404,6 +444,15 @@ function renderMyQ(){
   const mode = settings ? settings.timing_mode : 'sensor';
   const selfEntry = settings ? settings.queue_self_entry !== false : true;
   const myCar = onCourseCars.find(c => c.driver && c.driver.id === MY_ID);
+  const idx = queueItems.findIndex(q => q.driver && q.driver.id === MY_ID);
+
+  // Detect a transition into "front of queue" (queue:0) to fire notifyMyTurn()
+  // exactly once per transition, not on every SSE-triggered re-render, and
+  // never on the very first render (lastMyQueueKey === null) even if already
+  // at the front when the page loads.
+  const stateKey = myCar ? (myCar.finish ? 'finished' : (!myCar.t_start_us ? 'armed' : 'running')) : (idx < 0 ? 'none' : `queue:${idx}`);
+  if (stateKey === 'queue:0' && lastMyQueueKey !== null && lastMyQueueKey !== 'queue:0') notifyMyTurn();
+  lastMyQueueKey = stateKey;
 
   if (myCar && !myCar.t_start_us && !myCar.finish){
     box.appendChild(h('div', { class: 'pos' }, '投入済み — ', h('b', { style: 'font-size:14px' }, 'スタートセンサー通過待ち')));
@@ -420,7 +469,6 @@ function renderMyQ(){
     box.appendChild(h('div', { class: 'pos' }, myCar.finish ? 'ゴール! お疲れさまでした' : '走行中 — がんばれ!'));
     return;
   }
-  const idx = queueItems.findIndex(q => q.driver && q.driver.id === MY_ID);
   if (idx < 0){
     box.appendChild(h('div', { class: 'pos' }, '現在出走待ち列に並んでいません'));
     if (selfEntry){
@@ -439,7 +487,7 @@ function renderMyQ(){
     return;
   }
   if (idx === 0 && mode === 'sensor'){
-    box.appendChild(h('div', { class: 'pos' }, 'あなたの番です'));
+    box.appendChild(h('div', { class: 'pos active' }, 'あなたの番です'));
     const go = h('button', { class: 'selfgo', type: 'button' }, '出走 ▶ (スタートラインへ)');
     go.addEventListener('click', () => qAction(async () => {
       await api('POST', '/api/mypage/queue/launch');
@@ -455,7 +503,8 @@ function renderMyQ(){
     box.appendChild(h('div', { class: 'note' }, 'タップでコースに投入。計測開始はスタートセンサー通過の瞬間です。'));
     return;
   }
-  box.appendChild(h('div', { class: 'pos' }, '現在 ', h('b', {}, String(idx + 1)), ' 番目'));
+  box.appendChild(h('div', { class: 'pos' + (idx <= 2 ? ' near' : '') }, '現在 ', h('b', {}, String(idx + 1)), ' 番目'));
+  if (idx <= 2) box.appendChild(h('div', { class: 'note', style: 'color:var(--amber);font-weight:600' }, `あと${idx}台で出走`));
   box.appendChild(h('div', { class: 'note' },
     idx === 0 ? '手計測モードのため出走操作は運営が行います' : '順番が来るとここに出走ボタンが表示されます (センサーモード時)'));
   const leave = h('button', { class: 'btn danger', style: 'margin-top:10px', type: 'button' }, '出走中止 (取り下げ)');

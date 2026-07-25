@@ -20,23 +20,23 @@
     .avstack>.avatar:first-child{width:54px;height:54px;font-size:20px}
   }
   /* ---- ranking-specific ---- */
-  .evbanner{background:#2c2718;border-bottom:1px solid #77771f;color:var(--amber);font-size:11.5px;
+  .evbanner{background:var(--seg-warn-bg);border-bottom:1px solid #77771f;color:var(--amber);font-size:11.5px;
             padding:9px 12px;text-align:center}
   .evbanner a{color:var(--amber)}
   .archnotice{background:var(--panel);border:1px solid var(--line);border-radius:10px;
               padding:9px 12px;margin-bottom:12px;text-align:center;font-size:11.5px}
   .archnotice a{color:var(--mut);text-decoration:none}
   .frow{display:flex;align-items:flex-start;gap:8px;margin-bottom:6px}
-  .frow .ax{font-size:10px;color:var(--dim);width:52px;flex:none;padding-top:7px;letter-spacing:.03em}
+  .frow .ax{font-size:11px;color:var(--dim);width:52px;flex:none;padding-top:7px;letter-spacing:.03em}
   .chips{display:flex;gap:6px;flex-wrap:wrap;flex:1}
   .chip{font-size:11px;padding:5px 11px;border-radius:99px;border:1px solid var(--line);background:var(--panel);
         color:var(--mut);cursor:pointer;font-family:inherit}
-  .chip.on{background:#2b3a2f;border-color:var(--go);color:var(--go)}
+  .chip.on{background:var(--toast-bg);border-color:var(--go);color:var(--go)}
   .fsel{flex:1;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);
         padding:6px 9px;font-size:11.5px;font-family:inherit}
   .fsel.on{border-color:var(--go);color:var(--go)}
   .rk{width:100%;border-collapse:collapse;font-size:12.5px}
-  .rk th{font-size:9.5px;color:var(--dim);font-weight:600;letter-spacing:.1em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  .rk th{font-size:11px;color:var(--dim);font-weight:600;letter-spacing:.1em;text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
   .rk th.r,.rk td.r{text-align:right}
   /* fixed layout: 長い名前 (nowrapのマーキー) がテーブル幅を押し広げないよう
      列幅を thead 側で確定させる */
@@ -51,9 +51,9 @@
   .rk tr:nth-child(1) .pos{color:var(--amber)}
   .rk td.av{width:54px;padding-right:0}
   .rk .nm b{display:block;font-weight:600}
-  .rk .nm>span{display:block;font-size:10px;color:var(--mut)}
+  .rk .nm>span{display:block;font-size:11px;color:var(--mut)}
   .rk .best{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:700;font-size:14px}
-  .rk .sub{font-family:var(--mono);font-size:10px;color:var(--mut)}
+  .rk .sub{font-family:var(--mono);font-size:11px;color:var(--mut)}
   .rk tr.dead td{opacity:.45}
   .rk tr.dead .best{text-decoration:line-through}
   .modal-bg{position:absolute;inset:0;background:rgba(5,7,10,.7);display:none;align-items:flex-end;z-index:30}
@@ -64,7 +64,7 @@
   .modal h3{font-size:15px}
   .modal .sub{font-size:11px;color:var(--mut);margin:2px 0 12px}
   .runs{width:100%;border-collapse:collapse;font-size:12px}
-  .runs th{font-size:9px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
+  .runs th{font-size:10.5px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
   .runs td{padding:8px 6px;border-bottom:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums}
   .runs td:first-child{color:var(--mut)}
   .runs tr.dead td{color:var(--dim)} /* MC/無効走行はグレーのみ (取り消し線なし) */
@@ -305,7 +305,7 @@ function drawRk(){
       h('td', { class: 'pos t' }, p),
       h('td', { class: 'av' }, h('div', { class: 'avstack' }, dAv, vAv)),
       h('td', { class: 'nm' },
-        h('b', {}, marq(r.driver.name + ' ', h('span', { style: 'font-weight:400;font-size:10px;color:var(--dim)' }, r.driver_class || ''))),
+        h('b', {}, marq(r.driver.name + ' ', h('span', { style: 'font-weight:400;font-size:11px;color:var(--dim)' }, r.driver_class || ''))),
         h('span', {}, marq(`#${r.vehicle.number} ${r.vehicle.name}`)),
         h('span', {}, marq(`${r.vehicle.disp_class} / ${r.vehicle.dt_class}`))
       ),

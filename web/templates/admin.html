@@ -9,6 +9,10 @@
   header .live{margin-left:auto;font-size:10px;color:var(--go);font-family:var(--mono);display:flex;align-items:center;gap:5px}
   header .live::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--go);animation:pulse 1.6s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+  header .ev{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hdbadge{font-size:10.5px;padding:3px 9px;border-radius:99px;border:1px solid var(--line);color:var(--mut);
+           white-space:nowrap;cursor:pointer;display:flex;align-items:center;gap:4px}
+  .hdbadge .dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--dim)}
   .welcome{text-align:center;padding:28px 8px 8px}
   .welcome h2{font-size:17px;margin-bottom:4px}
   .welcome p{font-size:11.5px;color:var(--mut)}
@@ -40,8 +44,8 @@
   .seg{display:flex;gap:6px}
   .seg button{flex:1;background:var(--panel);border:1px solid var(--line);border-radius:9px;color:var(--mut);
               padding:9px 4px;font-size:12px;cursor:pointer;font-family:inherit}
-  .seg button.on{border-color:var(--go);color:var(--go);background:#22302a}
-  .seg.warn button.on{border-color:var(--amber);color:var(--amber);background:#2c2718}
+  .seg button.on{border-color:var(--go);color:var(--go);background:var(--seg-on-bg)}
+  .seg.warn button.on{border-color:var(--amber);color:var(--amber);background:var(--seg-warn-bg)}
   .gobtn{width:100%;border:none;border-radius:14px;background:linear-gradient(160deg,#2ec973,#1fa35c);
          color:#07130c;font-size:19px;font-weight:800;padding:20px 12px 22px;cursor:pointer;position:relative;
          overflow:hidden;font-family:inherit;letter-spacing:.05em}
@@ -80,11 +84,12 @@
      marq() span now, so a bare descendant `span` selector would also match
      the marquee's own inner measuring span nested inside the name line. */
   .oc-admin .nm > span:last-child{font-size:10px;color:var(--mut);font-weight:400}
-  .oc-admin .acts{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+  .oc-admin .acts{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
   .oc-admin.armed .acts{flex:0 0 100%;margin-left:0}
   .empty-course{border:1px dashed var(--line);border-radius:14px;padding:18px;text-align:center;color:var(--dim);font-size:12px;margin-top:9px}
-  .mini{font-size:10.5px;padding:6px 9px;border-radius:7px;background:var(--panel2);border:1px solid var(--line);
+  .mini{font-size:12px;padding:10px 12px;border-radius:8px;background:var(--panel2);border:1px solid var(--line);
         color:var(--mut);cursor:pointer;font-family:inherit;white-space:nowrap}
+  .acts .mini.red{margin-left:6px}
   .mini.on{border-color:#77771f;color:var(--amber);background:#2c2a18}
   .mini.red{color:var(--red)}
   .mini.go{color:var(--go);border-color:#2b5a3f;font-weight:700}
@@ -96,7 +101,7 @@
   .q li:last-child{border:none}
   .q li.sortable-ghost{opacity:.35;background:var(--panel2);border-radius:8px}
   .q li.sortable-chosen{background:var(--panel2);border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.45)}
-  .q .grip{color:var(--dim);font-size:15px;cursor:grab;flex:none;padding:0 2px;touch-action:none;user-select:none}
+  .q .grip{color:var(--dim);font-size:17px;cursor:grab;flex:none;padding:8px 10px;touch-action:none;user-select:none}
   .q li.sortable-chosen .grip{cursor:grabbing}
   .q .pos{font-family:var(--mono);color:var(--dim);font-size:11px;width:18px;flex:none}
   .q .nm{min-width:0}
@@ -105,7 +110,7 @@
      bare descendant `span` selector would also match the marquee's own inner
      measuring span nested inside <b> for the name line. */
   .q .nm > span{font-size:10px;color:var(--mut)}
-  .q .acts{margin-left:auto;display:flex;gap:5px}
+  .q .acts{margin-left:auto;display:flex;gap:8px}
   /* ログタブ: monitor.html の直近リザルト風 flex リスト (旧 <table class="lg"> から移行) */
   .loglist{list-style:none}
   .loglist li{display:flex;align-items:center;gap:8px;padding:9px 6px;border-bottom:1px solid var(--line);font-size:11.5px}
@@ -119,12 +124,17 @@
   .lg-row1{flex:1;min-width:0;display:flex;align-items:flex-start;gap:8px}
   .lg-mid{min-width:0;flex:1}
   .lg-mid b{font-weight:600;display:block}
-  .lg-meta{display:block;font-size:9.5px;color:var(--mut)}
+  .lg-meta{display:block;font-size:11px;color:var(--mut)}
   .lg-rgt{flex:none;display:flex;align-items:center;gap:4px}
   .lg-time{font-family:var(--mono);font-variant-numeric:tabular-nums;font-weight:600;text-align:right}
-  .lg-time .lg-pt{display:block;font-size:9px;color:var(--amber);font-weight:400}
+  .lg-time .lg-pt{display:block;font-size:10.5px;color:var(--amber);font-weight:400}
   .lg-src{flex:none;width:18px;text-align:center;font-size:12px}
   .lg-acts{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+  /* ログ行は最大5ボタン(PT+/PT−/MC/編集/削除)並ぶため、出走タブ同等の
+     タッチターゲット拡大を適用するとスマホ幅で2行に折り返してしまう。
+     ここは屋外の急ぎ操作ではなくログ編集という落ち着いた操作なので、
+     このコンテキストだけ元のサイズに戻す。 */
+  .lg-acts .mini{font-size:10.5px;padding:6px 9px;border-radius:7px}
   @media(min-width:900px){
     .lg-content{flex-direction:row;align-items:center}
     .lg-acts{margin-left:8px}
@@ -167,7 +177,7 @@
   .sensor .s .st{font-size:13px;font-weight:700;margin:4px 0 6px;display:flex;align-items:center;gap:6px}
   .dot{width:8px;height:8px;border-radius:50%}
   .dot.ok{background:var(--go)} .dot.warn{background:var(--amber)} .dot.err{background:var(--red)}
-  .sensor .kv{font-size:10px;color:var(--dim);font-family:var(--mono);line-height:1.7}
+  .sensor .kv{font-size:11px;color:var(--dim);font-family:var(--mono);line-height:1.7}
   .fld{margin-bottom:13px}
   .fld label{display:block;font-size:11px;color:var(--mut);margin-bottom:5px}
   .fld input,.fld select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:9px;
@@ -175,7 +185,7 @@
   .fldrow{display:flex;gap:10px}
   .fldrow .fld{flex:1}
   .fldrow .fld.sm{flex:0 0 96px}
-  .hint{font-size:10.5px;color:var(--dim);margin-top:4px;line-height:1.5}
+  .hint{font-size:11.5px;color:var(--dim);margin-top:4px;line-height:1.5}
   .modal-bg{position:absolute;inset:0;background:rgba(5,7,10,.7);display:none;align-items:flex-end;z-index:30}
   .modal-bg.on{display:flex}
   .modal{background:var(--panel);border-top:1px solid var(--line);border-radius:18px 18px 0 0;width:100%;
@@ -189,7 +199,7 @@
             border-radius:8px;padding:9px;word-break:break-all;color:var(--blue)}
   .tokenurl.copyable{cursor:pointer;position:relative}
   .tokenurl.copyable:active{border-color:var(--go)}
-  .tokenurl .cp{display:block;font-family:inherit;font-size:9px;color:var(--dim);margin-top:5px;letter-spacing:.05em}
+  .tokenurl .cp{display:block;font-family:inherit;font-size:10.5px;color:var(--dim);margin-top:5px;letter-spacing:.05em}
   .tokenurl.copied{border-color:var(--go)}
   .tokenurl.copied .cp{color:var(--go)}
   .cropwrap{max-height:300px;min-height:180px;overflow:hidden;margin:0 0 14px;background:#000;border-radius:8px}
@@ -204,6 +214,9 @@
 <div class="phone">
   <header>
     <span class="ev">{{.EventName}}</span>
+    {{if .IsAdmin}}{{if not .IsEmergency}}
+    <span class="hdbadge" id="hd-sensor" style="display:none"></span>
+    {{end}}{{end}}
     <span class="live t">LIVE</span>
   </header>
 
@@ -606,6 +619,46 @@ function dtClasses(){ return (pub && pub.dt_classes) || []; }
 /* ============================================================
    出走タブ
    ============================================================ */
+function renderHeaderStatus(){
+  const hdSensor = document.getElementById('hd-sensor');
+  if (!hdSensor) return; // emergency admin has no settings tab / event context
+  const hasEvent = !!(S || pub);
+  if (!hasEvent){
+    hdSensor.style.display = 'none';
+    return;
+  }
+  const m = mode();
+
+  if (!sensors.length){
+    if (m === 'sensor'){
+      hdSensor.style.display = 'flex';
+      hdSensor.className = 'hdbadge';
+      clear(hdSensor);
+      hdSensor.appendChild(h('span', { class: 'dot' }));
+      hdSensor.appendChild(document.createTextNode('Sensors — 0'));
+    } else {
+      hdSensor.style.display = 'none';
+    }
+    return;
+  }
+  let errCount = 0, warnCount = 0;
+  sensors.forEach(sn => {
+    const age = Math.max(0, Math.round((nowMs() - sn.last_seen_ms) / 1000));
+    if (age > 15) errCount++;
+    else if ((sn.loss_rate || 0) >= 0.01) warnCount++;
+  });
+  const badCount = errCount + warnCount;
+  hdSensor.style.display = 'flex';
+  clear(hdSensor);
+  const dotCls = errCount > 0 ? 'err' : (warnCount > 0 ? 'warn' : 'ok');
+  hdSensor.appendChild(h('span', { class: 'dot ' + dotCls }));
+  hdSensor.appendChild(document.createTextNode(badCount > 0 ? `Sensors ⚠ ${badCount}/${sensors.length}` : `Sensors ✓ ${sensors.length}/${sensors.length}`));
+}
+function goToSettingsTab(){
+  const btn = Array.from(document.querySelectorAll('.atabs button')).find(b => b.dataset.p === 'a-set');
+  if (btn) btn.click();
+}
+
 function renderModeUI(){
   const m = mode();
   document.querySelectorAll('#modeseg button').forEach(b => b.classList.toggle('on', b.dataset.m === m));
@@ -613,6 +666,7 @@ function renderModeUI(){
   document.getElementById('goalbtn').style.display = (m === 'manual') ? 'block' : 'none';
   document.getElementById('fallback-row').style.display = (m === 'manual') ? 'none' : 'flex';
   renderGoButtons();
+  renderHeaderStatus();
 }
 
 function renderGoButtons(){
@@ -746,6 +800,7 @@ async function courseMC(c){
   } catch (err) { toast(err.message); }
 }
 async function courseUndoGoal(c){
+  if (!confirm(`${c.driver.name} のゴールを取り消しますか?\n(記録を取り消し、計測を継続します)`)) return;
   try {
     await api('POST', `/api/admin/course/${c.queue_id}/undo-goal`, {});
     toast(`↩ ${c.driver.name} ゴール取消 (計測継続)`);
@@ -1364,7 +1419,8 @@ function renderUsers(){
 }
 async function toggleRole(u){
   const newRole = u.role === 'admin' ? 'user' : 'admin';
-  if (newRole === 'user' && !confirm(`${u.name} の運営権限を解除しますか?`)) return;
+  const msg = newRole === 'admin' ? `${u.name} に運営権限を付与しますか?` : `${u.name} の運営権限を解除しますか?`;
+  if (!confirm(msg)) return;
   try {
     await api('PUT', `/api/admin/users/${u.id}/role`, { role: newRole });
     toast(`${u.name} の運営権限を${newRole === 'admin' ? '付与' : '解除'}`);
@@ -1606,6 +1662,7 @@ function renderSensors(){
   clear(panel);
   if (!sensors.length){
     panel.appendChild(h('div', { class: 'card s', style: 'padding:11px 12px;color:var(--dim);font-size:11px' }, 'センサー未接続 (データなし)'));
+    renderHeaderStatus();
     return;
   }
   sensors.forEach(sn => {
@@ -1619,9 +1676,11 @@ function renderSensors(){
       h('div', { class: 'st' }, h('span', { class: 'dot ' + dotCls }), stText),
       h('div', { class: 'kv' },
         `last ${age}s ago`, h('br'),
-        `loss ${((sn.loss_rate || 0) * 100).toFixed(1)}% / ntp ${off >= 0 ? '+' : '−'}${Math.abs(off).toFixed(1)}ms`)
+        `loss ${((sn.loss_rate || 0) * 100).toFixed(1)}%`, h('br'),
+        `ntp ${off >= 0 ? '+' : '−'}${Math.abs(off).toFixed(1)}ms`)
     ));
   });
+  renderHeaderStatus();
 }
 
 function fillSettingsForm(){
@@ -1866,6 +1925,8 @@ async function init(){
     if (b.dataset.p === 'a-set'){ reloadAdminSettings().then(() => { fillSettingsForm(); renderNoEventState(); }); reloadEvents(); }
     if (b.dataset.p === 'a-log'){ reloadLogs(); }
   }));
+  const hdSensor = document.getElementById('hd-sensor');
+  if (hdSensor) hdSensor.addEventListener('click', goToSettingsTab);
   ['logmodal', 'assignmodal', 'newusermodal', 'renamemodal', 'qrmodal', 'vehmodal', 'combomodal', 'cropmodal'].forEach(bindModalClose);
   bindGoButtons();
   bindExports();

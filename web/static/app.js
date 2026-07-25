@@ -173,13 +173,30 @@ function nowMs(){ return Date.now() + offset; }
 // wires up one addEventListener per handlers key. When topics includes
 // 'time', the offset/offsetKnown clock-sync listener is registered
 // automatically - callers never need a 'time' entry in handlers.
+/* ---------- connection status (LIVE badge) ---------- */
+let sseConnected = true;
+function updateLiveBadge(){
+  const el = document.querySelector('header .live');
+  if (!el) return;
+  el.classList.toggle('off', !sseConnected);
+  el.textContent = sseConnected ? 'LIVE' : '再接続中…';
+}
+function setSseConnected(v){
+  if (sseConnected === v) return;
+  sseConnected = v;
+  updateLiveBadge();
+}
+
 function openStream(topics, handlers){
   const es = new EventSource('/api/stream?topics=' + topics.join(','));
+  es.addEventListener('open', () => setSseConnected(true));
+  es.addEventListener('error', () => setSseConnected(false));
   if (topics.includes('time')){
     es.addEventListener('time', e => {
       const d = JSON.parse(e.data);
       offset = d.server_ms - Date.now();
       offsetKnown = true;
+      setSseConnected(true);
     });
   }
   for (const name in (handlers || {})){

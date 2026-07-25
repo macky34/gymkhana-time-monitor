@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+{{template "head-common" .}}
+<title>タイムモニター | 無効なURL</title>
+<style>
+  .welcome{text-align:center;padding:48px 16px 8px}
+  .welcome h2{font-size:17px;margin-bottom:8px}
+  .welcome p{font-size:12.5px;color:var(--mut);line-height:1.7}
+</style>
+</head>
+<body>
+<div class="phone">
+  <header>
+    <span class="ev">タイムモニター</span>
+  </header>
+  <main id="main">
+  <section class="screen on">
+    <div class="welcome">
+      <div style="font-size:32px">⚠️</div>
+      <h2>{{.Message}}</h2>
+      <p>QRコード・URLが再発行されると古いものは使えなくなります。運営にログインURLの再発行を依頼してください。</p>
+      <a class="btn" href="/" style="display:inline-block;margin-top:16px;text-decoration:none">モニターへ</a>
+    </div>
+  </section>
+  </main>
+</div>
+</body>
+</html>

@@ -17,6 +17,11 @@ type PageData struct {
 	// "monitor"/"ranking"/"mypage"/"admin"/"archive", or "" for pages with no
 	// nav bar (register, setup). Consumed by the shared "nav" template.
 	Active string
+
+	// Message is the only field token_invalid.html reads - the
+	// human-readable reason shown on that page. Unused by every other
+	// template.
+	Message string
 }
 
 // pageData builds the PageData for the current request: event name (empty
@@ -39,6 +44,19 @@ func (s *Server) pageData(r *http.Request) PageData {
 func (s *Server) render(w http.ResponseWriter, name string, data PageData) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.Tmpl.ExecuteTemplate(w, name, data); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// renderTokenInvalid serves a 404 with a Japanese explanation page instead of
+// a bare "404 page not found" for an unknown/expired login or setup token.
+// The reason (unknown vs. expired) is never distinguished in the message -
+// same convention as driverFromRequest's ok=false and handleTokenLogin's
+// existing bare-404 fallback, so this doesn't leak which case occurred.
+func (s *Server) renderTokenInvalid(w http.ResponseWriter, message string) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusNotFound)
+	if err := s.Tmpl.ExecuteTemplate(w, "token_invalid.html", PageData{Message: message}); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }

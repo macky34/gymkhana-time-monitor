@@ -102,7 +102,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 // handleTokenLogin implements GET /a/{token}: exchange a driver's permanent
 // login token for a session cookie, then redirect to /mypage. Unknown tokens
-// get a bodyless 404 (no distinction from "expired"/"revoked").
+// get a Japanese "invalid URL" page (no distinction from "expired"/"revoked").
 func (s *Server) handleTokenLogin(w http.ResponseWriter, r *http.Request) {
 	token := r.PathValue("token")
 	d, ok, err := s.Store.GetDriverByToken(token)
@@ -121,7 +121,7 @@ func (s *Server) handleTokenLogin(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "/admin", http.StatusFound)
 			return
 		}
-		http.NotFound(w, r)
+		s.renderTokenInvalid(w, "このログインURLは無効です")
 		return
 	}
 	s.setSessionCookie(w, r, d.Token)
