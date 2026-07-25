@@ -16,21 +16,36 @@
 
 :root{
   --bg:#14171c; --panel:#1d232c; --panel2:#242b36; --line:#313a47;
-  --tx:#e9edf3; --mut:#8b95a5; --dim:#5b6472;
+  --tx:#e9edf3; --mut:#8b95a5; --dim:#7a8494;
   --go:#3ad07f; --amber:#ffb224; --red:#ff5d5d; --blue:#5aa2ff;
+  --bg-page:#0b0d10; --nav-bg:#161a20; --toast-bg:#2b3a2f;
+  --seg-on-bg:#22302a; --seg-warn-bg:#2c2718;
+  --shadow:0 20px 60px rgba(0,0,0,.5);
   --mono:"SFMono-Regular","Cascadia Mono","Consolas","Roboto Mono",ui-monospace,monospace;
 }
+@media (prefers-color-scheme: light){
+  :root{
+    --bg:#f4f6f9; --panel:#ffffff; --panel2:#eef1f5; --line:#d7dce3;
+    --tx:#1a2230; --mut:#5a6575; --dim:#6b7686;
+    --go:#0f9d58; --amber:#b9720a; --red:#d13c3c; --blue:#2f6cb8;
+    --bg-page:#e3e7ed; --nav-bg:#eef1f5; --toast-bg:#dff3e6;
+    --seg-on-bg:#e3f5ea; --seg-warn-bg:#fbeed7;
+    --shadow:0 10px 30px rgba(20,30,50,.12);
+  }
+}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{background:#0b0d10;color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+body{background:var(--bg-page);color:var(--tx);font-family:system-ui,-apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
      display:flex;justify-content:center;padding:0;min-height:100vh}
-.phone{width:392px;max-width:100%;background:var(--bg);border:1px solid #262d38;border-radius:22px;
-       overflow:hidden;display:flex;flex-direction:column;height:100vh;height:100dvh;max-height:none;box-shadow:0 20px 60px rgba(0,0,0,.5);position:relative}
+.phone{width:392px;max-width:100%;background:var(--bg);border:1px solid var(--line);border-radius:22px;
+       overflow:hidden;display:flex;flex-direction:column;height:100vh;height:100dvh;max-height:none;box-shadow:var(--shadow);position:relative}
 header{padding:10px 14px 8px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:8px;flex:none}
 header .ev{font-size:13px;font-weight:700;letter-spacing:.02em}
+header .live.off{color:var(--amber)}
+header .live.off::before{background:var(--amber);animation:none}
 main{flex:1;overflow-y:auto;overscroll-behavior:contain}
 .screen{display:none;padding:12px 12px 20px}
 .screen.on{display:block}
-nav{flex:none;display:flex;border-top:1px solid var(--line);background:#161a20}
+nav{flex:none;display:flex;border-top:1px solid var(--line);background:var(--nav-bg)}
 nav a{flex:1;background:none;border:none;color:var(--dim);font-size:10.5px;padding:9px 0 calc(11px + env(safe-area-inset-bottom));cursor:pointer;text-decoration:none;
            display:flex;flex-direction:column;gap:3px;align-items:center;font-family:inherit}
 nav a .ic{font-size:16px;line-height:1}
@@ -41,7 +56,7 @@ nav a.on .ic{color:var(--amber)}
 /* small always-visible explainer text appended to a .sec heading (e.g. "MC=
    ミスコース"), as opposed to a hover-only title= tooltip - this app is
    mostly viewed on phones, which have no hover. */
-.sechint{font-size:9.5px;color:var(--dim);letter-spacing:0;font-weight:400;white-space:nowrap}
+.sechint{font-size:11px;color:var(--dim);letter-spacing:0;font-weight:400;white-space:nowrap}
 .sechint.push{margin-left:auto}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px}
 .t{font-family:var(--mono);font-variant-numeric:tabular-nums}
@@ -50,7 +65,7 @@ nav a.on .ic{color:var(--amber)}
 .btn:active{transform:translateY(1px)}
 .btn.primary{background:var(--go);border-color:var(--go);color:#08130c;font-weight:700}
 .btn.danger{color:var(--red);border-color:#5a3038}
-.badge{font-size:9.5px;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
+.badge{font-size:10.5px;padding:2px 7px;border-radius:99px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
 .badge.main{border-color:var(--amber);color:var(--amber)}
 .avatar{width:38px;height:38px;border-radius:50%;background:var(--panel2);display:flex;align-items:center;justify-content:center;
         font-size:15px;font-weight:700;flex:none;border:1px solid var(--line);overflow:hidden}
@@ -86,10 +101,10 @@ nav a.on .ic{color:var(--amber)}
   0%,12%{transform:translateX(0)}
   88%,100%{transform:translateX(var(--marq-x,0))}
 }
-.toast{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:#2b3a2f;border:1px solid var(--go);
+.toast{position:absolute;bottom:64px;left:50%;transform:translateX(-50%);background:var(--toast-bg);border:1px solid var(--go);
        color:var(--go);font-size:12px;padding:9px 18px;border-radius:99px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:40;white-space:nowrap}
 .toast.on{opacity:1}
-.note{font-size:10px;color:var(--dim);margin-top:8px;line-height:1.6}
+.note{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.6}
 .grid2{display:block}
 @media(min-width:900px){
   body{padding:20px;align-items:flex-start}

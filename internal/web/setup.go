@@ -10,7 +10,8 @@ import (
 
 // handleSetupPage serves GET /setup. Only reachable with the exact token
 // generated at process start, and only before the event has been seeded.
-// Any other case is a bare 404 (no hint about which condition failed).
+// Any other case gets the same Japanese "invalid URL" page (no hint about
+// which condition failed).
 func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	tok := r.URL.Query().Get("t")
 
@@ -18,7 +19,7 @@ func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 	valid := s.setupToken != "" && tok == s.setupToken
 	s.setupMu.Unlock()
 	if !valid {
-		http.NotFound(w, r)
+		s.renderTokenInvalid(w, "このセットアップURLは無効です")
 		return
 	}
 
@@ -30,7 +31,7 @@ func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if hasAdmin {
-		http.NotFound(w, r)
+		s.renderTokenInvalid(w, "このセットアップURLは無効です")
 		return
 	}
 
