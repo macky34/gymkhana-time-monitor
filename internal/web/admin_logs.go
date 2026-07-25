@@ -13,6 +13,7 @@ type adminLogDriverOut struct {
 	ID      int64  `json:"id"`
 	Name    string `json:"name"`
 	HasIcon bool   `json:"has_icon"`
+	IconRev int64  `json:"icon_rev"`
 }
 
 type adminLogVehicleOut struct {
@@ -20,6 +21,7 @@ type adminLogVehicleOut struct {
 	Number  int    `json:"number"`
 	Name    string `json:"name"`
 	HasIcon bool   `json:"has_icon"`
+	IconRev int64  `json:"icon_rev"`
 }
 
 type adminLogOut struct {
@@ -62,12 +64,12 @@ func (s *Server) buildAdminLogOut(l store.LogRow, set store.EventRow, heatNums m
 
 	if l.DriverID != nil {
 		if d, ok, err := s.Store.GetDriver(*l.DriverID); err == nil && ok {
-			out.Driver = &adminLogDriverOut{ID: d.ID, Name: d.Name, HasIcon: d.HasIcon}
+			out.Driver = &adminLogDriverOut{ID: d.ID, Name: d.Name, HasIcon: d.HasIcon, IconRev: d.IconRev}
 		}
 	}
 	if l.VehicleID != nil {
 		if v, ok, err := s.Store.GetVehicle(*l.VehicleID); err == nil && ok {
-			out.Vehicle = &adminLogVehicleOut{ID: v.ID, Number: v.Number, Name: v.Name, HasIcon: v.HasIcon}
+			out.Vehicle = &adminLogVehicleOut{ID: v.ID, Number: v.Number, Name: v.Name, HasIcon: v.HasIcon, IconRev: v.IconRev}
 		}
 	}
 	if h, ok := heatNums[l.ID]; ok {

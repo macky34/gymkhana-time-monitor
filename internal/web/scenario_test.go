@@ -437,14 +437,14 @@ func TestScenario_FullEventLifecycle(t *testing.T) {
 		"best_log_id", "best_ms", "driver", "driver_class", "invalid",
 		"pt_total", "runs", "second_ms", "valid_runs", "vehicle",
 	})
-	assertKeySet(t, "GET /api/ranking row.driver", rankingDriverKeys, []string{"has_icon", "id", "name"})
+	assertKeySet(t, "GET /api/ranking row.driver", rankingDriverKeys, []string{"has_icon", "icon_rev", "id", "name"})
 	assertKeySet(t, "GET /api/ranking row.vehicle", rankingVehicleKeys, []string{
-		"converted_cc", "disp_class", "dt_class", "engine", "has_icon", "id", "name", "number",
+		"converted_cc", "disp_class", "dt_class", "engine", "has_icon", "icon_rev", "id", "name", "number",
 	})
 	assertKeySet(t, "GET /api/queue top-level", queueTop, []string{"on_course", "waiting"})
 	assertKeySet(t, "GET /api/queue row", queueRowKeys, []string{"driver", "position", "queue_id", "vehicle"})
-	assertKeySet(t, "GET /api/queue row.driver", queueDriverKeys, []string{"has_icon", "id", "name"})
-	assertKeySet(t, "GET /api/queue row.vehicle", queueVehicleKeys, []string{"has_icon", "id", "name", "number"})
+	assertKeySet(t, "GET /api/queue row.driver", queueDriverKeys, []string{"has_icon", "icon_rev", "id", "name"})
+	assertKeySet(t, "GET /api/queue row.vehicle", queueVehicleKeys, []string{"has_icon", "icon_rev", "id", "name", "number"})
 	assertKeySet(t, "GET /api/admin/settings top-level", settingsTop, []string{
 		"coefficients", "displacement_classes", "event_name", "heat_ranking", "max_course_time_sec",
 		"pt_mode", "pt_penalty_ms", "queue_self_entry", "registration_mode", "registration_open",

@@ -33,6 +33,7 @@ type rankVehicle struct {
 	DispClass   string `json:"disp_class"`
 	DTClass     string `json:"dt_class"`
 	HasIcon     bool   `json:"has_icon"`
+	IconRev     int64  `json:"icon_rev"`
 }
 
 // buildRanking builds the current standings for ev's event, in exactly the
@@ -104,6 +105,7 @@ func (b *Builder) buildRanking(ev store.EventRow) (rankingResponse, error) {
 				DispClass:   c.dispClass,
 				DTClass:     dtClassLabel[veh.DrivetrainClassID],
 				HasIcon:     veh.HasIcon,
+				IconRev:     veh.IconRev,
 			},
 			BestMS:    st.BestMS,
 			SecondMS:  st.SecondMS,

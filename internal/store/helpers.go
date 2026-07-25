@@ -9,13 +9,23 @@ import (
 )
 
 // setIcon / getIcon back the driver and vehicle icon accessors: both tables
-// store a nullable 128x128 JPEG in an `icon` column. table must be a
-// compile-time constant ("drivers" / "vehicles") — never user input — since
-// it is spliced into the SQL text; what is the per-wrapper error label.
+// store a nullable 128x128 JPEG in an `icon` column, plus an `icon_rev`
+// counter clients use as a `?v=` cache-buster (see schema.go). table must be
+// a compile-time constant ("drivers" / "vehicles") — never user input —
+// since it is spliced into the SQL text; what is the per-wrapper error label.
+//
+// icon_rev is bumped to MAX(icon_rev+1, current unix time) rather than a
+// plain +1 so that restoring an older snapshot (see Server-Setup wiki,
+// アップグレード手順 — the pre-migration/hourly VACUUM INTO backups this
+// project relies on) can never make a rev value get reused for different
+// bytes: unix time is already far larger than any realistic increment
+// count, so a restore is immediately followed by revs that jump ahead of
+// anything handed out before the restore. If the clock is wrong, this just
+// falls back to the plain-increment behavior — never worse than before.
 func (s *Store) setIcon(table, what string, id int64, jpeg []byte) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	_, err := s.db.Exec(`UPDATE `+table+` SET icon = ? WHERE id = ?`, jpeg, id)
+	_, err := s.db.Exec(`UPDATE `+table+` SET icon = ?, icon_rev = MAX(icon_rev + 1, CAST(strftime('%s','now') AS INTEGER)) WHERE id = ?`, jpeg, id)
 	if err != nil {
 		return fmt.Errorf("store: %s: %w", what, err)
 	}

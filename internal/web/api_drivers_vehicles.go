@@ -24,6 +24,7 @@ type vehicleOut struct {
 	DTClass         string      `json:"dt_class"`
 	Drivers         []driverRef `json:"drivers"`
 	HasIcon         bool        `json:"has_icon"`
+	IconRev         int64       `json:"icon_rev"`
 }
 
 // loadVehicleContext loads the pieces needed to project a store.Vehicle
@@ -87,6 +88,7 @@ func (s *Server) buildVehicleOut(v store.Vehicle, coef domain.Coefficients, disp
 		DTClass:         dtLabel[v.DrivetrainClassID],
 		Drivers:         drefs,
 		HasIcon:         v.HasIcon,
+		IconRev:         v.IconRev,
 	}, nil
 }
 
@@ -111,6 +113,7 @@ func (s *Server) handleAPIDrivers(w http.ResponseWriter, r *http.Request) {
 		Name        string `json:"name"`
 		DriverClass string `json:"driver_class"`
 		HasIcon     bool   `json:"has_icon"`
+		IconRev     int64  `json:"icon_rev"`
 	}
 	out := make([]driverOut, 0, len(drivers))
 	for _, d := range drivers {
@@ -119,6 +122,7 @@ func (s *Server) handleAPIDrivers(w http.ResponseWriter, r *http.Request) {
 			Name:        d.Name,
 			DriverClass: classLabel[d.DriverClassID],
 			HasIcon:     d.HasIcon,
+			IconRev:     d.IconRev,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"drivers": out})

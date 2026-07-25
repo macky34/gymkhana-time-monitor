@@ -195,9 +195,9 @@ function renderCourse(){
     const cls = 'oncourse' + (c.mc_flag ? ' mc' : '') + (flash ? ' flash' : '') + (armed ? ' armed' : '');
     const vhChildren = [`#${c.vehicle.number} ${c.vehicle.name}`];
     const av = h('div', { class: 'avatar' });
-    avatarInto(av, c.driver.id, c.driver.name, !!c.driver.has_icon);
+    avatarInto(av, c.driver);
     const vAv = h('div', { class: 'avatar' });
-    vehicleAvatarInto(vAv, c.vehicle.id, c.vehicle.name, !!c.vehicle.has_icon);
+    vehicleAvatarInto(vAv, c.vehicle);
     const tmText = armed ? '—:——' : (flash ? fmt3(c.finish.fin_ms) : (waitingOffset ? 'タイム取得中…' : fmt1(nowMs() - c.t_start_us / 1000)));
     const el = h('div', { class: cls, onclick: () => openFS(c.queue_id) },
       c.mc_flag ? h('div', { class: 'mcband' }, 'ミスコース') : null,
@@ -249,9 +249,9 @@ function renderNext(){
   }
   waitingQueue.slice(0, 3).forEach((q, i) => {
     const av = h('div', { class: 'avatar' });
-    avatarInto(av, q.driver.id, q.driver.name, !!q.driver.has_icon);
+    avatarInto(av, q.driver);
     const vAv = h('div', { class: 'avatar' });
-    vehicleAvatarInto(vAv, q.vehicle.id, q.vehicle.name, !!q.vehicle.has_icon);
+    vehicleAvatarInto(vAv, q.vehicle);
     nextEl.appendChild(h('li', {},
       h('span', { class: 'pos t' }, String(i + 1)),
       h('div', { class: 'avstack' }, av, vAv),
@@ -276,9 +276,9 @@ function renderRecent(items){
     const liCls = (isNew ? 'new' : '') + (it.invalid ? ' dead' : '');
     const nmSpanText = `#${it.vehicle.number} ${it.vehicle.name}`;
     const av = h('div', { class: 'avatar' });
-    avatarInto(av, it.driver.id, it.driver.name, !!it.driver.has_icon);
+    avatarInto(av, it.driver);
     const vAv = h('div', { class: 'avatar' });
-    vehicleAvatarInto(vAv, it.vehicle.id, it.vehicle.name, !!it.vehicle.has_icon);
+    vehicleAvatarInto(vAv, it.vehicle);
     const li = h('li', { class: liCls.trim() },
       h('span', { class: 'hn' }, it.heat !== null && it.heat !== undefined ? ('H' + it.heat) : ''),
       h('div', { class: 'avstack' }, av, vAv),
@@ -414,10 +414,8 @@ openStream(['ranking', 'on_course', 'queue', 'time', 'directory', 'settings'], {
   },
   ranking: () => { refreshRecent(); },
   directory: () => {
-    // directory change = user/vehicle master data (incl. icons) updated;
-    // bump the cache-buster so re-renders pick up new icon bytes.
-    iconRev = Date.now();
-    renderCourse();
+    // directory change = user/vehicle master data (incl. icons) updated.
+    renderCourse(); // re-render picks up each entity's icon_rev (see app.js avatarIntoKind)
     renderNext();
     refreshRecent();
   }

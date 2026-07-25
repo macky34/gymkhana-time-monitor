@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"time"
 
 	"timemon/internal/domain"
 )
@@ -420,7 +421,7 @@ func TestDriverVehicleEntryCRUD(t *testing.T) {
 	if err != nil || !ok {
 		t.Fatalf("GetDriver: ok=%v err=%v", ok, err)
 	}
-	if d1.Name != "山田太郎" || d1.Role != "user" || d1.DriverClassID != driverClassID || d1.HasIcon {
+	if d1.Name != "山田太郎" || d1.Role != "user" || d1.DriverClassID != driverClassID || d1.HasIcon || d1.IconRev != 0 {
 		t.Errorf("GetDriver mismatch: %+v", d1)
 	}
 	if d1.MainVehicleID != nil {
@@ -508,6 +509,9 @@ func TestDriverVehicleEntryCRUD(t *testing.T) {
 	}
 	if !d1WithIcon.HasIcon {
 		t.Errorf("HasIcon should be true after SetIcon")
+	}
+	if d1WithIcon.IconRev <= 0 {
+		t.Errorf("IconRev should be > 0 after SetIcon, got %d", d1WithIcon.IconRev)
 	}
 
 	// --- vehicles ---
@@ -655,8 +659,8 @@ func TestVehicleIconRoundtrip(t *testing.T) {
 		t.Errorf("GetVehicleIcon before SetVehicleIcon: ok=%v err=%v, want ok=false err=nil", ok, err)
 	}
 	v, ok, err := st.GetVehicle(vid)
-	if err != nil || !ok || v.HasIcon {
-		t.Fatalf("GetVehicle before SetVehicleIcon: ok=%v err=%v HasIcon=%v, want HasIcon=false", ok, err, v.HasIcon)
+	if err != nil || !ok || v.HasIcon || v.IconRev != 0 {
+		t.Fatalf("GetVehicle before SetVehicleIcon: ok=%v err=%v HasIcon=%v IconRev=%d, want HasIcon=false IconRev=0", ok, err, v.HasIcon, v.IconRev)
 	}
 
 	jpeg := []byte{0xFF, 0xD8, 0xFF, 0xD9}
@@ -676,6 +680,52 @@ func TestVehicleIconRoundtrip(t *testing.T) {
 	}
 	if !vWithIcon.HasIcon {
 		t.Errorf("HasIcon should be true after SetVehicleIcon")
+	}
+	if vWithIcon.IconRev <= 0 {
+		t.Errorf("IconRev should be > 0 after SetVehicleIcon, got %d", vWithIcon.IconRev)
+	}
+}
+
+// TestIconRevIsMonotonic covers the actual contract the ?v= cache-buster
+// depends on: not just "IconRev > 0 after an upload" (already covered
+// above) but that a second upload always produces a strictly larger rev
+// than the first, and that the very first rev is already clock-based (not
+// left at a small increment like 1) - see the MAX(icon_rev+1, now) formula
+// in helpers.go's setIcon.
+func TestIconRevIsMonotonic(t *testing.T) {
+	st := newTestStore(t)
+	seedMinimal(t, st)
+	driverClasses, err := st.ListClassDefs("driver")
+	if err != nil || len(driverClasses) == 0 {
+		t.Fatalf("ListClassDefs: ok=%v err=%v", len(driverClasses) > 0, err)
+	}
+
+	id, err := st.CreateDriver("Rev太郎", driverClasses[0].ID, "tok-rev", "user")
+	if err != nil {
+		t.Fatalf("CreateDriver: %v", err)
+	}
+
+	before := time.Now().Unix()
+	if err := st.SetIcon(id, []byte{0x01}); err != nil {
+		t.Fatalf("SetIcon (1st): %v", err)
+	}
+	d1, _, err := st.GetDriver(id)
+	if err != nil {
+		t.Fatalf("GetDriver (1st): %v", err)
+	}
+	if d1.IconRev < before {
+		t.Errorf("IconRev after 1st SetIcon = %d, want >= %d (clock-seeded, not a small increment)", d1.IconRev, before)
+	}
+
+	if err := st.SetIcon(id, []byte{0x02}); err != nil {
+		t.Fatalf("SetIcon (2nd): %v", err)
+	}
+	d2, _, err := st.GetDriver(id)
+	if err != nil {
+		t.Fatalf("GetDriver (2nd): %v", err)
+	}
+	if d2.IconRev <= d1.IconRev {
+		t.Errorf("IconRev after 2nd SetIcon = %d, want > %d (1st rev) - MAX(rev+1, now) must never go backwards or stay flat", d2.IconRev, d1.IconRev)
 	}
 }
 

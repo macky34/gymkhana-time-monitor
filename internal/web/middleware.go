@@ -240,7 +240,10 @@ func (s *Server) withCacheControl(next http.Handler) http.Handler {
 
 // cacheControlExempt reports whether path already manages its own
 // Cache-Control header: /static/ (long-lived, versioned with the binary),
-// the driver/vehicle icon endpoints (ETag-revalidated, no-cache), and the
+// the driver/vehicle icon endpoints (public+long-lived when the request
+// carries the icon_rev cache-buster as ?v=, no-cache/ETag-revalidated
+// otherwise — see serveIcon in icon.go; the decision depends on the query
+// string, which this path-only check does not need to know about), and the
 // SSE stream (no-cache, set in internal/sse).
 func cacheControlExempt(path string) bool {
 	switch {

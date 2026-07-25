@@ -7,6 +7,44 @@ import (
 	"timemon/internal/store"
 )
 
+// TestGetMyIncludesIconRev covers GET /api/mypage's driver object: uploaded
+// icon bytes must actually thread through to icon_rev in the response, not
+// just leave has_icon true with a zero-value IconRev left unset by mistake
+// (a struct-literal field the compiler can't catch by itself).
+func TestGetMyIncludesIconRev(t *testing.T) {
+	srv, _, _, _ := newTestServer(t, "sensor")
+	driverClasses, err := srv.Store.ListClassDefs("driver")
+	if err != nil || len(driverClasses) == 0 {
+		t.Fatalf("ListClassDefs driver: %v", err)
+	}
+
+	userID, err := srv.Store.CreateDriver("参加者", driverClasses[0].ID, "tok-iconrev-mypage", "user")
+	if err != nil {
+		t.Fatalf("CreateDriver: %v", err)
+	}
+	if err := srv.Store.SetIcon(userID, []byte{0x01}); err != nil {
+		t.Fatalf("SetIcon: %v", err)
+	}
+	user, ok, err := srv.Store.GetDriver(userID)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver: ok=%v err=%v", ok, err)
+	}
+
+	rec := callAdminEvents(t, srv.handleGetMy, http.MethodGet, "/api/mypage", nil, user)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET /api/mypage: status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	got := decodeJSON[struct {
+		Driver struct {
+			HasIcon bool  `json:"has_icon"`
+			IconRev int64 `json:"icon_rev"`
+		} `json:"driver"`
+	}](t, rec.Body.Bytes())
+	if !got.Driver.HasIcon || got.Driver.IconRev != user.IconRev {
+		t.Errorf("GET /api/mypage driver = %+v, want has_icon=true icon_rev=%d", got.Driver, user.IconRev)
+	}
+}
+
 // TestMypageVehicleFlow drives a single participant through the mypage
 // vehicle self-service surface: (a) a first added vehicle becomes the main
 // vehicle automatically, (b) a second addition leaves main unchanged, (c) a

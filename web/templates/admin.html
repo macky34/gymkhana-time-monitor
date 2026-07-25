@@ -569,9 +569,8 @@ function bindCrop(){
     closeModal('cropmodal');
     try {
       await api('POST', cropTargetUrl, { icon_b64: dataUrl.split(',')[1] });
-      iconRev = Date.now();
       toast('アイコンを更新しました');
-      if (cropOnSuccess) cropOnSuccess(dataUrl);
+      if (cropOnSuccess) cropOnSuccess(dataUrl); // preview repaints from dataUrl; lists refresh via 'directory' below
     } catch (err) { toast(err.message || 'アップロードに失敗しました'); }
   });
 }
@@ -761,9 +760,9 @@ function renderCourse(){
     }
     const tm = h('div', { class: 'tm' }, armed ? 'センサー待ち' : (flash ? fmt3(c.finish.fin_ms) : fmt1(el)));
     const av = h('div', { class: 'avatar' });
-    avatarInto(av, c.driver.id, c.driver.name, !!c.driver.has_icon);
+    avatarInto(av, c.driver);
     const vav = h('div', { class: 'avatar' });
-    vehicleAvatarInto(vav, c.vehicle.id, c.vehicle.name, !!c.vehicle.has_icon);
+    vehicleAvatarInto(vav, c.vehicle);
     const card = h('div', { class: 'card oc-admin' + (over ? ' over' : '') + (armed ? ' armed' : '') + (flash ? ' flash' : '') },
       h('div', { class: 'avstack' }, av, vav),
       h('div', { class: 'nm' }, marq(c.driver.name),
@@ -874,9 +873,9 @@ function renderQueue(){
     });
     const acts = h('div', { class: 'acts' }, cancel);
     const av = h('div', { class: 'avatar' });
-    avatarInto(av, q.driver.id, q.driver.name, !!q.driver.has_icon);
+    avatarInto(av, q.driver);
     const vav = h('div', { class: 'avatar' });
-    vehicleAvatarInto(vav, q.vehicle.id, q.vehicle.name, !!q.vehicle.has_icon);
+    vehicleAvatarInto(vav, q.vehicle);
     const li = h('li', { 'data-qid': String(q.queue_id) },
       grip,
       h('span', { class: 'pos t' }, String(i + 1)),
@@ -1140,11 +1139,11 @@ function renderLogs(){
     const mid = h('div', { class: 'lg-mid' });
     if (l.driver){
       const av = h('div', { class: 'avatar' });
-      avatarInto(av, l.driver.id, l.driver.name, !!l.driver.has_icon);
+      avatarInto(av, l.driver);
       stack.appendChild(av);
       if (l.vehicle){
         const vav = h('div', { class: 'avatar' });
-        vehicleAvatarInto(vav, l.vehicle.id, l.vehicle.name, !!l.vehicle.has_icon);
+        vehicleAvatarInto(vav, l.vehicle);
         stack.appendChild(vav);
       }
       mid.appendChild(h('b', {}, marq(l.driver.name)));
@@ -1391,7 +1390,7 @@ function renderUsers(){
   clear(list);
   users.forEach(u => {
     const av = h('div', { class: 'avatar sm' });
-    avatarInto(av, u.id, u.name, !!u.has_icon);
+    avatarInto(av, u);
     const mainV = vehiclesList.find(v => v.id === u.main_vehicle_id);
     const sub = (u.driver_class || '') + (mainV ? ` ・ ＃${mainV.number}` : '');
     // Emergency-admin cannot reach PUT /api/admin/users/{id} (rename) - the
@@ -1432,7 +1431,7 @@ let renameTarget = null;
 function openRename(u){
   renameTarget = u;
   document.getElementById('rn-name').value = u.name;
-  avatarInto(document.getElementById('rn-avatar-preview'), u.id, u.name, !!u.has_icon);
+  avatarInto(document.getElementById('rn-avatar-preview'), u);
   document.getElementById('rn-icon-btn').onclick = () => {
     startIconCrop('/api/admin/users/' + u.id + '/icon', (dataUrl) => {
       const pv = document.getElementById('rn-avatar-preview');
@@ -1550,7 +1549,7 @@ function renderVehiclesTab(){
       } catch (err) { toast(err.message); }
     });
     const vav = h('div', { class: 'avatar sm' });
-    vehicleAvatarInto(vav, v.id, v.name, !!v.has_icon);
+    vehicleAvatarInto(vav, v);
     list.appendChild(h('li', {},
       vav,
       h('div', {}, h('b', {}, `＃${v.number} ${v.name}`), h('br'),
@@ -1605,7 +1604,7 @@ function openVehModal(v){
   /* icon edit: only for an existing vehicle (a new one has no id to POST to yet) */
   document.getElementById('vm-icon-fld').style.display = v ? 'block' : 'none';
   if (v){
-    vehicleAvatarInto(document.getElementById('vm-avatar-preview'), v.id, v.name, !!v.has_icon);
+    vehicleAvatarInto(document.getElementById('vm-avatar-preview'), v);
     document.getElementById('vm-icon-btn').onclick = () => {
       startIconCrop('/api/admin/vehicles/' + v.id + '/icon', (dataUrl) => {
         const pv = document.getElementById('vm-avatar-preview');
@@ -2055,7 +2054,11 @@ async function init(){
         }
         if (rev === directoryRev) return;
         directoryRev = rev;
-        iconRev = Date.now(); // master data (incl. icons) changed — bust icon cache on next draws
+        // If a modal is open, the reload below is deferred until it closes
+        // (directoryPending). If the icon just uploaded belongs to the open
+        // modal itself, its avatar preview is already showing the right
+        // bytes (painted from the raw upload, not re-fetched), so the only
+        // staleness is the *list* behind the modal.
         if (anyModalOpen()){
           directoryPending = true;
           return;

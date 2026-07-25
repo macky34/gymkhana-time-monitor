@@ -75,28 +75,34 @@ function fmt3(ms){
   return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0') + '.' + String(mmm).padStart(3, '0');
 }
 
-/* ---------- avatars ---------- */
-let iconRev = Date.now();
-function avatarInto(el, driverId, name, hasIcon){
+/* ---------- avatars ----------
+   avatarInto/vehicleAvatarInto take the raw driver/vehicle object as it
+   comes off the wire (REST or an SSE snapshot) rather than unpacking
+   id/name/has_icon by hand at every call site - every one of them was
+   already doing exactly that with no variation, so callers that don't
+   already guard against a missing driver/vehicle (unassigned admin-log
+   rows are the one real case; see admin.html) are expected to throw rather
+   than silently render a fallback. obj.icon_rev (present on every payload
+   shape that has has_icon - see snapshot.refDriver / vehicleOut etc.) makes
+   the icon URL content-addressed, so the browser can cache it long-term
+   (see serveIcon in internal/web/icon.go) instead of the old scheme, where
+   a single page-wide `iconRev = Date.now()` was bumped by hand on every SSE
+   'directory' event and every own-icon-upload - busting every avatar on the
+   page regardless of whose icon actually changed. Re-rendering from a fresh
+   payload now always carries the right rev for each entity individually, so
+   none of that manual bumping is needed anymore. */
+function avatarIntoKind(el, obj, apiPath){
   clear(el);
-  if (hasIcon){
-    const img = h('img', { src: '/api/drivers/' + driverId + '/icon?v=' + iconRev, alt: '' });
-    img.addEventListener('error', () => { clear(el); el.textContent = (name || '?').slice(0, 1); });
+  if (obj.has_icon){
+    const img = h('img', { src: apiPath + obj.id + '/icon?v=' + obj.icon_rev, alt: '' });
+    img.addEventListener('error', () => { clear(el); el.textContent = (obj.name || '?').slice(0, 1); });
     el.appendChild(img);
   } else {
-    el.textContent = (name || '?').slice(0, 1);
+    el.textContent = (obj.name || '?').slice(0, 1);
   }
 }
-function vehicleAvatarInto(el, vehicleId, name, hasIcon){
-  clear(el);
-  if (hasIcon){
-    const img = h('img', { src: '/api/vehicles/' + vehicleId + '/icon?v=' + iconRev, alt: '' });
-    img.addEventListener('error', () => { clear(el); el.textContent = (name || '?').slice(0, 1); });
-    el.appendChild(img);
-  } else {
-    el.textContent = (name || '?').slice(0, 1);
-  }
-}
+function avatarInto(el, obj){ avatarIntoKind(el, obj, '/api/drivers/'); }
+function vehicleAvatarInto(el, obj){ avatarIntoKind(el, obj, '/api/vehicles/'); }
 
 /* ---------- overflow marquee ----------
    marq(...) wraps children in a `.marq` clip frame (see app.css). Because

@@ -33,6 +33,7 @@ type adminUserOut struct {
 	MainVehicleID *int64 `json:"main_vehicle_id"`
 	LoginURL      string `json:"login_url"`
 	HasIcon       bool   `json:"has_icon"`
+	IconRev       int64  `json:"icon_rev"`
 }
 
 // handleAdminUsersList implements GET /api/admin/users.
@@ -65,6 +66,7 @@ func (s *Server) handleAdminUsersList(w http.ResponseWriter, r *http.Request, ad
 			MainVehicleID: d.MainVehicleID,
 			LoginURL:      s.BaseURL + "/a/" + d.Token,
 			HasIcon:       d.HasIcon,
+			IconRev:       d.IconRev,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"users": out})
