@@ -1,12 +1,36 @@
 #!/usr/bin/env python3
-"""PreToolUse hook: gymkhana-time-monitor リポジトリが main ブランチのとき
-git commit をブロックする(CLAUDE.md のブランチ運用ルールの強制)。"""
+"""PreToolUse hook: gymkhana-time-monitor リポジトリ(またはその worktree)が
+main ブランチのとき git commit をブロックする(CLAUDE.md のブランチ運用
+ルールの強制)。
+
+git worktree はメインチェックアウトとは別のブランチを独立に持つため、
+判定は常に「このコマンドが実際に実行される場所(cwd)」のブランチを見る。
+メインチェックアウトへのパスをハードコードして参照すると、worktree 内で
+作業中でも常にメイン側の(main のままの)ブランチを見てしまい誤検知する
+(実際に一度これで正しい作業ブランチでのコミットが誤ブロックされた)。
+
+環境変数 CLAUDE_PROJECT_DIR は worktree セッションに切り替わっても常に
+メインチェックアウトの固定パスを指すため(実測で確認済み)、この判定には
+使えない。os.getcwd() はフックプロセス自身についても実際に呼び出しが
+行われる worktree のディレクトリを正しく返すので、こちらを唯一の情報源
+とする(以前は CLAUDE_PROJECT_DIR を優先していたため、この修正自体が
+worktree での誤ブロックを再現していた)。"""
 import json
 import os
 import subprocess
 import sys
 
-REPO = "/home/mac/src/gymkhana-time-monitor"
+
+def repo_root(path):
+    try:
+        r = subprocess.run(
+            ["git", "-C", path, "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=False,
+        )
+    except Exception:
+        return None
+    return r.stdout.strip() if r.returncode == 0 else None
+
 
 try:
     data = json.load(sys.stdin)
@@ -24,20 +48,22 @@ cmd_sans_wiki = cmd.replace("gymkhana-time-monitor.wiki", "")
 if "gymkhana-time-monitor.wiki" in cmd and "gymkhana-time-monitor" not in cmd_sans_wiki:
     sys.exit(0)
 
-# このリポジトリが対象になりうるコマンドかを判定:
-# プロジェクトディレクトリがリポジトリ内、またはコマンド文字列がリポジトリに言及
-proj = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
-involved = proj.startswith(REPO) or "gymkhana-time-monitor" in cmd_sans_wiki
+# このリポジトリ(のいずれかの worktree)が対象になりうるコマンドかを判定:
+# cwd がリポジトリ/worktree内、またはコマンド文字列がリポジトリに言及。
+proj = os.getcwd()
+root = repo_root(proj)
+involved = (root is not None and "gymkhana-time-monitor" in root) or (
+    "gymkhana-time-monitor" in cmd_sans_wiki
+)
 if not involved:
     sys.exit(0)
 
-try:
-    branch = subprocess.run(
-        ["git", "-C", REPO, "branch", "--show-current"],
-        capture_output=True, text=True, check=False,
-    ).stdout.strip()
-except Exception:
-    sys.exit(0)
+# メインチェックアウトへの固定パスではなく、実行場所(cwd)自身のブランチを
+# 見る — worktree ではこれがメインチェックアウトのブランチと異なる。
+branch = subprocess.run(
+    ["git", "-C", proj, "branch", "--show-current"],
+    capture_output=True, text=True, check=False,
+).stdout.strip()
 
 if branch == "main":
     print(
