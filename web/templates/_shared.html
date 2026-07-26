@@ -7,7 +7,7 @@
 
 {{define "head-common"}}<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<link rel="stylesheet" href="/static/app.css?v=8">
+<link rel="stylesheet" href="/static/app.css?v=9">
 <script src="/static/app.js?v=5"></script>
 {{end}}
 
@@ -17,10 +17,14 @@
      .IsAdmin, matching monitor/ranking/mypage/admin's existing behavior.
      Mypage is additionally hidden for the synthetic emergency-admin identity
      (.IsEmergency, see PageData.IsEmergency / isEmergency in middleware.go):
-     it has no drivers row, so /mypage has nothing to render for it. */}}
+     it has no drivers row, so /mypage has nothing to render for it.
+     ⏱/🛠 carry a variation selector (U+FE0F) so they render as colorful
+     emoji rather than a thin monochrome text glyph on platforms that
+     default to text presentation - this affects both the mobile bottom
+     bar and the desktop sidebar, since they share this markup. */}}
 {{define "nav"}}<nav id="nav">
-    {{if eq .Active "monitor"}}<a href="/" class="on">{{else}}<a href="/">{{end}}<span class="ic">⏱</span>Monitor</a>
+    {{if eq .Active "monitor"}}<a href="/" class="on">{{else}}<a href="/">{{end}}<span class="ic">⏱️</span>Monitor</a>
     {{if eq .Active "ranking"}}<a href="/ranking" class="on">{{else}}<a href="/ranking">{{end}}<span class="ic">🏆</span>Ranking</a>
     {{if not .IsEmergency}}{{if eq .Active "mypage"}}<a href="/mypage" class="on">{{else}}<a href="/mypage">{{end}}<span class="ic">👤</span>Mypage</a>{{end}}
-    {{if .IsAdmin}}{{if eq .Active "admin"}}<a href="/admin" class="on">{{else}}<a href="/admin">{{end}}<span class="ic">🛠</span>運営</a>{{end}}
+    {{if .IsAdmin}}{{if eq .Active "admin"}}<a href="/admin" class="on">{{else}}<a href="/admin">{{end}}<span class="ic">🛠️</span>運営</a>{{end}}
   </nav>{{end}}

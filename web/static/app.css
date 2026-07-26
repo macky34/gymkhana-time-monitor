@@ -122,7 +122,9 @@ nav a.on .ic{color:var(--amber)}
   nav a{flex:0 0 auto;width:100%;flex-direction:row;justify-content:flex-start;
              gap:11px;font-size:13px;padding:12px 22px;border-left:2px solid transparent}
   nav a.on{border-left-color:var(--amber);background:rgba(255,178,36,.06)}
-  nav a .ic{font-size:15px}
+  /* 絵文字ごとに描画幅が違うため、固定幅+中央寄せでラベルの左端を揃える
+     (幅指定なしだと項目ごとにラベル開始位置がずれて見える)。 */
+  nav a .ic{font-size:15px;width:20px;text-align:center;flex:none}
   header .ev{font-size:15px}
   .screen{padding:20px 28px 32px}
   /* minmax(0,1fr) rather than a bare 1fr: a plain 1fr track's automatic
