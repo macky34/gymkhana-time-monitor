@@ -1,0 +1,9 @@
+{
+  "name": "dual-browser-launcher",
+  "private": true,
+  "type": "module",
+  "description": "tools/dual-browser.sh のウィンドウ起動処理。Playwrightのcolor-scheme emulationでprefers-color-schemeを切り替えたウィンドウ(既定でPC/SP×light/darkの4窓)を起動する。",
+  "dependencies": {
+    "playwright-core": "^1.55.0"
+  }
+}

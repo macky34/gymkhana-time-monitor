@@ -30,13 +30,13 @@ go test ./...
 gofmt -l .   # 出力が空であること
 ```
 
-## E2E動作確認
+## コミット前の動作確認
 
-UIに影響する変更(web/templates/・web/static/・internal/web のハンドラやSSEペイロード)の動作確認は、`/event-sim`(一時DBサーバー + sensor-sim.py)によるAPIレベル検証に加えて、**Playwright MCP で実ブラウザを操作して行うこと**。トークンURLでログイン → 画面遷移 → ボタン/モーダルの実操作 → 各段階のスクリーンショット確認まで行い、SSEによるライブ更新も目視で確認する。
+**コミットする前に必ず `/live-check` スキルを実行すること**。このスキル1本で、Phase A(一時DBサーバー + sensor-sim.py によるシミュレータ自動E2E検証)から Phase B(本番 `event.sqlite3` の一時コピー+別ポートで起動する、人間による実データ最終確認)まで通しで行う。
 
-## コミット前の実データ起動確認 (人間による確認)
-
-**コミットする前に必ず `/live-check` スキルを実行すること**。ビルドしたバイナリを本番 `event.sqlite3` の一時コピー+別ポートで起動し、ログインURLをユーザーに提示して、**ユーザー自身に実データでの動作を確認してもらう**。Claude の自動E2E(Playwright)はこれの代わりにならない — 必ず人間の確認を得てからコミットする(本番DB・本番バイナリ・稼働中プロセスには触れない)。実DBは `internal/store/migrate.go` の仕組み(`PRAGMA user_version` ベース)で起動時に自動的に前進するので、スキーマ変更を含む変更ではこのチェックで実データコピーへの適用結果(起動ログの `store: migrated to version N` 行・`snapshots/premigrate-*` バックアップの生成・新しい列/値が実際に効いていること)を人間の目でも確認する。
+- Phase A: UIに影響する変更(web/templates/・web/static/・internal/web のハンドラやSSEペイロード)を含む場合は、APIレベル検証に加えて**実ブラウザを操作して行うこと**(X11転送が使える場合は headful ウィンドウで対話操作、使えない場合は Playwright MCP (headless) でスクリーンショット確認。詳細は `.claude/skills/live-check/SKILL.md` 参照)。トークンURLでログイン → 画面遷移 → ボタン/モーダルの実操作 → 各段階の確認まで行い、SSEによるライブ更新も目視で確認する。
+- Phase B: ビルドしたバイナリを本番DBの一時コピー+別ポートで起動し、ログインURLをユーザーに提示して、**ユーザー自身に実データでの動作を確認してもらう**。**PC画面とスマホ画面をlight/darkテーマ同時に表示して確認するのが標準手順**であり、X11転送が使える環境では `tools/dual-browser.sh` でChromiumを既定4窓(PC×light/PC×dark/SP×light/SP×dark)自動起動する。X11転送が使えない場合はURL提示のみに留め、人間に手元の端末での確認を委ねる。
+- Claude の自動E2E(Playwright)はPhase Bの代わりにならない — 必ず人間の確認を得てからコミットする(本番DB・本番バイナリ・稼働中プロセスには触れない)。実DBは `internal/store/migrate.go` の仕組み(`PRAGMA user_version` ベース)で起動時に自動的に前進するので、スキーマ変更を含む変更ではこのチェックで実データコピーへの適用結果(起動ログの `store: migrated to version N` 行・`snapshots/premigrate-*` バックアップの生成・新しい列/値が実際に効いていること)を人間の目でも確認する。
 
 ## Claude Code 自動化設定 (.claude/)
 
@@ -47,7 +47,7 @@ UIに影響する変更(web/templates/・web/static/・internal/web のハンド
   - `gofmt.py` — Edit/Write された .go を自動整形
   - `block_vendored.py` — ベンダー配布物 (`*.min.js` / `*.min.css`) の直接編集をブロック
   - `go_verify.py` — 応答終了時、.go に変更があれば `go build` / `go vet` を検証し失敗なら差し戻す
-- **スキル**: `/release`(リリースタグ作成)、`/wiki-sync`(Wiki同期)、`/event-sim`(シミュレータE2E動作確認)、`/new-admin-api`(管理API追加チェックリスト)、`/live-check`(コミット前の実データ起動確認)、`/loadtest`(性能試験。検証用インスタンス限定、実行前にSKILL.mdの安全上の注意を必ず確認)
+- **スキル**: `/release`(リリースタグ作成)、`/wiki-sync`(Wiki同期)、`/new-admin-api`(管理API追加チェックリスト)、`/live-check`(シミュレータ自動E2E検証+実データ起動確認をPC/スマホ×light/dark既定4画面同時表示で行う、コミット前の一連の動作確認)、`/loadtest`(性能試験。検証用インスタンス限定、実行前にSKILL.mdの安全上の注意を必ず確認)
 - **エージェント**: `implementer`(指示書ベースの実装)、`web-security-reviewer`(XSS・認可監査)、`concurrency-reviewer`(排他・レース監査)。internal/web や web/ を変更したら web-security-reviewer、store/sse/timing の並行性に触れたら concurrency-reviewer でのレビューを検討する。
 
 ## 補足

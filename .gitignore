@@ -22,3 +22,6 @@ tools/__pycache__/
 
 # claude code personal overrides
 .claude/settings.local.json
+
+# dual-browser theme launcher (Node)
+tools/dual-browser/node_modules/
