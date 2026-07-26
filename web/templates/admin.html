@@ -29,7 +29,18 @@
     .grid2{display:block}
   }
   /* ---- admin-specific ---- */
-  .atabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin:-12px -12px 12px}
+  /* main(#main)がスクロールコンテナ (app.css) なので sticky top:0 はその上端に
+     貼り付く。下のパネル/ログ/出走待ち列をスクロールしてもタブが隠れないように
+     する (issue #2)。背景を不透明にしないと下のコンテンツが透けて見える。
+     z-index は .modal-bg(30)/.toast(40) より確実に下。 */
+  .atabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin:-12px -12px 12px;
+         position:sticky;top:0;background:var(--bg);z-index:5}
+  /* 上の .atabs より後ろに置く必要がある (同じ詳細度なのでソース順で勝つ方が
+     適用される)。PC は .screen{padding:20px 28px 32px} (app.css) なので、
+     モバイルの .screen{padding:12px}前提の負マージンをここで打ち消し直す。 */
+  @media(min-width:900px){
+    .atabs{margin:-20px -28px 12px}
+  }
   .atabs button{flex:1;background:none;border:none;color:var(--dim);font-size:11.5px;padding:11px 0;cursor:pointer;
                 border-bottom:2px solid transparent;font-family:inherit}
   .atabs button.on{color:var(--tx);border-bottom-color:var(--amber);font-weight:600}
