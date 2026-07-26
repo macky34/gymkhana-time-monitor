@@ -152,8 +152,11 @@
   .ulist li{display:flex;align-items:center;gap:7px;padding:8px 10px;border-bottom:1px solid var(--line);font-size:12.5px}
   .ulist li:last-child{border:none}
   .ulist .nm{min-width:0;flex:1}
-  .ulist .nm b{font-weight:600;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .ulist .nm span{font-size:9.5px;color:var(--mut)}
+  .ulist .nm b{font-weight:600;display:block}
+  /* direct-child: the name is a marq() span now, so a bare descendant
+     `span` selector would also match the marquee's own inner measuring
+     span nested inside <b> (see .oc-admin .nm > span / .q .nm > span). */
+  .ulist .nm > span{font-size:9.5px;color:var(--mut)}
   .plist{list-style:none}
   .plist li{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);font-size:13px}
   .plist li:last-child{border:none}
@@ -1408,13 +1411,14 @@ function renderUsers(){
     btns.push(rei, adm);
     list.appendChild(h('li', {},
       av,
-      h('div', { class: 'nm' }, h('b', {}, u.name), h('span', {}, sub)),
+      h('div', { class: 'nm' }, h('b', {}, marq(u.name)), h('span', {}, sub)),
       btns
     ));
   });
   if (!users.length){
     list.appendChild(h('li', { style: 'color:var(--dim)' }, 'ユーザなし'));
   }
+  startMarquees(list);
 }
 async function toggleRole(u){
   const newRole = u.role === 'admin' ? 'user' : 'admin';
@@ -1766,9 +1770,10 @@ function renderEventMgmt(){
     const ul = h('ul', { class: 'ulist' });
     past.forEach(e => {
       const period = fmtDate(e.created_at_ms) + (e.closed_at_ms ? ' 〜 ' + fmtDate(e.closed_at_ms) : '');
-      ul.appendChild(h('li', {}, h('div', { class: 'nm' }, h('b', {}, e.name), h('span', {}, period))));
+      ul.appendChild(h('li', {}, h('div', { class: 'nm' }, h('b', {}, marq(e.name)), h('span', {}, period))));
     });
     card.appendChild(ul);
+    startMarquees(ul);
   }
   const archLink = h('a', { href: '/archive', class: 'btn', style: 'display:block;text-align:center;margin:0 12px 12px;text-decoration:none' }, 'アーカイブを見る →');
   card.appendChild(archLink);
@@ -1934,6 +1939,12 @@ async function init(){
     b.classList.add('on');
     document.querySelectorAll('.apane').forEach(p => p.classList.remove('on'));
     document.getElementById(b.dataset.p).classList.add('on');
+    // Panes can be (re)rendered while still display:none - renderUsers() via
+    // reloadUsers()/reloadVehicles(), renderEventMgmt() via reloadEvents()
+    // (both fire from other tabs, or from SSE) - where clientWidth is 0 and
+    // startMarquees() can't detect overflow. Re-measure this pane now that
+    // it's actually visible; a no-op if nothing in it overflows.
+    startMarquees(document.getElementById(b.dataset.p));
     if (b.dataset.p === 'a-set'){ reloadAdminSettings().then(() => { fillSettingsForm(); renderNoEventState(); }); reloadEvents(); }
     if (b.dataset.p === 'a-log'){ reloadLogs(); }
   }));
