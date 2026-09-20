@@ -264,12 +264,12 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/admin/sensors/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminSensorDelete)))
 
 	// ---- Internal (LAN only): ESP32 fetches its debounce lockout at boot ----
-	mux.Handle("GET /api/internal/sensor-config", timing.SensorConfigHandler(func() int {
+	mux.Handle("GET /api/internal/sensor-config", timing.SensorConfigHandler(func() float64 {
 		ev, ok, err := s.Store.GetActiveEvent()
 		if err != nil || !ok {
-			return 800 // defaults.json fallback
+			return 10 // defaults.json fallback
 		}
-		return ev.SensorLockoutMS
+		return ev.SensorLockoutSec
 	}))
 
 	return s.withCacheControl(mux)

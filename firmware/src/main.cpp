@@ -120,25 +120,28 @@ static void syncClock() {
   Serial.println("[sync] FAILED (will retry)");
 }
 
-// parseLockoutMs scans body for a "lockout_ms":N field and, if found and
-// positive, updates lockoutMs. Shared by fetchConfig() (the one-shot HTTP
-// fetch at boot) and the UDP "config" reply piggybacked on heartbeats (see
-// loop()), so a lockout change made in the admin UI reaches the sensor
-// within one heartbeat interval instead of requiring a reboot (issue #18).
-// logIfChanged reports a value change to Serial (used for the UDP path so a
-// live config change is visible without restarting the device; the
-// boot-time HTTP fetch already logs its own result separately).
+// parseLockoutMs scans body for a "lockout_sec":N field and, if found and
+// positive, updates lockoutMs (converting the wire-protocol seconds value to
+// the internal millisecond representation lockoutMs keeps for debounce
+// comparisons). Shared by fetchConfig() (the one-shot HTTP fetch at boot)
+// and the UDP "config" reply piggybacked on heartbeats (see loop()), so a
+// lockout change made in the admin UI reaches the sensor within one
+// heartbeat interval instead of requiring a reboot (issue #18). logIfChanged
+// reports a value change to Serial (used for the UDP path so a live config
+// change is visible without restarting the device; the boot-time HTTP fetch
+// already logs its own result separately).
 static void parseLockoutMs(const String &body, bool logIfChanged = false) {
-  int idx = body.indexOf("lockout_ms");
+  int idx = body.indexOf("lockout_sec");
   if (idx < 0) return;
   int colon = body.indexOf(':', idx);
   if (colon < 0) return;
-  long v = body.substring(colon + 1).toInt();
-  if (v <= 0) return;
-  if (logIfChanged && (uint32_t)v != lockoutMs) {
-    Serial.printf("[config] lockout_ms updated: %u -> %ld\n", lockoutMs, v);
+  double sec = body.substring(colon + 1).toDouble();
+  if (sec <= 0) return;
+  uint32_t newMs = (uint32_t)(sec * 1000.0 + 0.5);
+  if (logIfChanged && newMs != lockoutMs) {
+    Serial.printf("[config] lockout updated: %.3f -> %.3f sec\n", lockoutMs / 1000.0, newMs / 1000.0);
   }
-  lockoutMs = (uint32_t)v;
+  lockoutMs = newMs;
 }
 
 static void fetchConfig() {
@@ -150,7 +153,7 @@ static void fetchConfig() {
   if (code == 200) {
     String body = http.getString();
     parseLockoutMs(body);
-    Serial.printf("[config] lockout_ms=%u\n", lockoutMs);
+    Serial.printf("[config] lockout=%.3f sec\n", lockoutMs / 1000.0);
   } else {
     Serial.printf("[config] fetch failed (%d), using default %u\n", code, lockoutMs);
   }

@@ -42,7 +42,7 @@ type adminSettingsIO struct {
 	RegistrationOpen    bool                `json:"registration_open"`
 	QueueSelfEntry      bool                `json:"queue_self_entry"`
 	MaxCourseTimeSec    int                 `json:"max_course_time_sec"`
-	SensorLockoutMS     int                 `json:"sensor_lockout_ms"`
+	SensorLockoutSec    float64             `json:"sensor_lockout_sec"`
 	Coefficients        adminCoefficientsIO `json:"coefficients"`
 	DisplacementClasses []adminDispClassIO  `json:"displacement_classes"`
 }
@@ -62,7 +62,7 @@ func adminSettingsToIO(set store.EventRow) adminSettingsIO {
 		RegistrationOpen: set.RegistrationOpen,
 		QueueSelfEntry:   set.QueueSelfEntry,
 		MaxCourseTimeSec: set.MaxCourseTimeSec,
-		SensorLockoutMS:  set.SensorLockoutMS,
+		SensorLockoutSec: set.SensorLockoutSec,
 		Coefficients: adminCoefficientsIO{
 			TurboGasoline: set.Coef.TurboGasoline,
 			TurboDiesel:   set.Coef.TurboDiesel,
@@ -85,7 +85,7 @@ func (io adminSettingsIO) applyTo(set store.EventRow) store.EventRow {
 	set.RegistrationOpen = io.RegistrationOpen
 	set.QueueSelfEntry = io.QueueSelfEntry
 	set.MaxCourseTimeSec = io.MaxCourseTimeSec
-	set.SensorLockoutMS = io.SensorLockoutMS
+	set.SensorLockoutSec = io.SensorLockoutSec
 	set.Coef = domain.Coefficients{
 		TurboGasoline: io.Coefficients.TurboGasoline,
 		TurboDiesel:   io.Coefficients.TurboDiesel,

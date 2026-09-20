@@ -53,7 +53,7 @@ func seedFixture(t *testing.T) fixture {
 		RegistrationOpen: true,
 		QueueSelfEntry:   true,
 		MaxCourseTimeSec: 180,
-		SensorLockoutMS:  3000,
+		SensorLockoutSec: 3,
 		Coef: domain.Coefficients{
 			TurboGasoline: 1.7,
 			TurboDiesel:   1.5,

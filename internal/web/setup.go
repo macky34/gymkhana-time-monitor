@@ -39,14 +39,14 @@ func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 }
 
 type setupEventInput struct {
-	TimingMode       string `json:"timing_mode"`
-	PTMode           string `json:"pt_mode"`
-	PTPenaltyMS      int    `json:"pt_penalty_ms"`
-	HeatRanking      bool   `json:"heat_ranking"`
-	RegistrationMode string `json:"registration_mode"`
-	QueueSelfEntry   bool   `json:"queue_self_entry"`
-	MaxCourseTimeSec int    `json:"max_course_time_sec"`
-	SensorLockoutMS  int    `json:"sensor_lockout_ms"`
+	TimingMode       string  `json:"timing_mode"`
+	PTMode           string  `json:"pt_mode"`
+	PTPenaltyMS      int     `json:"pt_penalty_ms"`
+	HeatRanking      bool    `json:"heat_ranking"`
+	RegistrationMode string  `json:"registration_mode"`
+	QueueSelfEntry   bool    `json:"queue_self_entry"`
+	MaxCourseTimeSec int     `json:"max_course_time_sec"`
+	SensorLockoutSec float64 `json:"sensor_lockout_sec"`
 }
 
 type setupRequest struct {
@@ -122,7 +122,7 @@ func (s *Server) handleAPISetup(w http.ResponseWriter, r *http.Request) {
 		RegistrationOpen: true,
 		QueueSelfEntry:   req.Event.QueueSelfEntry,
 		MaxCourseTimeSec: req.Event.MaxCourseTimeSec,
-		SensorLockoutMS:  req.Event.SensorLockoutMS,
+		SensorLockoutSec: req.Event.SensorLockoutSec,
 		Coef:             req.Coefficients,
 		DispClasses:      req.DisplacementClasses,
 	}

@@ -87,14 +87,14 @@ type Deps struct {
 	// belonging to an active event so pairing proceeds exactly as before.
 	ActiveEventID func() (id int64, ok bool)
 
-	// SensorLockoutMS, if non-nil, is called on every heartbeat to fetch the
-	// current lockout value (milliseconds) for the active event, which is
+	// SensorLockoutSec, if non-nil, is called on every heartbeat to fetch the
+	// current lockout value (seconds) for the active event, which is
 	// then piggybacked back to the ESP32 sensor as a "config" reply on the
 	// same UDP socket (see handleHeartbeat). This lets a lockout change made
 	// in the admin UI reach the sensor within one heartbeat interval instead
 	// of requiring a device reboot (issue #18). Nil means no config reply is
 	// ever sent.
-	SensorLockoutMS func() int
+	SensorLockoutSec func() float64
 
 	// boundAddr, when non-nil, receives the UDP socket's actual local
 	// address once Listen has bound (useful with a ":0" addr). Unexported

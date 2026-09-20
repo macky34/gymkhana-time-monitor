@@ -208,7 +208,7 @@ func TestScenario_FullEventLifecycle(t *testing.T) {
 			RegistrationMode: "public",
 			QueueSelfEntry:   true,
 			MaxCourseTimeSec: 180,
-			SensorLockoutMS:  800,
+			SensorLockoutSec: 0.8,
 		},
 		Coefficients: domain.Coefficients{TurboGasoline: 1.7, TurboDiesel: 1.5, Rotary: 1.7, Supercharger: 1.7},
 		DisplacementClasses: []domain.DispClass{
@@ -448,7 +448,7 @@ func TestScenario_FullEventLifecycle(t *testing.T) {
 	assertKeySet(t, "GET /api/admin/settings top-level", settingsTop, []string{
 		"coefficients", "displacement_classes", "event_name", "heat_ranking", "max_course_time_sec",
 		"pt_mode", "pt_penalty_ms", "queue_self_entry", "registration_mode", "registration_open",
-		"sensor_lockout_ms", "timing_mode",
+		"sensor_lockout_sec", "timing_mode",
 	})
 
 	// -------------------------------------------------------------

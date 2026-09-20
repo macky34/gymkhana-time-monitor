@@ -24,7 +24,7 @@ func TestHandleHeartbeatSendsConfigReply(t *testing.T) {
 	stopped := make(chan struct{})
 	go func() {
 		if err := Listen(ctx, addr, Deps{
-			SensorLockoutMS: func() int { return 1234 },
+			SensorLockoutSec: func() float64 { return 1.234 },
 		}); err != nil {
 			t.Logf("Listen: %v", err)
 		}
@@ -67,8 +67,8 @@ func TestHandleHeartbeatSendsConfigReply(t *testing.T) {
 	}
 
 	var reply struct {
-		Type      string `json:"type"`
-		LockoutMS int    `json:"lockout_ms"`
+		Type       string  `json:"type"`
+		LockoutSec float64 `json:"lockout_sec"`
 	}
 	if err := json.Unmarshal(buf[:n], &reply); err != nil {
 		t.Fatalf("unmarshal config reply %q: %v", buf[:n], err)
@@ -76,16 +76,16 @@ func TestHandleHeartbeatSendsConfigReply(t *testing.T) {
 	if reply.Type != "config" {
 		t.Errorf("reply.Type = %q, want %q", reply.Type, "config")
 	}
-	if reply.LockoutMS != 1234 {
-		t.Errorf("reply.LockoutMS = %d, want %d", reply.LockoutMS, 1234)
+	if reply.LockoutSec != 1.234 {
+		t.Errorf("reply.LockoutSec = %v, want %v", reply.LockoutSec, 1.234)
 	}
 }
 
-// TestHandleHeartbeatNoConfigReplyWhenNilSensorLockoutMS verifies that no
-// reply is sent when Deps.SensorLockoutMS is left nil (the default),
+// TestHandleHeartbeatNoConfigReplyWhenNilSensorLockoutSec verifies that no
+// reply is sent when Deps.SensorLockoutSec is left nil (the default),
 // preserving today's one-directional-only behavior for callers that don't
 // wire it up.
-func TestHandleHeartbeatNoConfigReplyWhenNilSensorLockoutMS(t *testing.T) {
+func TestHandleHeartbeatNoConfigReplyWhenNilSensorLockoutSec(t *testing.T) {
 	probe, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("reserve udp port: %v", err)
@@ -133,6 +133,6 @@ func TestHandleHeartbeatNoConfigReplyWhenNilSensorLockoutMS(t *testing.T) {
 	}
 	buf := make([]byte, 256)
 	if _, err := conn.Read(buf); err == nil {
-		t.Fatalf("expected no reply when SensorLockoutMS is nil, but got one")
+		t.Fatalf("expected no reply when SensorLockoutSec is nil, but got one")
 	}
 }

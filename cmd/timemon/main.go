@@ -135,12 +135,12 @@ func main() {
 				}
 				return ev.ID, true
 			},
-			SensorLockoutMS: func() int {
+			SensorLockoutSec: func() float64 {
 				ev, ok, err := st.GetActiveEvent()
 				if err != nil || !ok {
-					return 800 // defaults.json fallback
+					return 10 // defaults.json fallback
 				}
-				return ev.SensorLockoutMS
+				return ev.SensorLockoutSec
 			},
 		})
 		if err != nil {

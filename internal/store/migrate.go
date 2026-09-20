@@ -61,6 +61,24 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		version: 2,
+		name:    "sensor-lockout-sec",
+		apply: func(tx *sql.Tx) error {
+			if err := addColumnIfMissing(tx, "events", "sensor_lockout_sec", "REAL NOT NULL DEFAULT 10"); err != nil {
+				return err
+			}
+			// Backfill from the old ms column for rows that predate this
+			// migration.
+			if _, err := tx.Exec(`UPDATE events SET sensor_lockout_sec = sensor_lockout_ms / 1000.0`); err != nil {
+				return fmt.Errorf("backfill sensor_lockout_sec: %w", err)
+			}
+			if _, err := tx.Exec(`ALTER TABLE events DROP COLUMN sensor_lockout_ms`); err != nil {
+				return fmt.Errorf("drop sensor_lockout_ms: %w", err)
+			}
+			return nil
+		},
+	},
 }
 
 // schemaVersion reads the database's current schema version from SQLite's
