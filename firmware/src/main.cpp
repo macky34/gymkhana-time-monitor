@@ -189,8 +189,17 @@ void setup() {
   WiFi.setBandMode(WIFI_BAND_MODE_2G_ONLY);
 #endif
   WiFi.begin(WIFI_SSID, WIFI_PASS);
+  uint32_t wifiStartMs = millis();
   while (WiFi.status() != WL_CONNECTED) {
     setLed(millis() / 250 % 2); // fast blink while connecting
+    // If the AP isn't up yet (or never comes up) at boot, don't wait
+    // forever: a full restart re-runs esp_wifi init from scratch, which is
+    // more reliable than anything we could do from inside a stuck STA state
+    // (see the loop() reconnect comment below for the same reasoning).
+    if (millis() - wifiStartMs > 60UL * 1000UL) {
+      Serial.println("[wifi] initial connect timed out after 60s, restarting");
+      ESP.restart();
+    }
     delay(50);
   }
   Serial.printf("[wifi] connected, ip=%s boot_id=%u\n",
@@ -211,15 +220,38 @@ void setup() {
 void loop() {
   static uint32_t lastHbMs = 0;
   static uint32_t lastResyncMs = 0;
+  static uint32_t lastReconnectAttemptMs = 0;
+  static uint32_t wifiDownSinceMs = 0;
   uint32_t nowMs = millis();
 
   // Periodic re-sync (hourly) and WiFi recovery.
   if (WiFi.status() != WL_CONNECTED) {
     setLed(nowMs / 250 % 2);
-    WiFi.reconnect();
-    delay(200);
+    if (wifiDownSinceMs == 0) wifiDownSinceMs = nowMs;
+    // Calling WiFi.reconnect() every loop (every ~200ms) races the previous
+    // connect attempt: esp_wifi logs "sta is connecting, return error" and
+    // the STA state machine never gets a chance to finish NO_AP_FOUND /
+    // STA_LEAVING and settle, so it never recovers on its own (issue #35 -
+    // reported as "needs a manual reboot to reconnect"). Throttle attempts
+    // and disconnect first so each attempt starts from a clean STA state.
+    if (nowMs - lastReconnectAttemptMs > 5000) {
+      lastReconnectAttemptMs = nowMs;
+      Serial.println("[wifi] disconnected, reconnecting...");
+      WiFi.disconnect();
+      WiFi.begin(WIFI_SSID, WIFI_PASS);
+    }
+    // Belt-and-suspenders: if the above still can't recover the link within
+    // 5 minutes, restart rather than sit there indefinitely - a full reboot
+    // re-runs esp_wifi init from scratch and is what operators were doing
+    // manually anyway.
+    if (nowMs - wifiDownSinceMs > 5UL * 60UL * 1000UL) {
+      Serial.println("[wifi] down for >5min, restarting");
+      ESP.restart();
+    }
+    delay(50);
     return;
   }
+  wifiDownSinceMs = 0;
   if (nowMs - lastResyncMs > 3600UL * 1000UL) {
     lastResyncMs = nowMs;
     syncClock();
