@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # rpi-auto-update.sh: GitHub Releaseの最新版をチェックし、現在稼働中の
 # timemonバイナリと異なれば自動的にダウンロード・差し替え・再起動する。
-# RPi上でsystemdタイマー(例: 1時間毎)から定期実行することを想定
-# (常時自動適用: イベント運用中かどうかは判定しない。設定手順は
+# RPi上でsystemdタイマー(例: 1時間毎)から定期実行することを想定。
+# イベント運用中(GET /api/settings の event_status=="active")は計測を
+# 中断させないよう適用を見送り、次回の定期実行で再チェックする(設定手順は
 # Server-Setup wikiページ「自動アップデート」を参照)。
 #
 # Usage:
@@ -13,12 +14,14 @@
 # 動作:
 #   1. 現在のバイナリの --version と GitHub Releases API の最新タグを比較
 #   2. 差異が無ければ何もせず終了(exit 0)
-#   3. 差異があれば新バイナリをダウンロードして --version で検証し、
+#   3. 差異があっても event_status=="active"(イベント運用中)なら見送って
+#      終了(exit 0)。次回の定期実行で再チェックされる
+#   4. それ以外なら新バイナリをダウンロードして --version で検証し、
 #      既存バイナリをバックアップした上でsystemdサービスを再起動
-#   4. 再起動後にヘルスチェックが失敗したら旧バイナリへ即ロールバック
+#   5. 再起動後にヘルスチェックが失敗したら旧バイナリへ即ロールバック
 #
 # Exit codes:
-#   0  正常終了(更新なし、または更新成功)
+#   0  正常終了(更新なし・イベント運用中で見送り・または更新成功)
 #   1  引数エラー
 #   2  最新リリース情報の取得に失敗
 #   3  新バイナリのダウンロード・検証に失敗(既存バイナリには一切触れていない)
@@ -89,6 +92,23 @@ if [ "$CURRENT_VERSION" = "$LATEST_VERSION" ]; then
 fi
 
 log "update available: $CURRENT_VERSION -> $LATEST_VERSION"
+
+# Don't interrupt an in-progress event: applying (which stops/restarts the
+# service) mid-timing would drop connections and could lose a trigger.
+# GET /api/settings returns {"event":null} (no event_status field at all)
+# when no event is active, and {..., "event_status":"active", ...} while
+# one is (there is no "closed"-but-current-event case: GetActiveEvent only
+# ever returns the one row with status='active', see internal/snapshot).
+SETTINGS_JSON="$(curl -sf "$HEALTH_URL" 2>/dev/null || true)"
+EVENT_STATUS="$(echo "$SETTINGS_JSON" | python3 -c 'import json,sys
+try:
+    print(json.load(sys.stdin).get("event_status") or "")
+except Exception:
+    print("")' 2>/dev/null || true)"
+if [ "$EVENT_STATUS" = "active" ]; then
+  log "event is active, deferring update to next scheduled run"
+  exit 0
+fi
 
 DOWNLOAD_URL="https://github.com/$REPO/releases/download/$LATEST_VERSION/$BIN_NAME"
 TMP_BIN="$(mktemp)"
