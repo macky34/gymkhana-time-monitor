@@ -54,13 +54,15 @@ func (s *Store) CreateDriver(name string, classID int64, token, role string) (in
 	return id, nil
 }
 
-// GetDriverByToken looks up a driver by exact login-token match. This is a
-// plain equality SELECT — the caller is responsible for treating "not
+// GetDriverByToken looks up a driver by exact login-token match, excluding
+// deleted drivers (is_deleted=1) so a deleted account's old session cookie
+// and login URL/QR stop authenticating immediately (see DeleteDriver). This
+// is a plain equality SELECT — the caller is responsible for treating "not
 // found" as a bare 404 (no existence leakage), constant-time comparison is
 // not needed here since tokens are indexed, high-entropy random values, not
 // user-chosen secrets compared byte-by-byte.
 func (s *Store) GetDriverByToken(token string) (Driver, bool, error) {
-	row := s.db.QueryRow(`SELECT `+driverSelectCols+` FROM drivers WHERE token = ?`, token)
+	row := s.db.QueryRow(`SELECT `+driverSelectCols+` FROM drivers WHERE token = ? AND is_deleted = 0`, token)
 	d, err := scanDriver(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Driver{}, false, nil
@@ -71,9 +73,9 @@ func (s *Store) GetDriverByToken(token string) (Driver, bool, error) {
 	return d, true, nil
 }
 
-// GetDriver looks up a driver by id, regardless of is_deleted (there is
-// currently no store method that ever sets is_deleted=1 on a driver; see
-// final report).
+// GetDriver looks up a driver by id, regardless of is_deleted, so that past
+// logs/queue/ranking rows referencing a since-deleted driver can still be
+// rendered with a name (mirrors GetVehicle's treatment of is_deleted).
 func (s *Store) GetDriver(id int64) (Driver, bool, error) {
 	row := s.db.QueryRow(`SELECT `+driverSelectCols+` FROM drivers WHERE id = ?`, id)
 	d, err := scanDriver(row)
@@ -194,6 +196,24 @@ func (s *Store) SetIcon(id int64, jpeg []byte) error {
 // driver" and "driver has no icon" — either way there is nothing to serve.
 func (s *Store) GetIcon(id int64) ([]byte, bool, error) {
 	return s.getIcon("drivers", "get icon", id)
+}
+
+// DeleteDriver soft-deletes a driver (is_deleted=1), mirroring
+// DeleteVehicle. Existing logs/queue/entries rows keep referencing the
+// driver by id so historical rankings/CSV stay correct (GetDriver does not
+// filter on is_deleted). GetDriverByToken does filter on is_deleted, so this
+// also immediately invalidates the driver's login token/session. The
+// caller (handleAdminUserDelete) is responsible for the "can't delete
+// yourself" / "can't delete the last admin" 409 rules, the same division of
+// responsibility as SetRole/CountAdmins.
+func (s *Store) DeleteDriver(id int64) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	_, err := s.db.Exec(`UPDATE drivers SET is_deleted = 1 WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("store: delete driver: %w", err)
+	}
+	return nil
 }
 
 // SetMainVehicle changes a driver's main_vehicle_id.

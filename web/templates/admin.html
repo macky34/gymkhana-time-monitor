@@ -435,6 +435,7 @@
         </div>
       </div>
       <button type="button" class="btn primary" style="width:100%" id="rn-save">保存</button>
+      <button type="button" class="btn danger" style="width:100%;margin-top:10px" id="rn-delete">🗑 このユーザを削除</button>
     </div>
   </div>
 
@@ -521,6 +522,7 @@
 'use strict';
 const IS_ADMIN = {{.IsAdmin}};
 const IS_EMERGENCY = {{.IsEmergency}};
+const MY_ID = {{.MyID}};
 
 function toast(msg){
   const t = document.getElementById('toast');
@@ -1476,6 +1478,19 @@ function openRename(u){
     try {
       await api('PUT', '/api/admin/users/' + u.id, { name, driver_class_id: selId });
       toast('更新しました');
+      closeModal('renamemodal');
+      await reloadUsers();
+    } catch (err) { toast(err.message); }
+  };
+  const delBtn = document.getElementById('rn-delete');
+  // 自分自身の削除はサーバ側でも409拒否されるが、押せてしまう見た目を避けるため
+  // ボタン自体を隠す (最後の運営者かどうかはサーバ側判定のみに委ねる)。
+  delBtn.style.display = (u.id === MY_ID) ? 'none' : 'block';
+  delBtn.onclick = async () => {
+    if (!confirm(`${u.name} を削除しますか?\n(ログインURLは無効になります。過去の走行ログは残ります)`)) return;
+    try {
+      await api('DELETE', '/api/admin/users/' + u.id);
+      toast('削除しました');
       closeModal('renamemodal');
       await reloadUsers();
     } catch (err) { toast(err.message); }
