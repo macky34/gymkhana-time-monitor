@@ -108,7 +108,9 @@ func (s *Store) GetEvent(id int64) (EventRow, bool, error) {
 
 // ListEvents returns every event (active and closed), newest first.
 func (s *Store) ListEvents() ([]EventRow, error) {
-	rows, err := s.db.Query(`SELECT ` + eventSelectCols + ` FROM events ORDER BY created_at_ms DESC`)
+	// id の降順を副次キーに置く。created_at_ms はミリ秒精度しかないため、
+	// 同一ミリ秒に作られたイベント同士の順序が決まらないため。
+	rows, err := s.db.Query(`SELECT ` + eventSelectCols + ` FROM events ORDER BY created_at_ms DESC, id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("store: list events: %w", err)
 	}
