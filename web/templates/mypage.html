@@ -48,9 +48,8 @@
   .selfgo{width:100%;border:none;border-radius:12px;background:linear-gradient(160deg,#2ec973,#1fa35c);
           color:#07130c;font-size:16px;font-weight:800;padding:14px;cursor:pointer;font-family:inherit;margin-top:10px}
   .selfgo:active{transform:scale(.98)}
-  /* 出走待ち列に並ぶボタン専用の配色。出走(緑/アンバー)・ゴール(青)と
-     被らないティール系にする(#24)。 */
-  .selfgo.queue{background:linear-gradient(160deg,#5eead4,#2dd4bf);color:#042f2e}
+  /* 出走(緑)・ゴール(青)と被らない薄い青系の塗りつぶし。枠線だけの表現は選択状態と紛らわしいため避ける(#24) */
+  .selfgo.queue{background:linear-gradient(160deg,#93c5fd,#60a5fa);color:#0c2340;border:none;font-weight:700}
   .vcard{display:flex;align-items:center;gap:10px;padding:12px;font-size:13px;cursor:pointer;
          background:var(--panel);border:1px solid var(--line);border-radius:12px;transition:border-color .15s,background .15s}
   .vcard .vinfo{flex:1;min-width:0}
