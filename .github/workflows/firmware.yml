@@ -1,0 +1,54 @@
+name: firmware
+
+# ESP32ファームウェアのビルド検証。Goのワークフロー(ci.yml)とは
+# ライフサイクルが独立しているため別ファイルに分けている。
+# paths フィルタにより firmware/ に変更が無いPR・pushでは起動しない。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware.yml'
+  pull_request:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # ツールチェーンは数百MBあるため必ずキャッシュする。
+      # platformio.ini が変わればプラットフォーム指定も変わり得るのでキーに含める。
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: |
+            pio-${{ runner.os }}-
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio
+
+      # config.h は台毎の識別情報を持つためgitignoreされている。
+      # ここではコンパイルが通るかだけを見るので、exampleの値をそのまま使う。
+      - name: Generate config.h
+        run: cp firmware/src/config.h.example firmware/src/config.h
+
+      # 環境を指定しなければ platformio.ini の全env(esp32dev /
+      # seeed_xiao_esp32c6 / seeed_xiao_esp32c5)がビルドされる。
+      - name: Build all environments
+        working-directory: firmware
+        run: pio run

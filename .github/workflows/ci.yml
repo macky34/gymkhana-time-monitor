@@ -67,8 +67,8 @@ jobs:
           path: timemon-linux-${{ matrix.goarch }}
           retention-days: 30
 
-  # NOTE: ファームウェア(firmware/)のCIビルドは意図的に無し。実機センサーが
-  # まだ手元に無く検証できないため、ハードウェア検証が可能になるまでCI対象外。
+  # NOTE: ファームウェア(firmware/)のビルドは firmware.yml で行う。
+  # firmware/ に変更があるPR・pushでのみ起動する。
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
