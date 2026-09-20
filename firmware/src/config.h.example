@@ -26,8 +26,10 @@
 // onboard u.FL antenna) -- leave it undefined. WiFi band is pinned to 2.4GHz
 // in main.cpp since the C5 is dual-band and the venue AP is 2.4GHz-only.
 
-// Fallback debounce lockout if the server config fetch fails (ms).
-#define DEFAULT_LOCKOUT_MS 800
+// Fallback debounce lockout if the server config fetch fails (ms; the
+// server config wire protocol itself is in seconds, but this internal
+// fallback stays in ms to match lockoutMs's internal representation).
+#define DEFAULT_LOCKOUT_MS 10000  // 10 seconds
 
 // --- Seeed Studio XIAO ESP32C6 (env:seeed_xiao_esp32c6) ---------------------
 // Uncomment/replace the above when building for the XIAO ESP32C6 instead:

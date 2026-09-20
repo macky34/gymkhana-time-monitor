@@ -39,7 +39,7 @@ func newTestServer(t *testing.T, timingMode string) (srv *Server, queueID, drive
 		RegistrationOpen: true,
 		QueueSelfEntry:   true,
 		MaxCourseTimeSec: 180,
-		SensorLockoutMS:  800,
+		SensorLockoutSec: 0.8,
 		Coef:             domain.Coefficients{TurboGasoline: 1.7, TurboDiesel: 1.5, Rotary: 1.7, Supercharger: 1.7},
 		DispClasses:      []domain.DispClass{{Label: "~1600cc", MaxCC: intp(1600)}, {Label: "無制限", MaxCC: nil}},
 	}

@@ -38,13 +38,13 @@ type EventRow struct {
 	RegistrationOpen bool
 	QueueSelfEntry   bool
 	MaxCourseTimeSec int
-	SensorLockoutMS  int
+	SensorLockoutSec float64
 	Coef             domain.Coefficients
 	DispClasses      []domain.DispClass
 }
 
 const eventSelectCols = `id, name, status, created_at_ms, closed_at_ms, timing_mode, pt_mode, pt_penalty_ms, heat_ranking,
-	registration_mode, registration_open, queue_self_entry, max_course_time_sec, sensor_lockout_ms,
+	registration_mode, registration_open, queue_self_entry, max_course_time_sec, sensor_lockout_sec,
 	coefficients, displacement_classes`
 
 func scanEventRow(row rowScanner) (EventRow, error) {
@@ -53,7 +53,7 @@ func scanEventRow(row rowScanner) (EventRow, error) {
 	var heatRanking, regOpen, selfEntry int
 	var coefJSON, dispJSON string
 	err := row.Scan(&e.ID, &e.EventName, &e.Status, &e.CreatedAtMS, &closedAt, &e.TimingMode, &e.PTMode, &e.PTPenaltyMS,
-		&heatRanking, &e.RegistrationMode, &regOpen, &selfEntry, &e.MaxCourseTimeSec, &e.SensorLockoutMS,
+		&heatRanking, &e.RegistrationMode, &regOpen, &selfEntry, &e.MaxCourseTimeSec, &e.SensorLockoutSec,
 		&coefJSON, &dispJSON)
 	if err != nil {
 		return EventRow{}, err
@@ -149,11 +149,11 @@ func (s *Store) CreateEvent(set EventRow) (int64, error) {
 
 	now := time.Now().UnixMilli()
 	res, err := s.db.Exec(`INSERT INTO events (name, status, created_at_ms, timing_mode, pt_mode, pt_penalty_ms,
-		heat_ranking, registration_mode, registration_open, queue_self_entry, max_course_time_sec, sensor_lockout_ms,
+		heat_ranking, registration_mode, registration_open, queue_self_entry, max_course_time_sec, sensor_lockout_sec,
 		coefficients, displacement_classes) VALUES (?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		set.EventName, now, set.TimingMode, set.PTMode, set.PTPenaltyMS, boolToInt(set.HeatRanking),
 		set.RegistrationMode, boolToInt(set.RegistrationOpen), boolToInt(set.QueueSelfEntry),
-		set.MaxCourseTimeSec, set.SensorLockoutMS, string(coefJSON), string(dispJSON))
+		set.MaxCourseTimeSec, set.SensorLockoutSec, string(coefJSON), string(dispJSON))
 	if err != nil {
 		if isUniqueConstraintErr(err) {
 			return 0, ErrActiveEventExists
@@ -216,11 +216,11 @@ func (s *Store) SeedEvent(set EventRow, driverClasses, dtClasses []string) error
 
 	now := time.Now().UnixMilli()
 	_, err = tx.Exec(`INSERT INTO events (name, status, created_at_ms, timing_mode, pt_mode, pt_penalty_ms, heat_ranking,
-		registration_mode, registration_open, queue_self_entry, max_course_time_sec, sensor_lockout_ms,
+		registration_mode, registration_open, queue_self_entry, max_course_time_sec, sensor_lockout_sec,
 		coefficients, displacement_classes) VALUES (?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		set.EventName, now, set.TimingMode, set.PTMode, set.PTPenaltyMS, boolToInt(set.HeatRanking),
 		set.RegistrationMode, boolToInt(set.RegistrationOpen), boolToInt(set.QueueSelfEntry),
-		set.MaxCourseTimeSec, set.SensorLockoutMS, string(coefJSON), string(dispJSON))
+		set.MaxCourseTimeSec, set.SensorLockoutSec, string(coefJSON), string(dispJSON))
 	if err != nil {
 		return fmt.Errorf("store: seed event: insert event: %w", err)
 	}
@@ -271,10 +271,10 @@ func (s *Store) UpdateEvent(set EventRow) error {
 
 	_, err = s.db.Exec(`UPDATE events SET name=?, timing_mode=?, pt_mode=?, pt_penalty_ms=?,
 		heat_ranking=?, registration_mode=?, registration_open=?, queue_self_entry=?, max_course_time_sec=?,
-		sensor_lockout_ms=?, coefficients=?, displacement_classes=? WHERE id=?`,
+		sensor_lockout_sec=?, coefficients=?, displacement_classes=? WHERE id=?`,
 		set.EventName, set.TimingMode, set.PTMode, set.PTPenaltyMS, boolToInt(set.HeatRanking),
 		set.RegistrationMode, boolToInt(set.RegistrationOpen), boolToInt(set.QueueSelfEntry),
-		set.MaxCourseTimeSec, set.SensorLockoutMS, string(coefJSON), string(dispJSON), set.ID)
+		set.MaxCourseTimeSec, set.SensorLockoutSec, string(coefJSON), string(dispJSON), set.ID)
 	if err != nil {
 		return fmt.Errorf("store: update event: %w", err)
 	}

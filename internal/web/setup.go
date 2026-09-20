@@ -39,14 +39,14 @@ func (s *Server) handleSetupPage(w http.ResponseWriter, r *http.Request) {
 }
 
 type setupEventInput struct {
-	TimingMode       string `json:"timing_mode"`
-	PTMode           string `json:"pt_mode"`
-	PTPenaltyMS      int    `json:"pt_penalty_ms"`
-	HeatRanking      bool   `json:"heat_ranking"`
-	RegistrationMode string `json:"registration_mode"`
-	QueueSelfEntry   bool   `json:"queue_self_entry"`
-	MaxCourseTimeSec int    `json:"max_course_time_sec"`
-	SensorLockoutMS  int    `json:"sensor_lockout_ms"`
+	TimingMode       string  `json:"timing_mode"`
+	PTMode           string  `json:"pt_mode"`
+	PTPenaltyMS      int     `json:"pt_penalty_ms"`
+	HeatRanking      bool    `json:"heat_ranking"`
+	RegistrationMode string  `json:"registration_mode"`
+	QueueSelfEntry   bool    `json:"queue_self_entry"`
+	MaxCourseTimeSec int     `json:"max_course_time_sec"`
+	SensorLockoutSec float64 `json:"sensor_lockout_sec"`
 }
 
 type setupRequest struct {
@@ -109,6 +109,13 @@ func (s *Server) handleAPISetup(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid driver_class")
 		return
 	}
+	// SensorLockoutSec is relayed verbatim to the ESP32 sensors over UDP
+	// (internal/timing/status.go), so a non-positive or absurdly large value
+	// would leave the sensor effectively debounce-locked forever.
+	if req.Event.SensorLockoutSec <= 0 || req.Event.SensorLockoutSec > 60 {
+		writeJSONError(w, http.StatusBadRequest, "invalid sensor_lockout_sec")
+		return
+	}
 
 	set := store.EventRow{
 		EventName:        req.EventName,
@@ -122,7 +129,7 @@ func (s *Server) handleAPISetup(w http.ResponseWriter, r *http.Request) {
 		RegistrationOpen: true,
 		QueueSelfEntry:   req.Event.QueueSelfEntry,
 		MaxCourseTimeSec: req.Event.MaxCourseTimeSec,
-		SensorLockoutMS:  req.Event.SensorLockoutMS,
+		SensorLockoutSec: req.Event.SensorLockoutSec,
 		Coef:             req.Coefficients,
 		DispClasses:      req.DisplacementClasses,
 	}

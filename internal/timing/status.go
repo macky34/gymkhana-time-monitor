@@ -99,10 +99,10 @@ func (d *dispatcher) handleHeartbeat(p packet, addr net.Addr) {
 	// Piggyback the current lockout value on the heartbeat reply so a
 	// lockout change made in the admin UI reaches the sensor within one
 	// heartbeat interval, without requiring a device reboot (issue #18).
-	if d.deps.SensorLockoutMS == nil || d.conn == nil {
+	if d.deps.SensorLockoutSec == nil || d.conn == nil {
 		return
 	}
-	reply := configReply{Type: "config", LockoutMS: d.deps.SensorLockoutMS()}
+	reply := configReply{Type: "config", LockoutSec: d.deps.SensorLockoutSec()}
 	data, err := json.Marshal(reply)
 	if err != nil {
 		log.Printf("timing: failed to marshal config reply: %v", err)
@@ -117,10 +117,10 @@ func (d *dispatcher) handleHeartbeat(p packet, addr net.Addr) {
 // configReply is the JSON shape of the config reply piggybacked on heartbeat
 // responses:
 //
-//	{"type":"config","lockout_ms":800}
+//	{"type":"config","lockout_sec":10}
 type configReply struct {
-	Type      string `json:"type"`
-	LockoutMS int    `json:"lockout_ms"`
+	Type       string  `json:"type"`
+	LockoutSec float64 `json:"lockout_sec"`
 }
 
 // sensorStatusEntry and sensorStatusPayload define the exact JSON shape of

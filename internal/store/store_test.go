@@ -44,7 +44,7 @@ func defaultSettings(eventName string) EventRow {
 		RegistrationOpen: true,
 		QueueSelfEntry:   true,
 		MaxCourseTimeSec: 180,
-		SensorLockoutMS:  800,
+		SensorLockoutSec: 0.8,
 		Coef: domain.Coefficients{
 			TurboGasoline: 1.7,
 			TurboDiesel:   1.5,
@@ -220,7 +220,7 @@ func TestSeedEventAndGetActiveEvent(t *testing.T) {
 		got.RegistrationOpen != set.RegistrationOpen ||
 		got.QueueSelfEntry != set.QueueSelfEntry ||
 		got.MaxCourseTimeSec != set.MaxCourseTimeSec ||
-		got.SensorLockoutMS != set.SensorLockoutMS {
+		got.SensorLockoutSec != set.SensorLockoutSec {
 		t.Errorf("GetActiveEvent roundtrip mismatch:\n got=%+v\nwant=%+v", got, set)
 	}
 	if got.Coef != set.Coef {

@@ -58,14 +58,14 @@ type adminEventCreateRequest struct {
 // through the browser).
 type defaultsFile struct {
 	Event struct {
-		TimingMode       string `json:"timing_mode"`
-		PTMode           string `json:"pt_mode"`
-		PTPenaltyMS      int    `json:"pt_penalty_ms"`
-		HeatRanking      bool   `json:"heat_ranking"`
-		RegistrationMode string `json:"registration_mode"`
-		QueueSelfEntry   bool   `json:"queue_self_entry"`
-		MaxCourseTimeSec int    `json:"max_course_time_sec"`
-		SensorLockoutMS  int    `json:"sensor_lockout_ms"`
+		TimingMode       string  `json:"timing_mode"`
+		PTMode           string  `json:"pt_mode"`
+		PTPenaltyMS      int     `json:"pt_penalty_ms"`
+		HeatRanking      bool    `json:"heat_ranking"`
+		RegistrationMode string  `json:"registration_mode"`
+		QueueSelfEntry   bool    `json:"queue_self_entry"`
+		MaxCourseTimeSec int     `json:"max_course_time_sec"`
+		SensorLockoutSec float64 `json:"sensor_lockout_sec"`
 	} `json:"event"`
 	Coefficients        domain.Coefficients `json:"coefficients"`
 	DisplacementClasses []domain.DispClass  `json:"displacement_classes"`
@@ -89,7 +89,7 @@ func loadDefaultEventRow(name string) (store.EventRow, error) {
 		RegistrationOpen: true,
 		QueueSelfEntry:   d.Event.QueueSelfEntry,
 		MaxCourseTimeSec: d.Event.MaxCourseTimeSec,
-		SensorLockoutMS:  d.Event.SensorLockoutMS,
+		SensorLockoutSec: d.Event.SensorLockoutSec,
 		Coef:             d.Coefficients,
 		DispClasses:      d.DisplacementClasses,
 	}, nil

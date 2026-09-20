@@ -7,7 +7,7 @@
     "registration_mode": "public",
     "queue_self_entry": true,
     "max_course_time_sec": 300,
-    "sensor_lockout_ms": 800
+    "sensor_lockout_sec": 10
   },
   "coefficients": {
     "turbo_gasoline": 1.7,

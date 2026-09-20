@@ -436,7 +436,7 @@ func TestListenReturnsOnContextCancel(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestSensorConfigHandler(t *testing.T) {
-	handler := SensorConfigHandler(func() int { return 800 })
+	handler := SensorConfigHandler(func() float64 { return 10 })
 
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, "/api/sensor/config", nil))
@@ -447,8 +447,8 @@ func TestSensorConfigHandler(t *testing.T) {
 	if ct := rr.Header().Get("Content-Type"); ct != "application/json" {
 		t.Fatalf("Content-Type = %q, want application/json", ct)
 	}
-	if body := rr.Body.String(); body != `{"lockout_ms":800}` {
-		t.Fatalf("body = %q, want %q", body, `{"lockout_ms":800}`)
+	if body := rr.Body.String(); body != `{"lockout_sec":10}` {
+		t.Fatalf("body = %q, want %q", body, `{"lockout_sec":10}`)
 	}
 }
 

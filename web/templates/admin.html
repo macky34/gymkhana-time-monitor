@@ -347,7 +347,7 @@
             <div class="setrow">出走待ち列 自己投入 <span class="ml"><select id="set-self-entry"><option value="1">許可</option><option value="0">運営のみ</option></select></span></div>
             <div class="setrow">ヒートランキング <span class="ml"><select id="set-heat-ranking"><option value="0">なし(自由走行)</option><option value="1">あり</option></select></span></div>
             <div class="setrow">コースタイム上限 <span class="ml"><input id="set-max-time"> 秒</span></div>
-            <div class="setrow">センサーロックアウト <span class="ml"><input id="set-lockout"> ms</span></div>
+            <div class="setrow">センサーロックアウト <span class="ml"><input id="set-lockout"> 秒</span></div>
             <div class="setrow">ロータリー係数 <span class="ml"><input id="set-coef-rotary"></span></div>
             <div class="setrow">ターボ係数(ガソリン) <span class="ml"><input id="set-coef-tg"></span></div>
             <div class="setrow">ターボ係数(ディーゼル) <span class="ml"><input id="set-coef-td"></span></div>
@@ -1735,7 +1735,7 @@ function fillSettingsForm(){
   document.getElementById('set-self-entry').value = S.queue_self_entry ? '1' : '0';
   document.getElementById('set-heat-ranking').value = S.heat_ranking ? '1' : '0';
   document.getElementById('set-max-time').value = String(S.max_course_time_sec || 180);
-  document.getElementById('set-lockout').value = String(S.sensor_lockout_ms || 800);
+  document.getElementById('set-lockout').value = String(S.sensor_lockout_sec || 10);
   const c = S.coefficients || DEF_COEF;
   document.getElementById('set-coef-rotary').value = String(c.rotary);
   document.getElementById('set-coef-tg').value = String(c.turbo_gasoline);
@@ -1843,7 +1843,7 @@ async function saveSettings(){
     queue_self_entry: document.getElementById('set-self-entry').value === '1',
     heat_ranking: document.getElementById('set-heat-ranking').value === '1',
     max_course_time_sec: Math.round(num('set-max-time', S.max_course_time_sec)),
-    sensor_lockout_ms: Math.round(num('set-lockout', S.sensor_lockout_ms)),
+    sensor_lockout_sec: num('set-lockout', S.sensor_lockout_sec),
     coefficients: {
       rotary: num('set-coef-rotary', DEF_COEF.rotary),
       turbo_gasoline: num('set-coef-tg', DEF_COEF.turbo_gasoline),

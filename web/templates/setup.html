@@ -90,7 +90,7 @@
         <div class="setrow">出走待ち列 自己投入 <span class="ml"><select id="su-self-entry"><option value="1" selected>許可</option><option value="0">運営のみ</option></select></span></div>
         <div class="setrow">ヒートランキング <span class="ml"><select id="su-heat"><option value="0" selected>なし(自由走行)</option><option value="1">あり</option></select></span></div>
         <div class="setrow">コースタイム上限 <span class="ml"><input id="su-max-time" value="180"> 秒</span></div>
-        <div class="setrow">センサーロックアウト <span class="ml"><input id="su-lockout" value="800"> ms</span></div>
+        <div class="setrow">センサーロックアウト <span class="ml"><input id="su-lockout" value="10"> 秒</span></div>
       </div>
 
       <div class="sec">COEFFICIENTS — 換算係数</div>
@@ -207,7 +207,7 @@ async function submitSetup(){
       registration_mode: document.getElementById('su-reg-mode').value,
       queue_self_entry: document.getElementById('su-self-entry').value === '1',
       max_course_time_sec: Math.round(numOf('su-max-time', 180)),
-      sensor_lockout_ms: Math.round(numOf('su-lockout', 800))
+      sensor_lockout_sec: numOf('su-lockout', 10)
     },
     coefficients: {
       turbo_gasoline: numOf('su-coef-tg', 1.7),

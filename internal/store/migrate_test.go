@@ -319,13 +319,24 @@ func TestRealMigrationsAddIconRevColumns(t *testing.T) {
 	}
 
 	// 2. Revert to "before version 1": drop icon_rev (SQLite has supported
-	// DROP COLUMN since 3.35) and roll user_version back to 0. This is the
-	// only structural difference an actual pre-migration event.sqlite3 has
-	// relative to what schemaSQL produces today.
+	// DROP COLUMN since 3.35), restore events.sensor_lockout_ms (the shape
+	// version 2 migrates away from) in place of sensor_lockout_sec, and roll
+	// user_version back to 0. This is the only structural difference an
+	// actual pre-migration event.sqlite3 has relative to what schemaSQL
+	// produces today.
 	for _, tbl := range []string{"drivers", "vehicles"} {
 		if _, err := st1.db.Exec(`ALTER TABLE ` + tbl + ` DROP COLUMN icon_rev`); err != nil {
 			t.Fatalf("drop icon_rev from %s: %v", tbl, err)
 		}
+	}
+	if _, err := st1.db.Exec(`ALTER TABLE events ADD COLUMN sensor_lockout_ms INTEGER NOT NULL DEFAULT 800`); err != nil {
+		t.Fatalf("add sensor_lockout_ms: %v", err)
+	}
+	if _, err := st1.db.Exec(`UPDATE events SET sensor_lockout_ms = CAST(ROUND(sensor_lockout_sec * 1000) AS INTEGER)`); err != nil {
+		t.Fatalf("backfill sensor_lockout_ms: %v", err)
+	}
+	if _, err := st1.db.Exec(`ALTER TABLE events DROP COLUMN sensor_lockout_sec`); err != nil {
+		t.Fatalf("drop sensor_lockout_sec: %v", err)
 	}
 	if err := setSchemaVersion(st1.db, 0); err != nil {
 		t.Fatalf("reset schema version: %v", err)
@@ -369,6 +380,18 @@ func TestRealMigrationsAddIconRevColumns(t *testing.T) {
 	gotVehicleIcon, ok, err := st2.GetVehicleIcon(vehicleID)
 	if err != nil || !ok || string(gotVehicleIcon) != string(vehicleIcon) {
 		t.Fatalf("GetVehicleIcon after migrate: ok=%v err=%v got=%v want=%v", ok, err, gotVehicleIcon, vehicleIcon)
+	}
+
+	// 4b. Version 2's own backfill: the pre-migration sensor_lockout_ms value
+	// (800, from defaultSettings' SensorLockoutSec=0.8 converted back to ms
+	// in step 2 above) must reappear as sensor_lockout_sec=0.8, not the
+	// column's own DEFAULT 10.
+	activeEvent, ok, err := st2.GetActiveEvent()
+	if err != nil || !ok {
+		t.Fatalf("GetActiveEvent after migrate: ok=%v err=%v", ok, err)
+	}
+	if activeEvent.SensorLockoutSec != 0.8 {
+		t.Errorf("SensorLockoutSec after migrate = %v, want 0.8", activeEvent.SensorLockoutSec)
 	}
 
 	// 5. The real regression this migration risks: every Go scan path that
