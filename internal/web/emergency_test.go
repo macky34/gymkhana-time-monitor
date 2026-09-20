@@ -245,6 +245,7 @@ func TestEmergencyAdmin_ForbiddenRoutes(t *testing.T) {
 		{http.MethodDelete, "/api/admin/orphans/1", ""},
 		{http.MethodDelete, "/api/admin/orphans", ""},
 		{http.MethodGet, "/api/admin/export", ""},
+		{http.MethodGet, "/api/admin/register-link", ""},
 	}
 	for _, c := range cases {
 		req := httptest.NewRequest(c.method, c.path, strings.NewReader(c.body))
@@ -300,6 +301,12 @@ func TestEmergencyAdmin_HTMLHidesRestrictedTabs(t *testing.T) {
 	if !strings.Contains(emergencyHTML, `data-p="a-usr"`) {
 		t.Error("emergency /admin HTML is missing data-p=\"a-usr\"")
 	}
+	// The register-link section calls a withAdmin-only API; if it rendered
+	// for the emergency session, its JS would 403 on load. See
+	// handleAdminRegisterLink's own comment for why it stays on withAdmin.
+	if strings.Contains(emergencyHTML, `id="reglink-url"`) {
+		t.Error("emergency /admin HTML contains id=\"reglink-url\", want it hidden (register-link is not an emergency-admin operation)")
+	}
 
 	adminHTML := fetch("tok-admin")
 	if !strings.Contains(adminHTML, `data-p="a-set"`) {
@@ -307,6 +314,9 @@ func TestEmergencyAdmin_HTMLHidesRestrictedTabs(t *testing.T) {
 	}
 	if !strings.Contains(adminHTML, `data-p="a-usr"`) {
 		t.Error("normal admin /admin HTML is missing data-p=\"a-usr\"")
+	}
+	if !strings.Contains(adminHTML, `id="reglink-url"`) {
+		t.Error("normal admin /admin HTML is missing id=\"reglink-url\"")
 	}
 }
 

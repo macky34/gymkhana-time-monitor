@@ -295,6 +295,14 @@
 
     <!-- ユーザ管理 -->
     <div class="apane{{if .IsEmergency}} on{{end}}" id="a-usr">
+      {{if not .IsEmergency}}
+      <div class="sec">参加募集</div>
+      <div class="card" style="padding:12px;text-align:center;margin-bottom:12px">
+        <p class="note" style="text-align:left;margin:0 0 4px">このURL/QRを参加者に共有すると、参加登録ページ(/entry)を開けます。</p>
+        <div class="qr"><img id="reglink-qr" alt="参加登録QR"></div>
+        <div class="tokenurl copyable" id="reglink-url" title="タップでコピー"><span></span><span class="cp">📋 タップでコピー</span></div>
+      </div>
+      {{end}}
       <button type="button" class="btn primary" style="width:100%;margin-bottom:12px" id="usr-new">＋ ユーザを運営登録</button>
       <div class="card">
         <ul class="ulist" id="usr-list"></ul>
@@ -1893,6 +1901,15 @@ async function reloadUsers(){
     renderQueueAddForm();
   } catch (err) { toast('ユーザ取得に失敗: ' + err.message); }
 }
+// 募集URL/QRは/entryへの固定リンクでトークンを含まないため、一度
+// 取得すれば以後の再取得は不要(SSEでの更新対象にもしていない)。
+async function loadRegisterLink(){
+  try {
+    const r = await apiGet('/api/admin/register-link');
+    document.querySelector('#reglink-url span').textContent = r.register_url;
+    document.getElementById('reglink-qr').src = 'data:image/png;base64,' + r.qr_png_b64;
+  } catch (err) { toast('募集リンク取得に失敗: ' + err.message); }
+}
 async function reloadVehicles(){
   try {
     const r = await apiGet('/api/vehicles');
@@ -1979,6 +1996,9 @@ async function init(){
   document.getElementById('qm-reissue').addEventListener('click', doReissue);
   bindCopyable(document.getElementById('qm-url'));
   bindCopyable(document.getElementById('nu-url'));
+  // reglink-url は緊急管理者向けにはテンプレートから出力されない(存在しない
+  // 要素へのbindCopyableはエラーになるためガードする)。
+  if (!IS_EMERGENCY) bindCopyable(document.getElementById('reglink-url'));
   document.getElementById('lm-save').addEventListener('click', saveLogModal);
   document.getElementById('as-save').addEventListener('click', saveAssign);
   document.getElementById('log-add').addEventListener('click', openLogAdd);
@@ -1995,7 +2015,7 @@ async function init(){
   if (IS_EMERGENCY){
     await Promise.all([reloadPublicSettings(), reloadUsers(), reloadVehicles(), reloadDrivers()]);
   } else {
-    await Promise.all([reloadAdminSettings(), reloadUsers(), reloadVehicles(), reloadDrivers(), reloadEvents()]);
+    await Promise.all([reloadAdminSettings(), reloadUsers(), reloadVehicles(), reloadDrivers(), reloadEvents(), loadRegisterLink()]);
   }
   fillSettingsForm();
   renderModeUI();

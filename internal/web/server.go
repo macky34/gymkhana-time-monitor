@@ -237,6 +237,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("POST /api/admin/users/{id}/reissue", s.withCSRFGuard(s.withUserAdmin(s.handleAdminUserReissue)))
 	mux.HandleFunc("PUT /api/admin/users/{id}/role", s.withCSRFGuard(s.withUserAdmin(s.handleAdminUserRole)))
 	mux.HandleFunc("POST /api/admin/users/{id}/icon", s.withCSRFGuard(s.withAdmin(s.handleAdminUserIcon)))
+	mux.HandleFunc("GET /api/admin/register-link", s.withAdmin(s.handleAdminRegisterLink))
 	// ---- Admin: vehicle management (W4) ----
 	mux.HandleFunc("POST /api/admin/vehicles", s.withCSRFGuard(s.withAdmin(s.handleAdminVehicleCreate)))
 	mux.HandleFunc("PUT /api/admin/vehicles/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminVehicleUpdate)))
