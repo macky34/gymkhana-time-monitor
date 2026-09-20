@@ -87,6 +87,15 @@ type Deps struct {
 	// belonging to an active event so pairing proceeds exactly as before.
 	ActiveEventID func() (id int64, ok bool)
 
+	// SensorLockoutMS, if non-nil, is called on every heartbeat to fetch the
+	// current lockout value (milliseconds) for the active event, which is
+	// then piggybacked back to the ESP32 sensor as a "config" reply on the
+	// same UDP socket (see handleHeartbeat). This lets a lockout change made
+	// in the admin UI reach the sensor within one heartbeat interval instead
+	// of requiring a device reboot (issue #18). Nil means no config reply is
+	// ever sent.
+	SensorLockoutMS func() int
+
 	// boundAddr, when non-nil, receives the UDP socket's actual local
 	// address once Listen has bound (useful with a ":0" addr). Unexported
 	// on purpose: it is an in-package test seam, not part of the public
@@ -112,6 +121,13 @@ type packet struct {
 
 func validSensorID(id string) bool {
 	return id == "start" || id == "goal"
+}
+
+// inboundPacket pairs a decoded packet with its UDP source address, so the
+// dispatcher goroutine can reply to heartbeats (see handleHeartbeat).
+type inboundPacket struct {
+	packet
+	addr net.Addr
 }
 
 // sourceIP extracts just the IP portion (no port) from a packet's source
@@ -159,9 +175,10 @@ func Listen(ctx context.Context, addr string, deps Deps) error {
 		deps:              deps,
 		sensors:           make(map[string]*sensorState),
 		unresponsiveAfter: unresponsiveAfter,
+		conn:              conn,
 	}
 
-	work := make(chan packet, 64)
+	work := make(chan inboundPacket, 64)
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -245,7 +262,7 @@ func Listen(ctx context.Context, addr string, deps Deps) error {
 			continue
 		}
 
-		work <- p
+		work <- inboundPacket{packet: p, addr: srcAddr}
 	}
 
 	close(stopWatch)
@@ -261,9 +278,13 @@ type dispatcher struct {
 	deps              Deps
 	sensors           map[string]*sensorState
 	unresponsiveAfter time.Duration
+
+	// conn is the UDP socket Listen bound; used to send config replies back
+	// to sensors piggybacked on their heartbeats (see handleHeartbeat).
+	conn net.PacketConn
 }
 
-func (d *dispatcher) run(work <-chan packet, statusInterval time.Duration) {
+func (d *dispatcher) run(work <-chan inboundPacket, statusInterval time.Duration) {
 	ticker := time.NewTicker(statusInterval)
 	defer ticker.Stop()
 
@@ -290,12 +311,12 @@ func (d *dispatcher) run(work <-chan packet, statusInterval time.Duration) {
 	}
 }
 
-func (d *dispatcher) handle(p packet) {
+func (d *dispatcher) handle(p inboundPacket) {
 	switch p.Type {
 	case "trigger":
-		d.handleTrigger(p)
+		d.handleTrigger(p.packet)
 	case "hb":
-		d.handleHeartbeat(p)
+		d.handleHeartbeat(p.packet, p.addr)
 	}
 }
 

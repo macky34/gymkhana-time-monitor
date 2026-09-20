@@ -135,6 +135,13 @@ func main() {
 				}
 				return ev.ID, true
 			},
+			SensorLockoutMS: func() int {
+				ev, ok, err := st.GetActiveEvent()
+				if err != nil || !ok {
+					return 800 // defaults.json fallback
+				}
+				return ev.SensorLockoutMS
+			},
 		})
 		if err != nil {
 			log.Printf("timing: %v", err)
