@@ -19,7 +19,7 @@
   --tx:#e9edf3; --mut:#8b95a5; --dim:#7a8494;
   --go:#3ad07f; --amber:#ffb224; --red:#ff5d5d; --blue:#5aa2ff;
   --bg-page:#0b0d10; --nav-bg:#161a20; --toast-bg:#2b3a2f;
-  --seg-on-bg:#22302a; --seg-warn-bg:#2c2718;
+  --seg-on-bg:#22302a; --seg-warn-bg:#2c2718; --seg-danger-bg:#3a2226;
   --shadow:0 20px 60px rgba(0,0,0,.5);
   --mono:"SFMono-Regular","Cascadia Mono","Consolas","Roboto Mono",ui-monospace,monospace;
 }
@@ -29,7 +29,7 @@
     --tx:#1a2230; --mut:#5a6575; --dim:#6b7686;
     --go:#0f9d58; --amber:#b9720a; --red:#d13c3c; --blue:#2f6cb8;
     --bg-page:#e3e7ed; --nav-bg:#eef1f5; --toast-bg:#dff3e6;
-    --seg-on-bg:#e3f5ea; --seg-warn-bg:#fbeed7;
+    --seg-on-bg:#e3f5ea; --seg-warn-bg:#fbeed7; --seg-danger-bg:#fbe4e4;
     --shadow:0 10px 30px rgba(20,30,50,.12);
   }
 }

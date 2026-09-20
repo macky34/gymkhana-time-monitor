@@ -60,9 +60,6 @@
   .gobtn{width:100%;border:none;border-radius:14px;background:linear-gradient(160deg,#2ec973,#1fa35c);
          color:#07130c;font-size:19px;font-weight:800;padding:20px 12px 22px;cursor:pointer;position:relative;
          overflow:hidden;font-family:inherit;letter-spacing:.05em}
-  .gobtn small{display:block;font-size:10.5px;font-weight:600;opacity:.75;margin-top:3px;letter-spacing:0}
-  .gobtn .fill{position:absolute;left:0;top:0;bottom:0;width:0%;background:rgba(255,255,255,.30)}
-  .gobtn.holding .fill{width:100%;transition:width .5s linear}
   .gobtn:active{transform:scale(.99)}
   .gobtn:disabled{filter:grayscale(.7);opacity:.6}
   .gobtn.manual{background:linear-gradient(160deg,#ffc23d,#e69a12);color:#241a03}
@@ -254,8 +251,8 @@
       <div class="grid2">
         <div>
           <div class="startgoal-row">
-            <button type="button" class="gobtn" id="gobtn"><span class="fill"></span><span id="go-label"></span><span class="marq gobtn-target"><span id="go-target"></span></span><small id="go-hint"></small></button>
-            <button type="button" class="gobtn goal" id="goalbtn" style="display:none"><span id="goal-label"></span><span class="marq gobtn-target"><span id="goal-target"></span></span><small>タップの瞬間がゴール打刻 (走行中の先頭車)</small></button>
+            <button type="button" class="gobtn" id="gobtn"><span id="go-label"></span><span class="marq gobtn-target"><span id="go-target"></span></span></button>
+            <button type="button" class="gobtn goal" id="goalbtn" style="display:none"><span id="goal-label"></span><span class="marq gobtn-target"><span id="goal-target"></span></span></button>
           </div>
           <div class="fbrow" id="fallback-row" style="display:none">
             <button type="button" class="fbbtn" id="fallback-start">⏱ 手動スタート打刻</button>
@@ -686,18 +683,16 @@ function renderGoButtons(){
   const gb = document.getElementById('gobtn');
   const m = mode();
   const next = waitingQueue[0];
-  const nx = next ? `${next.driver.name}(＃${next.vehicle.number})` : '出走待ち列空';
+  const nx = next ? `${next.driver.name}(#${next.vehicle.number})` : '出走待ち列空';
   document.getElementById('go-label').textContent = m === 'manual' ? 'スタート ⏱' : '出走 ▶';
   document.getElementById('go-target').textContent = nx;
-  document.getElementById('go-hint').textContent = m === 'manual'
-    ? 'タップの瞬間が計測開始 (手計測)' : '長押し0.5秒で投入 / タイムはセンサー打刻';
   gb.disabled = !waitingQueue.length;
   const running = onCourseCars.filter(c => c.t_start_us && !c.finish);
   const gbt = document.getElementById('goalbtn');
   gbt.disabled = !running.length;
   document.getElementById('goal-label').textContent = 'ゴール 🏁';
   document.getElementById('goal-target').textContent = running.length
-    ? `${running[0].driver.name}(＃${running[0].vehicle.number} ${running[0].vehicle.name})` : '走行中なし';
+    ? `${running[0].driver.name}(#${running[0].vehicle.number} ${running[0].vehicle.name})` : '走行中なし';
   const armed = onCourseCars.filter(c => !c.t_start_us);
   const fbStart = document.getElementById('fallback-start');
   if (fbStart) fbStart.disabled = !armed.length;
@@ -780,7 +775,7 @@ function renderCourse(){
     const card = h('div', { class: 'card oc-admin' + (over ? ' over' : '') + (armed ? ' armed' : '') + (flash ? ' flash' : '') },
       h('div', { class: 'avstack' }, av, vav),
       h('div', { class: 'nm' }, marq(c.driver.name),
-        marq(`＃${c.vehicle.number} ${c.vehicle.name}` + (c.pt_count ? ` ・PT${c.pt_count}` : '') + (c.mc_flag ? ' ・MC' : ''))),
+        marq(`#${c.vehicle.number} ${c.vehicle.name}` + (c.pt_count ? ` ・PT${c.pt_count}` : '') + (c.mc_flag ? ' ・MC' : ''))),
       tm,
       h('div', { class: 'acts' }, acts)
     );
@@ -851,7 +846,7 @@ async function courseDNF(c){
 async function courseAdoptOrphan(run){
   const next = waitingQueue[0];
   if (!next) return;
-  if (!confirm(`出走待ち列先頭の ${next.driver.name}(＃${next.vehicle.number}) をこの走行に割り当てますか?`)) return;
+  if (!confirm(`出走待ち列先頭の ${next.driver.name}(#${next.vehicle.number}) をこの走行に割り当てますか?`)) return;
   try {
     await api('POST', '/api/admin/course/adopt-orphan', { orphan_id: run.orphan_id });
     toast('割り当てました');
@@ -894,7 +889,7 @@ function renderQueue(){
       grip,
       h('span', { class: 'pos t' }, String(i + 1)),
       h('div', { class: 'avstack' }, av, vav),
-      h('div', { class: 'nm' }, h('b', {}, marq(q.driver.name)), h('span', {}, marq(`＃${q.vehicle.number} ${q.vehicle.name}`))),
+      h('div', { class: 'nm' }, h('b', {}, marq(q.driver.name)), h('span', {}, marq(`#${q.vehicle.number} ${q.vehicle.name}`))),
       acts
     );
     qEl.appendChild(li);
@@ -1014,13 +1009,13 @@ function fillQaVehicle(){
   }
   const linked = vehiclesList.filter(v => linkedIds.has(v.id));
   const rest = vehiclesList.filter(v => !linkedIds.has(v.id));
-  linked.forEach(v => vSel.appendChild(h('option', { value: String(v.id) }, `＃${v.number} ${v.name}`)));
+  linked.forEach(v => vSel.appendChild(h('option', { value: String(v.id) }, `#${v.number} ${v.name}`)));
   if (linked.length && rest.length){
     const sepa = h('option', { value: '' }, '— 紐づけ外 —');
     sepa.disabled = true;
     vSel.appendChild(sepa);
   }
-  rest.forEach(v => vSel.appendChild(h('option', { value: String(v.id) }, `＃${v.number} ${v.name}`)));
+  rest.forEach(v => vSel.appendChild(h('option', { value: String(v.id) }, `#${v.number} ${v.name}`)));
   vSel.value = keepV;
 }
 // Driver changed: regroup the vehicle suggestions, and — only if the vehicle
@@ -1068,18 +1063,10 @@ function markQaSelects(){
 /* go / goal buttons */
 function bindGoButtons(){
   const gb = document.getElementById('gobtn');
-  let hold = null;
   gb.addEventListener('pointerdown', () => {
     if (gb.disabled || !waitingQueue.length) return;
-    if (mode() === 'manual'){ doLaunch(); return; }
-    gb.classList.add('holding');
-    hold = setTimeout(() => {
-      gb.classList.remove('holding');
-      doLaunch();
-    }, 500);
+    doLaunch();
   });
-  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
-    gb.addEventListener(ev, () => { clearTimeout(hold); gb.classList.remove('holding'); }));
   document.getElementById('goalbtn').addEventListener('click', doFinish);
   document.getElementById('fallback-goal').addEventListener('click', doFinish);
   document.getElementById('fallback-start').addEventListener('click', doManualStart);
@@ -1111,6 +1098,11 @@ function bindGoButtons(){
   });
 }
 async function doLaunch(){
+  // 長押しゲートを廃止したぶん、連打での二重投入(waitingQueue[0]の更新が
+  // 間に合わず先頭2台が両方出走する)をここで防ぐ。応答後は
+  // renderGoButtons() が最新のqueueに応じて disabled を再計算する。
+  const gb = document.getElementById('gobtn');
+  gb.disabled = true;
   const next = waitingQueue[0];
   try {
     await api('POST', '/api/admin/course', mode() === 'manual' ? clientMsBody() : {});
@@ -1118,6 +1110,7 @@ async function doLaunch(){
       ? `⏱ ${next ? next.driver.name : ''} 計測開始`
       : `▶ ${next ? next.driver.name : ''} 投入 (センサー待ち)`);
   } catch (err) { toast(err.message); }
+  finally { renderGoButtons(); }
 }
 // センサーモードの予備ボタン: 手動スタート打刻 (最古のセンサー待ち車に打刻)
 async function doManualStart(){
@@ -1162,7 +1155,7 @@ function renderLogs(){
       }
       mid.appendChild(h('b', {}, marq(l.driver.name)));
       const meta = [];
-      if (l.vehicle) meta.push(`＃${l.vehicle.number} ${l.vehicle.name}`);
+      if (l.vehicle) meta.push(`#${l.vehicle.number} ${l.vehicle.name}`);
       if (l.heat !== null && l.heat !== undefined) meta.push('H' + l.heat);
       let metaText = meta.join(' / ');
       if (l.edited_at) metaText += (metaText ? ' ・ ' : '') + '編集済 ' + hhmm(l.edited_at);
@@ -1313,7 +1306,7 @@ function fillDriverSelect(sel, withEmpty, emptyLabel){
 function fillVehicleSelect(sel, withEmpty, emptyLabel){
   clear(sel);
   if (withEmpty) sel.appendChild(h('option', { value: '' }, emptyLabel || '未割当'));
-  vehiclesList.forEach(v => sel.appendChild(h('option', { value: String(v.id) }, `＃${v.number} ${v.name}`)));
+  vehiclesList.forEach(v => sel.appendChild(h('option', { value: String(v.id) }, `#${v.number} ${v.name}`)));
 }
 function setLmMC(on){
   document.querySelectorAll('#lm-mc button').forEach(b => b.classList.toggle('on', (b.dataset.v === '1') === on));
@@ -1406,7 +1399,7 @@ function renderUsers(){
     const av = h('div', { class: 'avatar sm' });
     avatarInto(av, u);
     const mainV = vehiclesList.find(v => v.id === u.main_vehicle_id);
-    const sub = (u.driver_class || '') + (mainV ? ` ・ ＃${mainV.number}` : '');
+    const sub = (u.driver_class || '') + (mainV ? ` ・ #${mainV.number}` : '');
     // Emergency-admin cannot reach PUT /api/admin/users/{id} (rename) - the
     // server returns 403, so its only permitted button here is omitted.
     const btns = [];
@@ -1556,7 +1549,7 @@ function renderVehiclesTab(){
     edit.addEventListener('click', () => openVehModal(v));
     const del = h('button', { type: 'button', class: 'mini red' }, '削除');
     del.addEventListener('click', async () => {
-      if (!confirm(`＃${v.number} ${v.name} を削除しますか?\n(過去の走行ログは残ります)`)) return;
+      if (!confirm(`#${v.number} ${v.name} を削除しますか?\n(過去の走行ログは残ります)`)) return;
       try {
         await api('DELETE', '/api/admin/vehicles/' + v.id);
         toast('削除しました');
@@ -1567,7 +1560,7 @@ function renderVehiclesTab(){
     vehicleAvatarInto(vav, v);
     list.appendChild(h('li', {},
       vav,
-      h('div', {}, h('b', {}, `＃${v.number} ${v.name}`), h('br'),
+      h('div', {}, h('b', {}, `#${v.number} ${v.name}`), h('br'),
         h('span', { style: 'font-size:10px;color:var(--mut)' }, vehSpecLine(v))),
       h('span', { class: 'ml' }, edit, del)
     ));
@@ -1607,7 +1600,7 @@ function vmConvPreview(){
 }
 function openVehModal(v){
   vmEditing = v || null;
-  document.getElementById('vm-title').textContent = v ? `＃${v.number} ${v.name} を編集` : '車両を追加';
+  document.getElementById('vm-title').textContent = v ? `#${v.number} ${v.name} を編集` : '車両を追加';
   document.getElementById('vm-num').value = v ? String(v.number) : '';
   document.getElementById('vm-name').value = v ? v.name : '';
   vmEngine = v ? v.engine : 'gasoline';
@@ -1747,7 +1740,7 @@ function renderEventMgmt(){
   if (active){
     card.appendChild(h('div', { class: 'setrow' }, 'イベント名', h('span', { class: 'ml' }, active.name)));
     card.appendChild(h('div', { class: 'setrow' }, 'ステータス', h('span', { class: 'ml badge' }, 'アクティブ')));
-    const wrap = h('div', { style: 'padding:0 12px 12px' });
+    const wrap = h('div', { style: 'padding:12px' });
     const closeBtn = h('button', { type: 'button', class: 'btn danger', style: 'width:100%' }, 'イベントを終了する');
     closeBtn.addEventListener('click', () => closeEventFlow(active));
     wrap.appendChild(closeBtn);

@@ -23,7 +23,7 @@
     .avatar.sm{width:30px;height:30px;font-size:12px}
   }
   /* ---- my-specific ---- */
-  .evbanner{background:#2c2718;border-bottom:1px solid #77771f;color:var(--amber);font-size:11.5px;
+  .evbanner{background:var(--seg-warn-bg);border-bottom:1px solid #77771f;color:var(--amber);font-size:11.5px;
             padding:9px 12px;text-align:center}
   .evbanner a{color:var(--amber)}
   .tokenurl{font-family:var(--mono);font-size:10.5px;background:var(--panel2);border:1px solid var(--line);
@@ -53,11 +53,11 @@
          background:var(--panel);border:1px solid var(--line);border-radius:12px;transition:border-color .15s,background .15s}
   .vcard .vinfo{flex:1;min-width:0}
   .vcard .ml{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:nowrap;flex:none}
-  .vcard.sel{border-color:var(--amber);background:#262316;box-shadow:0 0 0 1px var(--amber) inset}
+  .vcard.sel{border-color:var(--amber);background:var(--seg-warn-bg);box-shadow:0 0 0 1px var(--amber) inset}
   .vcard:not(.sel):hover{border-color:var(--dim)}
   .ve-unlink{width:100%;margin-top:14px;padding:10px;border-radius:9px;background:var(--panel2);
              border:1px solid #5a3038;color:var(--red);font-family:inherit;font-size:12.5px;cursor:pointer}
-  .ve-unlink:hover{background:#3a2226}
+  .ve-unlink:hover{background:var(--seg-danger-bg)}
   .runs{width:100%;border-collapse:collapse;font-size:12px}
   .runs th{font-size:10.5px;color:var(--dim);text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
   .runs td{padding:8px 6px;border-bottom:1px solid var(--line);font-family:var(--mono);font-variant-numeric:tabular-nums}
@@ -198,7 +198,7 @@
           </div>
         </div>
         <div id="vm-ice">
-          <div class="fld"><label>排気量 (実cc)</label><input class="t" id="vm-cc" value="1500" inputmode="numeric"></div>
+          <div class="fld"><label>排気量 (実cc)</label><input class="t" id="vm-cc" placeholder="例: 1500" inputmode="numeric"></div>
           <div class="fld"><label>過給機</label>
             <div class="seg" id="vm-fi"><button type="button" class="on" data-fi="0">NA</button><button type="button" data-fi="1">ターボ / SC</button></div>
             <div class="hint" id="vm-conv"></div>
@@ -218,7 +218,6 @@
         <div class="fld"><label>相乗りする車両</label>
           <select id="vm-sel"></select>
         </div>
-        <div class="hint">本人操作のみで即成立します。</div>
       </div>
       <button type="button" class="btn primary" style="width:100%;margin-top:6px" id="vm-submit">追加する</button>
       <p class="note">※諸元・アイコンは追加後も「編集」から変更できます。ゼッケン番号のみ運営が管理します。</p>
@@ -242,7 +241,7 @@
         </div>
       </div>
       <div id="ve-ice">
-        <div class="fld"><label>排気量 (実cc)</label><input class="t" id="ve-cc" inputmode="numeric"></div>
+        <div class="fld"><label>排気量 (実cc)</label><input class="t" id="ve-cc" placeholder="例: 1500" inputmode="numeric"></div>
         <div class="fld"><label>過給機</label>
           <div class="seg" id="ve-fi"><button type="button" data-fi="0">NA</button><button type="button" data-fi="1">ターボ / SC</button></div>
           <div class="hint" id="ve-conv"></div>
@@ -314,7 +313,8 @@ function vehicleSpecText(v){
   if (v.engine === 'ev'){
     spec = 'EV';
   } else {
-    spec = (v.displacement_cc || 0) + 'cc' + (v.engine === 'rotary' ? ' RE' : '') + (v.forced_induction ? ' ターボ' : ' NA');
+    const ccText = v.displacement_cc != null ? v.displacement_cc + 'cc' : '排気量未設定';
+    spec = ccText + (v.engine === 'rotary' ? ' RE' : '') + (v.forced_induction ? ' ターボ' : ' NA');
     if (v.converted_cc !== null && v.converted_cc !== undefined) spec += ` (換算${v.converted_cc}cc)`;
   }
   spec += ' / ' + (v.dt_class || '');
@@ -349,7 +349,7 @@ function renderVehicles(){
     vehicleAvatarInto(vav, v);
     const li = h('li', { class: 'vcard' + (isMain ? ' sel' : '') },
       vav,
-      h('div', { class: 'vinfo' }, h('b', {}, marq(`＃${v.number} ${v.name}`)),
+      h('div', { class: 'vinfo' }, h('b', {}, marq(`#${v.number} ${v.name}`)),
         h('span', { style: 'font-size:10px;color:var(--mut)' }, marq(vehicleSpecText(v)))),
       ml
     );
@@ -381,7 +381,7 @@ function renderRuns(){
     const dead = !!r.invalid;
     const veh = (myData.vehicles || []).find(v => v.id === r.vehicle_id);
     const heatCell = h('td', {}, String(r.heat));
-    if (multiVeh && veh) heatCell.appendChild(h('span', { style: 'font-size:9px;color:var(--dim)' }, ` ＃${veh.number}`));
+    if (multiVeh && veh) heatCell.appendChild(h('span', { style: 'font-size:9px;color:var(--dim)' }, ` #${veh.number}`));
     tb.appendChild(h('tr', { class: dead ? 'dead' : '' },
       heatCell,
       h('td', {}, fmt3(r.raw_ms)),
@@ -474,7 +474,7 @@ function renderMyQ(){
     if (selfEntry){
       const mainV = (myData.vehicles || []).find(v => v.id === myData.main_vehicle_id);
       const btn = h('button', { class: 'selfgo plain', type: 'button' },
-        '出走待ち列に並ぶ' + (mainV ? ` (＃${mainV.number} ${mainV.name})` : ''));
+        '出走待ち列に並ぶ' + (mainV ? ` (#${mainV.number} ${mainV.name})` : ''));
       btn.addEventListener('click', () => qAction(async () => {
         await api('POST', '/api/mypage/queue', {});
         toast('出走待ち列末尾に追加');
@@ -645,12 +645,20 @@ function segBind(containerId, dataAttr, onSelect){
     });
   });
 }
+// 空欄・非数値は「未入力」として null を返す(0ccとして扱わない)。
+function parsedCC(elId){
+  const v = document.getElementById(elId).value.trim();
+  if (v === '') return null;
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) ? null : n;
+}
 function vmConvPreview(){
   const hint = document.getElementById('vm-conv');
   if (vmEngine === 'ev'){ hint.textContent = 'EVクラス (換算なし)'; return; }
   const coef = (settings && settings.coefficients) || DEF_COEF;
   const dispClasses = (settings && settings.displacement_classes) || DEF_DISP;
-  const cc = parseInt(document.getElementById('vm-cc').value, 10) || 0;
+  const cc = parsedCC('vm-cc');
+  if (cc === null){ hint.textContent = ''; return; }
   const r = convertedCC(cc, vmEngine, vmFI, coef);
   hint.textContent = `換算排気量 ${r.cc}cc → クラス自動判定: ${dispClassOf(r.cc, r.ok, dispClasses)}`;
 }
@@ -664,7 +672,7 @@ async function openVehModal(){
   clear(sel);
   const linked = new Set((myData.vehicles || []).map(v => v.id));
   allVehicles.filter(v => !linked.has(v.id)).forEach(v => {
-    sel.appendChild(h('option', { value: String(v.id) }, `＃${v.number} ${v.name}`));
+    sel.appendChild(h('option', { value: String(v.id) }, `#${v.number} ${v.name}`));
   });
   if (!sel.options.length) sel.appendChild(h('option', { value: '' }, '相乗りできる車両がありません'));
   const dtSeg = document.getElementById('vm-dt');
@@ -694,7 +702,7 @@ async function vmSubmit(){
     body = {
       number: num, name,
       engine_type: vmEngine,
-      displacement_cc: vmEngine === 'ev' ? null : (parseInt(document.getElementById('vm-cc').value, 10) || 0),
+      displacement_cc: vmEngine === 'ev' ? null : parsedCC('vm-cc'),
       forced_induction: vmEngine === 'ev' ? false : vmFI,
       drivetrain_class_id: vmDtClassId
     };
@@ -728,7 +736,8 @@ function veConvPreview(){
   if (veEngine === 'ev'){ hint.textContent = 'EVクラス (換算なし)'; return; }
   const coef = (settings && settings.coefficients) || DEF_COEF;
   const dispClasses = (settings && settings.displacement_classes) || DEF_DISP;
-  const cc = parseInt(document.getElementById('ve-cc').value, 10) || 0;
+  const cc = parsedCC('ve-cc');
+  if (cc === null){ hint.textContent = ''; return; }
   const r = convertedCC(cc, veEngine, veFI, coef);
   hint.textContent = `換算排気量 ${r.cc}cc → クラス自動判定: ${dispClassOf(r.cc, r.ok, dispClasses)}`;
 }
@@ -739,7 +748,7 @@ function openVehEdit(v){
   veEngine = v.engine;
   document.querySelectorAll('#ve-eng button').forEach(b => b.classList.toggle('on', b.dataset.e === veEngine));
   document.getElementById('ve-ice').style.display = (veEngine === 'ev') ? 'none' : 'block';
-  document.getElementById('ve-cc').value = v.displacement_cc || 1500;
+  document.getElementById('ve-cc').value = v.displacement_cc != null ? v.displacement_cc : '';
   veFI = !!v.forced_induction;
   document.querySelectorAll('#ve-fi button').forEach(b => b.classList.toggle('on', (b.dataset.fi === '1') === veFI));
   const dtSeg = document.getElementById('ve-dt');
@@ -762,11 +771,11 @@ function openVehEdit(v){
   const unlink = document.getElementById('ve-unlink');
   unlink.style.display = isMain ? 'none' : 'block'; // main vehicle cannot be unlinked (must switch main first)
   unlink.onclick = async () => {
-    if (!confirm(`＃${v.number} ${v.name} の紐づけを解除しますか?\n(過去の走行記録・順位はそのまま残ります)`)) return;
+    if (!confirm(`#${v.number} ${v.name} の紐づけを解除しますか?\n(過去の走行記録・順位はそのまま残ります)`)) return;
     try {
       await api('DELETE', '/api/mypage/vehicles/' + v.id);
       closeModal('vehEditModal');
-      toast(`＃${v.number} ${v.name} の紐づけを解除`);
+      toast(`#${v.number} ${v.name} の紐づけを解除`);
       await reloadMy();
     } catch (err) { toast(err.message || '解除に失敗しました'); }
   };
@@ -778,7 +787,7 @@ async function veSubmit(){
   const body = {
     name,
     engine_type: veEngine,
-    displacement_cc: veEngine === 'ev' ? null : (parseInt(document.getElementById('ve-cc').value, 10) || 0),
+    displacement_cc: veEngine === 'ev' ? null : parsedCC('ve-cc'),
     forced_induction: veEngine === 'ev' ? false : veFI,
     drivetrain_class_id: veDtClassId
   };

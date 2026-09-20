@@ -98,7 +98,7 @@
           </div>
         </div>
         <div id="reg-ice">
-          <div class="fld"><label>排気量 (実cc)</label><input class="t" id="reg-cc" value="658" inputmode="numeric"></div>
+          <div class="fld"><label>排気量 (実cc)</label><input class="t" id="reg-cc" placeholder="例: 1500" inputmode="numeric"></div>
           <div class="fld"><label>過給機</label>
             <div class="seg" id="reg-fi"><button type="button" class="on" data-fi="0">NA</button><button type="button" data-fi="1">ターボ / SC</button></div>
             <div class="hint" id="reg-conv"></div>
@@ -185,6 +185,14 @@ function segBind(containerId, dataAttr, onSelect){
   });
 }
 
+// 空欄・非数値は「未入力」として null を返す(0ccとして扱わない)。
+function parsedCC(elId){
+  const v = document.getElementById(elId).value.trim();
+  if (v === '') return null;
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) ? null : n;
+}
+
 function updateConvPreview(){
   const hint = document.getElementById('reg-conv');
   if (currentEngine === 'ev'){
@@ -195,7 +203,11 @@ function updateConvPreview(){
     hint.textContent = '';
     return;
   }
-  const cc = parseInt(document.getElementById('reg-cc').value, 10) || 0;
+  const cc = parsedCC('reg-cc');
+  if (cc === null){
+    hint.textContent = '';
+    return;
+  }
   const { cc: cv, ok } = convertedCC(cc, currentEngine, currentFI, settings.coefficients);
   const cls = dispClassOf(cv, ok, settings.displacement_classes);
   hint.textContent = `換算排気量 ${cv}cc → クラス自動判定: ${cls}`;
@@ -307,7 +319,7 @@ async function submitRegister(getDriverClassId){
       number: num,
       name: vname,
       engine_type: currentEngine,
-      displacement_cc: currentEngine === 'ev' ? null : (parseInt(document.getElementById('reg-cc').value, 10) || 0),
+      displacement_cc: currentEngine === 'ev' ? null : parsedCC('reg-cc'),
       forced_induction: currentEngine === 'ev' ? false : currentFI,
       drivetrain_class_id: currentDtClassId
     };
