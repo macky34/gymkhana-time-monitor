@@ -36,6 +36,26 @@ type sseReader struct {
 	br   *bufio.Reader
 }
 
+// waitSubscribers blocks until the hub has registered at least n subscribers.
+// Handler writes the response headers before it subscribes, so a completed
+// GET does not yet imply the subscription exists.
+func waitSubscribers(t *testing.T, h *Hub, n int) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		h.mu.Lock()
+		got := len(h.subscribers)
+		h.mu.Unlock()
+		if got >= n {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("waiting for %d subscribers, got %d", n, got)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 func newSSEReader(_ *testing.T, body io.Reader) *sseReader {
 	return &sseReader{body: body}
 }
@@ -313,6 +333,13 @@ func TestHandler_SlowSubscriberDoesNotBlockPublish(t *testing.T) {
 	}
 	t.Cleanup(func() { resp2.Body.Close() })
 	sr2 := newSSEReader(t, resp2.Body)
+
+	// Handler はレスポンスヘッダを書いてから購読を登録するため、Get が
+	// 返った時点ではまだ subscribers に入っていないことがある。待たずに
+	// publish すると購読前のイベントを取りこぼし、64件を待つ下の drain が
+	// 永久にブロックする。
+	waitSubscribers(t, h, 2)
+
 	drainDone := make(chan struct{})
 	go func() {
 		defer close(drainDone)
