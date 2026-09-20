@@ -13,18 +13,13 @@ import (
 // from, carrying the current lockout value (issue #18: live lockout reload
 // without a device reboot).
 func TestHandleHeartbeatSendsConfigReply(t *testing.T) {
-	probe, err := net.ListenPacket("udp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("reserve udp port: %v", err)
-	}
-	addr := probe.LocalAddr().String()
-	probe.Close()
-
+	addrCh := make(chan net.Addr, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	stopped := make(chan struct{})
 	go func() {
-		if err := Listen(ctx, addr, Deps{
+		if err := Listen(ctx, "127.0.0.1:0", Deps{
 			SensorLockoutSec: func() float64 { return 1.234 },
+			boundAddr:        addrCh,
 		}); err != nil {
 			t.Logf("Listen: %v", err)
 		}
@@ -39,16 +34,22 @@ func TestHandleHeartbeatSendsConfigReply(t *testing.T) {
 		}
 	})
 
-	var conn net.Conn
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		conn, err = net.Dial("udp", addr)
-		if err == nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+	// Wait for Listen to actually bind before dialing — UDP's Dial never
+	// touches the network, so racing it against Listen's own bind (as a
+	// fixed-address reserve-close-reuse dance would) can send the hb packet
+	// to a port nobody is listening on yet, which surfaces later as a
+	// spurious "connection refused" on Read.
+	var addr net.Addr
+	select {
+	case addr = <-addrCh:
+	case <-stopped:
+		t.Fatalf("Listen exited before binding")
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for Listen to bind")
 	}
-	if conn == nil {
+
+	conn, err := net.Dial("udp", addr.String())
+	if err != nil {
 		t.Fatalf("dial udp %s: %v", addr, err)
 	}
 	t.Cleanup(func() { conn.Close() })
@@ -86,17 +87,11 @@ func TestHandleHeartbeatSendsConfigReply(t *testing.T) {
 // preserving today's one-directional-only behavior for callers that don't
 // wire it up.
 func TestHandleHeartbeatNoConfigReplyWhenNilSensorLockoutSec(t *testing.T) {
-	probe, err := net.ListenPacket("udp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("reserve udp port: %v", err)
-	}
-	addr := probe.LocalAddr().String()
-	probe.Close()
-
+	addrCh := make(chan net.Addr, 1)
 	ctx, cancel := context.WithCancel(context.Background())
 	stopped := make(chan struct{})
 	go func() {
-		if err := Listen(ctx, addr, Deps{}); err != nil {
+		if err := Listen(ctx, "127.0.0.1:0", Deps{boundAddr: addrCh}); err != nil {
 			t.Logf("Listen: %v", err)
 		}
 		close(stopped)
@@ -110,16 +105,17 @@ func TestHandleHeartbeatNoConfigReplyWhenNilSensorLockoutSec(t *testing.T) {
 		}
 	})
 
-	var conn net.Conn
-	deadline := time.Now().Add(time.Second)
-	for time.Now().Before(deadline) {
-		conn, err = net.Dial("udp", addr)
-		if err == nil {
-			break
-		}
-		time.Sleep(10 * time.Millisecond)
+	var addr net.Addr
+	select {
+	case addr = <-addrCh:
+	case <-stopped:
+		t.Fatalf("Listen exited before binding")
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for Listen to bind")
 	}
-	if conn == nil {
+
+	conn, err := net.Dial("udp", addr.String())
+	if err != nil {
 		t.Fatalf("dial udp %s: %v", addr, err)
 	}
 	t.Cleanup(func() { conn.Close() })
