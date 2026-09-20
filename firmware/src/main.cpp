@@ -125,13 +125,20 @@ static void syncClock() {
 // fetch at boot) and the UDP "config" reply piggybacked on heartbeats (see
 // loop()), so a lockout change made in the admin UI reaches the sensor
 // within one heartbeat interval instead of requiring a reboot (issue #18).
-static void parseLockoutMs(const String &body) {
+// logIfChanged reports a value change to Serial (used for the UDP path so a
+// live config change is visible without restarting the device; the
+// boot-time HTTP fetch already logs its own result separately).
+static void parseLockoutMs(const String &body, bool logIfChanged = false) {
   int idx = body.indexOf("lockout_ms");
   if (idx < 0) return;
   int colon = body.indexOf(':', idx);
   if (colon < 0) return;
   long v = body.substring(colon + 1).toInt();
-  if (v > 0) lockoutMs = (uint32_t)v;
+  if (v <= 0) return;
+  if (logIfChanged && (uint32_t)v != lockoutMs) {
+    Serial.printf("[config] lockout_ms updated: %u -> %ld\n", lockoutMs, v);
+  }
+  lockoutMs = (uint32_t)v;
 }
 
 static void fetchConfig() {
@@ -248,7 +255,7 @@ void loop() {
     int len = udp.read(buf, sizeof(buf) - 1);
     if (len > 0) {
       buf[len] = '\0';
-      parseLockoutMs(String(buf));
+      parseLockoutMs(String(buf), true);
     }
   }
 
