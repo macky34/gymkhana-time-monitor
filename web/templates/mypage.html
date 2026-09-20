@@ -48,9 +48,7 @@
   .selfgo{width:100%;border:none;border-radius:12px;background:linear-gradient(160deg,#2ec973,#1fa35c);
           color:#07130c;font-size:16px;font-weight:800;padding:14px;cursor:pointer;font-family:inherit;margin-top:10px}
   .selfgo:active{transform:scale(.98)}
-  /* 出走待ち列に並ぶボタン専用の配色。出走(緑/アンバー)・ゴール(青)と
-     被らないティール系にする(#24)。 */
-  .selfgo.queue{background:linear-gradient(160deg,#5eead4,#2dd4bf);color:#042f2e}
+  .selfgo.plain{background:var(--panel2);color:var(--tx);border:1px solid var(--line);font-weight:600}
   .vcard{display:flex;align-items:center;gap:10px;padding:12px;font-size:13px;cursor:pointer;
          background:var(--panel);border:1px solid var(--line);border-radius:12px;transition:border-color .15s,background .15s}
   .vcard .vinfo{flex:1;min-width:0}
@@ -475,7 +473,7 @@ function renderMyQ(){
     box.appendChild(h('div', { class: 'pos' }, '現在出走待ち列に並んでいません'));
     if (selfEntry){
       const mainV = (myData.vehicles || []).find(v => v.id === myData.main_vehicle_id);
-      const btn = h('button', { class: 'selfgo queue', type: 'button' },
+      const btn = h('button', { class: 'selfgo plain', type: 'button' },
         '出走待ち列に並ぶ' + (mainV ? ` (#${mainV.number} ${mainV.name})` : ''));
       btn.addEventListener('click', () => qAction(async () => {
         await api('POST', '/api/mypage/queue', {});
