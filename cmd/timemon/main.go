@@ -76,7 +76,13 @@ func main() {
 	udpAddr := flag.String("udp", ":9999", "センサーUDP待受アドレス (ポート番号のみでも可)")
 	dbPath := flag.String("db", "./event.sqlite3", "イベントDBファイル (拡張子 .sqlite3 は省略可。無ければ自動作成)")
 	baseURL := flag.String("base-url", "", "外部から見えるベースURL (Setup URL/QR用。省略時はLAN IPから自動生成)")
+	showVersion := flag.Bool("version", false, "バージョンを表示して終了 (tools/rpi-auto-update.sh が現在稼働中のバージョン確認に使用)")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println(version)
+		return
+	}
 
 	*addr = normalizeAddr(*addr)
 	*udpAddr = normalizeAddr(*udpAddr)
