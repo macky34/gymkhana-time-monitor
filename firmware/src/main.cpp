@@ -222,11 +222,13 @@ void loop() {
   static uint32_t lastResyncMs = 0;
   static uint32_t lastReconnectAttemptMs = 0;
   static uint32_t wifiDownSinceMs = 0;
+  static bool wasDisconnected = false;
   uint32_t nowMs = millis();
 
   // Periodic re-sync (hourly) and WiFi recovery.
   if (WiFi.status() != WL_CONNECTED) {
     setLed(nowMs / 250 % 2);
+    wasDisconnected = true;
     if (wifiDownSinceMs == 0) wifiDownSinceMs = nowMs;
     // Calling WiFi.reconnect() every loop (every ~200ms) races the previous
     // connect attempt: esp_wifi logs "sta is connecting, return error" and
@@ -252,6 +254,18 @@ void loop() {
     return;
   }
   wifiDownSinceMs = 0;
+  if (wasDisconnected) {
+    // Just reconnected: the LED was left blinking at whatever phase the
+    // ~250ms toggle happened to be at when WiFi came back (issue #35
+    // follow-up - looked like a "coin flip" between lit/unlit after a
+    // reconnect). Re-sync the clock (it may have drifted while we were
+    // disconnected) and set the LED to the real ready state instead of
+    // leaving it wherever the blink loop last left it.
+    wasDisconnected = false;
+    lastResyncMs = nowMs;
+    syncClock();
+    setLed(clockSynced);
+  }
   if (nowMs - lastResyncMs > 3600UL * 1000UL) {
     lastResyncMs = nowMs;
     syncClock();
