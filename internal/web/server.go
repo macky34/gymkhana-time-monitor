@@ -230,10 +230,11 @@ func (s *Server) Routes() http.Handler {
 	// ---- Admin: user management (W4) ----
 	// The first four routes are also the emergency-admin's entire reason to
 	// exist (see emergencyDriver / withUserAdmin), so they alone use
-	// withUserAdmin; rename and icon stay on withAdmin (emergency-denied).
+	// withUserAdmin; rename, delete and icon stay on withAdmin (emergency-denied).
 	mux.HandleFunc("GET /api/admin/users", s.withUserAdmin(s.handleAdminUsersList))
 	mux.HandleFunc("POST /api/admin/users", s.withCSRFGuard(s.withUserAdmin(s.handleAdminUserCreate)))
 	mux.HandleFunc("PUT /api/admin/users/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminUserUpdate)))
+	mux.HandleFunc("DELETE /api/admin/users/{id}", s.withCSRFGuard(s.withAdmin(s.handleAdminUserDelete)))
 	mux.HandleFunc("POST /api/admin/users/{id}/reissue", s.withCSRFGuard(s.withUserAdmin(s.handleAdminUserReissue)))
 	mux.HandleFunc("PUT /api/admin/users/{id}/role", s.withCSRFGuard(s.withUserAdmin(s.handleAdminUserRole)))
 	mux.HandleFunc("POST /api/admin/users/{id}/icon", s.withCSRFGuard(s.withAdmin(s.handleAdminUserIcon)))

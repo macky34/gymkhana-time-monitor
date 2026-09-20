@@ -250,6 +250,56 @@ func (s *Server) handleAdminUserRole(w http.ResponseWriter, r *http.Request, adm
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
+// handleAdminUserDelete implements DELETE /api/admin/users/{id} (logical
+// delete via store.DeleteDriver). Refuses with 409 to delete the caller's
+// own account (deleting yourself while using the admin console has no sane
+// recovery within the same session) and to delete the last remaining admin
+// (would leave nobody able to reach user management short of the
+// emergency-admin recovery flow). On withAdmin (not withUserAdmin): unlike
+// the emergency identity's narrow four-route allowance, deleting a real
+// account is not part of its token-recovery purpose.
+func (s *Server) handleAdminUserDelete(w http.ResponseWriter, r *http.Request, admin store.Driver) {
+	id, ok := requirePathID(w, r)
+	if !ok {
+		return
+	}
+	if id == admin.ID {
+		writeErr(w, conflictf("cannot delete yourself"))
+		return
+	}
+
+	target, ok, err := s.Store.GetDriver(id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "not found")
+		return
+	}
+	if target.Role == "admin" {
+		n, err := s.Store.CountAdmins()
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		if n <= 1 {
+			writeErr(w, conflictf("cannot delete last admin"))
+			return
+		}
+	}
+
+	if err := s.Store.DeleteDriver(id); err != nil {
+		writeErr(w, err)
+		return
+	}
+
+	s.publishDirectory()
+	s.audit(&admin.ID, "admin.user.delete", map[string]any{"driver_id": id})
+
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
 // handleAdminUserIcon implements POST /api/admin/users/{id}/icon: sets any
 // driver's icon, symmetric to handleMyIcon but without the "self"
 // restriction.

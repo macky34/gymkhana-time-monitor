@@ -235,6 +235,7 @@ func TestEmergencyAdmin_ForbiddenRoutes(t *testing.T) {
 		body   string
 	}{
 		{http.MethodPut, "/api/admin/users/" + itoa(driverID), `{"name":"x","driver_class_id":1}`},
+		{http.MethodDelete, "/api/admin/users/" + itoa(driverID), ""},
 		{http.MethodPost, "/api/admin/users/" + itoa(driverID) + "/icon", `{}`},
 		{http.MethodPost, "/api/admin/vehicles", `{}`},
 		{http.MethodPut, "/api/admin/settings", `{}`},

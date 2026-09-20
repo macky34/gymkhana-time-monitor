@@ -236,6 +236,135 @@ func TestAdminRegisterLink(t *testing.T) {
 	}
 }
 
+// TestAdminUserDeleteRemovesFromListAndRevokesLogin covers DELETE
+// /api/admin/users/{id}: the logically-deleted user disappears from GET
+// /api/admin/users and its login token stops resolving (GetDriverByToken
+// filters is_deleted, unlike GetDriver which callers use for historical
+// name lookups).
+func TestAdminUserDeleteRemovesFromListAndRevokesLogin(t *testing.T) {
+	srv, _, driverID, _ := newTestServer(t, "sensor")
+	admin, ok, err := srv.Store.GetDriver(driverID)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver: ok=%v err=%v", ok, err)
+	}
+	driverClasses, err := srv.Store.ListClassDefs("driver")
+	if err != nil || len(driverClasses) == 0 {
+		t.Fatalf("ListClassDefs driver: %v", err)
+	}
+	target, err := srv.Store.CreateDriver("削除対象", driverClasses[0].ID, "tok-delete-target", "user")
+	if err != nil {
+		t.Fatalf("CreateDriver: %v", err)
+	}
+
+	rec := callAdminUsersByID(t, srv.handleAdminUserDelete, http.MethodDelete, "/api/admin/users/"+itoa(target),
+		target, nil, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	listRec := callAdminEvents(t, srv.handleAdminUsersList, http.MethodGet, "/api/admin/users", nil, admin)
+	list := decodeJSON[struct {
+		Users []struct {
+			ID int64 `json:"id"`
+		} `json:"users"`
+	}](t, listRec.Body.Bytes())
+	for _, u := range list.Users {
+		if u.ID == target {
+			t.Fatalf("deleted user %d still present in GET /api/admin/users list", target)
+		}
+	}
+
+	if _, ok, err := srv.Store.GetDriverByToken("tok-delete-target"); err != nil || ok {
+		t.Fatalf("GetDriverByToken(deleted user's token): ok=%v err=%v, want ok=false", ok, err)
+	}
+}
+
+// TestAdminUserDeleteRejectsSelf covers DELETE /api/admin/users/{id}: an
+// admin cannot delete their own account (would strand the current session
+// with no sane recovery), regardless of whether other admins exist.
+func TestAdminUserDeleteRejectsSelf(t *testing.T) {
+	srv, _, driverID, _ := newTestServer(t, "sensor")
+	admin, ok, err := srv.Store.GetDriver(driverID)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver: ok=%v err=%v", ok, err)
+	}
+	driverClasses, err := srv.Store.ListClassDefs("driver")
+	if err != nil || len(driverClasses) == 0 {
+		t.Fatalf("ListClassDefs driver: %v", err)
+	}
+	// A second admin exists, so this is not also a last-admin rejection -
+	// isolates the self-delete guard.
+	second, err := srv.Store.CreateDriver("二人目", driverClasses[0].ID, "tok-second-admin", "admin")
+	if err != nil {
+		t.Fatalf("CreateDriver: %v", err)
+	}
+	_ = second
+
+	rec := callAdminUsersByID(t, srv.handleAdminUserDelete, http.MethodDelete, "/api/admin/users/"+itoa(driverID),
+		driverID, nil, admin)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("self-delete: status = %d, want 409; body=%s", rec.Code, rec.Body.String())
+	}
+	stillThere, ok, err := srv.Store.GetDriver(driverID)
+	if err != nil || !ok || stillThere.Role != "admin" {
+		t.Fatalf("GetDriver(self): ok=%v err=%v driver=%+v, want unaffected admin", ok, err, stillThere)
+	}
+}
+
+// TestAdminUserDeleteRejectsLastAdmin covers DELETE /api/admin/users/{id}:
+// deleting the sole remaining admin (a different one from the caller) is
+// rejected with 409, and succeeds once a second admin exists.
+func TestAdminUserDeleteRejectsLastAdmin(t *testing.T) {
+	srv, _, driverID, _ := newTestServer(t, "sensor")
+	admin, ok, err := srv.Store.GetDriver(driverID)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver: ok=%v err=%v", ok, err)
+	}
+	driverClasses, err := srv.Store.ListClassDefs("driver")
+	if err != nil || len(driverClasses) == 0 {
+		t.Fatalf("ListClassDefs driver: %v", err)
+	}
+
+	// Sole admin (driverID) tries to delete itself - covered by
+	// TestAdminUserDeleteRejectsSelf, so instead promote a second driver to
+	// admin, then have the original delete the second one, dropping the
+	// admin count from 2 to 1: that must succeed. Then create a third
+	// non-admin target and confirm a would-be last-admin scenario is
+	// rejected by demoting back down to a single admin and attempting to
+	// delete that sole admin from a *different* admin session.
+	second, err := srv.Store.CreateDriver("二人目", driverClasses[0].ID, "tok-second", "admin")
+	if err != nil {
+		t.Fatalf("CreateDriver: %v", err)
+	}
+	secondDriver, ok, err := srv.Store.GetDriver(second)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver(second): ok=%v err=%v", ok, err)
+	}
+
+	// With two admins, the original can delete the second one.
+	rec := callAdminUsersByID(t, srv.handleAdminUserDelete, http.MethodDelete, "/api/admin/users/"+itoa(second),
+		second, nil, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete second admin (two exist): status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+
+	// Recreate a second admin, then try to have IT delete the original
+	// (still the caller in this call) while both are admins: that's fine.
+	// The actually-interesting case - deleting the sole admin - is only
+	// reachable by a non-self caller, so simulate that with the (deleted)
+	// secondDriver struct as the "caller" acting on driverID while driverID
+	// is the sole active admin.
+	rec2 := callAdminUsersByID(t, srv.handleAdminUserDelete, http.MethodDelete, "/api/admin/users/"+itoa(driverID),
+		driverID, nil, secondDriver)
+	if rec2.Code != http.StatusConflict {
+		t.Fatalf("delete sole remaining admin: status = %d, want 409; body=%s", rec2.Code, rec2.Body.String())
+	}
+	stillThere, ok, err := srv.Store.GetDriver(driverID)
+	if err != nil || !ok || stillThere.Role != "admin" {
+		t.Fatalf("GetDriver(sole admin): ok=%v err=%v driver=%+v, want unaffected admin", ok, err, stillThere)
+	}
+}
+
 // TestAdminUserRoleLastAdminConflict covers PUT /api/admin/users/{id}/role:
 // demoting the sole remaining admin is rejected with 409 and leaves the role
 // untouched; once a second admin exists, the same demotion succeeds.
