@@ -242,7 +242,7 @@ func TestScenario_FullEventLifecycle(t *testing.T) {
 	// -------------------------------------------------------------
 	// 2. Pages and static assets.
 	// -------------------------------------------------------------
-	for _, path := range []string{"/", "/ranking", "/archive", "/mypage", "/register", "/admin"} {
+	for _, path := range []string{"/", "/ranking", "/archive", "/mypage", "/entry", "/admin"} {
 		resp, body := client.get(path)
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("step 2: GET %s: status = %d, want 200; body=%s", path, resp.StatusCode, body)

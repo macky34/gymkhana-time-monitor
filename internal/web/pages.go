@@ -77,7 +77,7 @@ type pageRoute struct {
 var pageRoutes = []pageRoute{
 	{"GET /{$}", "monitor.html", "monitor"},
 	{"GET /ranking", "ranking.html", "ranking"},
-	{"GET /register", "register.html", ""},
+	{"GET /entry", "register.html", ""},
 	{"GET /mypage", "mypage.html", "mypage"},
 	{"GET /admin", "admin.html", "admin"},
 	{"GET /archive", "archive.html", "archive"},

@@ -204,6 +204,38 @@ func TestAdminUserReissue(t *testing.T) {
 	}
 }
 
+// TestAdminRegisterLink covers GET /api/admin/register-link: it must return
+// a fixed /entry URL (no token) plus a non-empty QR PNG for that same
+// URL. Emergency-session rejection is covered separately by
+// TestEmergencyAdmin_ForbiddenRoutes (this handler is on withAdmin, not
+// withUserAdmin - see its own comment for why).
+func TestAdminRegisterLink(t *testing.T) {
+	srv, _, driverID, _ := newTestServer(t, "sensor")
+	admin, ok, err := srv.Store.GetDriver(driverID)
+	if err != nil || !ok {
+		t.Fatalf("GetDriver: ok=%v err=%v", ok, err)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/api/admin/register-link", nil)
+	rec := httptest.NewRecorder()
+	srv.handleAdminRegisterLink(rec, req, admin)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	out := decodeJSON[struct {
+		RegisterURL string `json:"register_url"`
+		QRPNGB64    string `json:"qr_png_b64"`
+	}](t, rec.Body.Bytes())
+
+	want := srv.BaseURL + "/entry"
+	if out.RegisterURL != want {
+		t.Errorf("register_url = %q, want %q", out.RegisterURL, want)
+	}
+	if out.QRPNGB64 == "" {
+		t.Error("qr_png_b64 is empty")
+	}
+}
+
 // TestAdminUserRoleLastAdminConflict covers PUT /api/admin/users/{id}/role:
 // demoting the sole remaining admin is rejected with 409 and leaves the role
 // untouched; once a second admin exists, the same demotion succeeds.

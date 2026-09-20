@@ -173,6 +173,28 @@ func (s *Server) handleAdminUserReissue(w http.ResponseWriter, r *http.Request, 
 	})
 }
 
+// handleAdminRegisterLink implements GET /api/admin/register-link: returns
+// the participant self-registration URL and a QR code for it, for display
+// on the ユーザ管理 tab. Unlike a driver's login URL this is a fixed public
+// path rather than a secret token, so there is nothing to rotate and no
+// audit entry - reading it repeatedly is harmless. Deliberately on withAdmin
+// (not withUserAdmin): displaying this link is not one of the emergency
+// admin's four user-management operations.
+func (s *Server) handleAdminRegisterLink(w http.ResponseWriter, r *http.Request, admin store.Driver) {
+	registerURL := s.BaseURL + "/entry"
+
+	png, err := qrcode.Encode(registerURL, qrcode.Medium, 256)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"register_url": registerURL,
+		"qr_png_b64":   base64.StdEncoding.EncodeToString(png),
+	})
+}
+
 type adminUserRoleBody struct {
 	Role string `json:"role"`
 }
