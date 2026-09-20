@@ -1,0 +1,70 @@
+name: firmware
+
+# ESP32ファームウェアのビルド検証。Goのワークフロー(ci.yml)とは
+# ライフサイクルが独立しているため別ファイルに分けている。
+# paths フィルタにより firmware/ に変更が無いPR・pushでは起動しない。
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware.yml'
+  pull_request:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/firmware.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  # env毎にジョブを分ける。単に並列化のためではなく、環境を分離するため。
+  # espressif32 (esp32dev) と platform-seeedboards (XIAO系) は
+  # ~/.platformio/packages/tool-esptoolpy を共有し、同じ環境で esp32dev を
+  # 先にビルドすると公式のesptool v4系が居座る。v4系はアンダースコア書式の
+  # CLIのため、Seeedのビルドスクリプトが渡す --flash-mode 等を解釈できずに
+  # 失敗する。ジョブを分ければランナーごとに ~/.platformio が独立するため、
+  # この汚染経路自体が無くなる。
+  build:
+    name: build (${{ matrix.env }})
+    runs-on: ubuntu-latest
+    strategy:
+      # 1つ落ちても他のenvの結果を見たいので打ち切らない
+      fail-fast: false
+      matrix:
+        env: [esp32dev, seeed_xiao_esp32c6, seeed_xiao_esp32c5]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # ツールチェーンは数百MBあるため必ずキャッシュする。
+      # キーとrestore-keysは必ずenv単位にすること。共通にすると
+      # 他envのキャッシュ(上記の汚染されたesptool)が復元されて意味が無くなる。
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ matrix.env }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: |
+            pio-${{ runner.os }}-${{ matrix.env }}-
+
+      # esptool はPythonの依存モジュールを同梱しておらず、PlatformIOも
+      # それらを入れてくれない。入っていないと bootloader.bin 生成時に
+      # ModuleNotFoundError で落ちる。PlatformIOと同じPython環境に入れる
+      # 必要がある(ローカルでも同じ対処が要る。[[Sensor-Device]] §3.1 参照)。
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio intelhex reedsolo bitstring ecdsa pyserial cryptography pyyaml
+
+      # config.h は台毎の識別情報を持つためgitignoreされている。
+      # ここではコンパイルが通るかだけを見るので、exampleの値をそのまま使う。
+      - name: Generate config.h
+        run: cp firmware/src/config.h.example firmware/src/config.h
+
+      - name: Build
+        working-directory: firmware
+        run: pio run -e ${{ matrix.env }}

@@ -155,6 +155,8 @@ void setup() {
   pinMode(14, OUTPUT);
   digitalWrite(14, USE_EXTERNAL_ANTENNA ? HIGH : LOW);
 #endif
+  // C5 has no GPIO-controlled antenna switch (fixed onboard u.FL antenna),
+  // so USE_EXTERNAL_ANTENNA is a no-op there.
 
   pinMode(STATUS_LED_GPIO, OUTPUT);
   pinMode(SENSOR_GPIO, INPUT_PULLUP);
@@ -163,6 +165,12 @@ void setup() {
   bootID = esp_random();
 
   WiFi.mode(WIFI_STA);
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+  // C5 is 2.4/5GHz dual-band; the venue AP is 2.4GHz-only, so pin the band
+  // to skip scanning 5GHz (faster connect/reconnect). setBandMode() requires
+  // STA to already be started, hence after mode() rather than before.
+  WiFi.setBandMode(WIFI_BAND_MODE_2G_ONLY);
+#endif
   WiFi.begin(WIFI_SSID, WIFI_PASS);
   while (WiFi.status() != WL_CONNECTED) {
     setLed(millis() / 250 % 2); // fast blink while connecting
