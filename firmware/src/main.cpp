@@ -120,6 +120,27 @@ static void syncClock() {
   Serial.println("[sync] FAILED (will retry)");
 }
 
+// parseLockoutMs scans body for a "lockout_ms":N field and, if found and
+// positive, updates lockoutMs. Shared by fetchConfig() (the one-shot HTTP
+// fetch at boot) and the UDP "config" reply piggybacked on heartbeats (see
+// loop()), so a lockout change made in the admin UI reaches the sensor
+// within one heartbeat interval instead of requiring a reboot (issue #18).
+// logIfChanged reports a value change to Serial (used for the UDP path so a
+// live config change is visible without restarting the device; the
+// boot-time HTTP fetch already logs its own result separately).
+static void parseLockoutMs(const String &body, bool logIfChanged = false) {
+  int idx = body.indexOf("lockout_ms");
+  if (idx < 0) return;
+  int colon = body.indexOf(':', idx);
+  if (colon < 0) return;
+  long v = body.substring(colon + 1).toInt();
+  if (v <= 0) return;
+  if (logIfChanged && (uint32_t)v != lockoutMs) {
+    Serial.printf("[config] lockout_ms updated: %u -> %ld\n", lockoutMs, v);
+  }
+  lockoutMs = (uint32_t)v;
+}
+
 static void fetchConfig() {
   HTTPClient http;
   String url = String("http://") + RPI_HOST + ":" + String(RPI_HTTP_PORT) +
@@ -128,14 +149,7 @@ static void fetchConfig() {
   int code = http.GET();
   if (code == 200) {
     String body = http.getString();
-    int idx = body.indexOf("lockout_ms");
-    if (idx >= 0) {
-      int colon = body.indexOf(':', idx);
-      if (colon >= 0) {
-        long v = body.substring(colon + 1).toInt();
-        if (v > 0) lockoutMs = (uint32_t)v;
-      }
-    }
+    parseLockoutMs(body);
     Serial.printf("[config] lockout_ms=%u\n", lockoutMs);
   } else {
     Serial.printf("[config] fetch failed (%d), using default %u\n", code, lockoutMs);
@@ -178,6 +192,11 @@ void setup() {
   }
   Serial.printf("[wifi] connected, ip=%s boot_id=%u\n",
                 WiFi.localIP().toString().c_str(), bootID);
+
+  // Bind to a fixed local port so we can both send heartbeats/triggers and
+  // receive the server's piggybacked "config" reply (issue #18) on the same
+  // socket.
+  udp.begin(LOCAL_UDP_PORT);
 
   syncClock();
   fetchConfig();
@@ -224,6 +243,20 @@ void loop() {
   if (nowMs - lastHbMs >= 5000) { // heartbeat every 5s
     lastHbMs = nowMs;
     sendHeartbeat();
+  }
+
+  // Non-blocking check for the server's "config" reply, piggybacked on our
+  // heartbeat (the RPi replies to whichever UDP source port sent the hb).
+  // This is how a lockout change made in the admin UI reaches us without a
+  // reboot (issue #18): applied within one heartbeat interval (<=5s).
+  int packetSize = udp.parsePacket();
+  if (packetSize > 0) {
+    char buf[128];
+    int len = udp.read(buf, sizeof(buf) - 1);
+    if (len > 0) {
+      buf[len] = '\0';
+      parseLockoutMs(String(buf), true);
+    }
   }
 
   delay(1);

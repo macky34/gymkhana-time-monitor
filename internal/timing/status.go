@@ -3,6 +3,7 @@ package timing
 import (
 	"encoding/json"
 	"log"
+	"net"
 	"time"
 )
 
@@ -86,7 +87,7 @@ func (d *dispatcher) forgetSensor(sensorID string) error {
 	return nil
 }
 
-func (d *dispatcher) handleHeartbeat(p packet) {
+func (d *dispatcher) handleHeartbeat(p packet, addr net.Addr) {
 	s := d.sensors[p.SensorID]
 	if s == nil {
 		s = &sensorState{}
@@ -94,6 +95,32 @@ func (d *dispatcher) handleHeartbeat(p packet) {
 	}
 	s.recordHeartbeat(p.BootID, p.Seq, p.NTPOffsetMS, time.Now().UnixMilli())
 	// hb packets are never persisted via InsertSensorEvent; only triggers are.
+
+	// Piggyback the current lockout value on the heartbeat reply so a
+	// lockout change made in the admin UI reaches the sensor within one
+	// heartbeat interval, without requiring a device reboot (issue #18).
+	if d.deps.SensorLockoutMS == nil || d.conn == nil {
+		return
+	}
+	reply := configReply{Type: "config", LockoutMS: d.deps.SensorLockoutMS()}
+	data, err := json.Marshal(reply)
+	if err != nil {
+		log.Printf("timing: failed to marshal config reply: %v", err)
+		return
+	}
+	if _, err := d.conn.WriteTo(data, addr); err != nil {
+		// UDP is best-effort: the next heartbeat (5s later) will retry.
+		log.Printf("timing: failed to send config reply to %s: %v", addr, err)
+	}
+}
+
+// configReply is the JSON shape of the config reply piggybacked on heartbeat
+// responses:
+//
+//	{"type":"config","lockout_ms":800}
+type configReply struct {
+	Type      string `json:"type"`
+	LockoutMS int    `json:"lockout_ms"`
 }
 
 // sensorStatusEntry and sensorStatusPayload define the exact JSON shape of
