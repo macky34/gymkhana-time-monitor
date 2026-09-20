@@ -18,33 +18,20 @@
 // piggybacked on heartbeat responses (issue #18: live lockout reload).
 #define LOCAL_UDP_PORT 9999
 
-// GPIO the photoelectric sensor's open-collector output is wired to
-// (10k pull-up to 3.3V). Falling edge = beam broken.
-#define SENSOR_GPIO 27
-
-// Status LED (solid = time-synced & ready, blinking = not yet synced).
-#define STATUS_LED_GPIO 2
+// --- Seeed Studio XIAO ESP32C5 (env:seeed_xiao_esp32c5), the default board --
+#define SENSOR_GPIO 0        // D1 pin (GPIO0)
+#define STATUS_LED_GPIO 27   // onboard LED, active-low
+#define LED_ACTIVE_LOW 1     // onboard LED is lit when driven LOW
+// USE_EXTERNAL_ANTENNA has no effect on the C5 (no antenna switch; fixed
+// onboard u.FL antenna) -- leave it undefined. WiFi band is pinned to 2.4GHz
+// in main.cpp since the C5 is dual-band and the venue AP is 2.4GHz-only.
 
 // Fallback debounce lockout if the server config fetch fails (ms).
 #define DEFAULT_LOCKOUT_MS 800
 
 // --- Seeed Studio XIAO ESP32C6 (env:seeed_xiao_esp32c6) ---------------------
-// Uncomment/replace the above when building for the XIAO ESP32C6 instead of
-// the ESP32 DevKit:
+// Uncomment/replace the above when building for the XIAO ESP32C6 instead:
 //   #define SENSOR_GPIO 1        // D1 pin (GPIO1)
 //   #define STATUS_LED_GPIO 15   // onboard LED, active-low
 //   #define LED_ACTIVE_LOW 1     // onboard LED is lit when driven LOW
 //   #define USE_EXTERNAL_ANTENNA 0  // 0 = onboard chip antenna, 1 = external (u.FL)
-// LED_ACTIVE_LOW and USE_EXTERNAL_ANTENNA default to 0 in main.cpp if not
-// defined here, so existing config.h files for esp32dev keep working as-is.
-
-// --- Seeed Studio XIAO ESP32C5 (env:seeed_xiao_esp32c5) ---------------------
-// Uncomment/replace the above when building for the XIAO ESP32C5 instead of
-// the ESP32 DevKit. Same physical D1 pin as the C6 above, but a different
-// GPIO number:
-//   #define SENSOR_GPIO 0        // D1 pin (GPIO0)
-//   #define STATUS_LED_GPIO 27   // onboard LED, active-low
-//   #define LED_ACTIVE_LOW 1     // onboard LED is lit when driven LOW
-// USE_EXTERNAL_ANTENNA has no effect on the C5 (no antenna switch; fixed
-// onboard u.FL antenna) -- leave it undefined. WiFi band is pinned to 2.4GHz
-// in main.cpp since the C5 is dual-band and the venue AP is 2.4GHz-only.
