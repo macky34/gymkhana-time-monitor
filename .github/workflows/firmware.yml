@@ -53,8 +53,12 @@ jobs:
           restore-keys: |
             pio-${{ runner.os }}-${{ matrix.env }}-
 
+      # esptool はPythonの依存モジュールを同梱しておらず、PlatformIOも
+      # それらを入れてくれない。入っていないと bootloader.bin 生成時に
+      # ModuleNotFoundError で落ちる。PlatformIOと同じPython環境に入れる
+      # 必要がある(ローカルでも同じ対処が要る。[[Sensor-Device]] §3.1 参照)。
       - name: Install PlatformIO
-        run: pip install --upgrade platformio
+        run: pip install --upgrade platformio intelhex reedsolo bitstring ecdsa pyserial cryptography pyyaml
 
       # config.h は台毎の識別情報を持つためgitignoreされている。
       # ここではコンパイルが通るかだけを見るので、exampleの値をそのまま使う。
