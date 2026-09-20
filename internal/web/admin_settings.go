@@ -133,6 +133,13 @@ func (s *Server) handleAdminSettingsUpdate(w http.ResponseWriter, r *http.Reques
 		writeJSONError(w, http.StatusBadRequest, "invalid body")
 		return
 	}
+	// SensorLockoutSec is relayed verbatim to the ESP32 sensors over UDP
+	// (internal/timing/status.go), so a non-positive or absurdly large value
+	// would leave the sensor effectively debounce-locked forever.
+	if body.SensorLockoutSec <= 0 || body.SensorLockoutSec > 60 {
+		writeJSONError(w, http.StatusBadRequest, "invalid sensor_lockout_sec")
+		return
+	}
 
 	updated := body.applyTo(current)
 	if err := s.Store.UpdateEvent(updated); err != nil {

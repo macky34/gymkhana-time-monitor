@@ -109,6 +109,13 @@ func (s *Server) handleAPISetup(w http.ResponseWriter, r *http.Request) {
 		writeJSONError(w, http.StatusBadRequest, "invalid driver_class")
 		return
 	}
+	// SensorLockoutSec is relayed verbatim to the ESP32 sensors over UDP
+	// (internal/timing/status.go), so a non-positive or absurdly large value
+	// would leave the sensor effectively debounce-locked forever.
+	if req.Event.SensorLockoutSec <= 0 || req.Event.SensorLockoutSec > 60 {
+		writeJSONError(w, http.StatusBadRequest, "invalid sensor_lockout_sec")
+		return
+	}
 
 	set := store.EventRow{
 		EventName:        req.EventName,
