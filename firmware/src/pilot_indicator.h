@@ -1,9 +1,5 @@
-// PilotIndicator: the external LED2 ("pilot lamp"), a second information
-// channel distinct from StatusLed's connection/sync display. Phase 1 only
-// implements the trigger flash layer; later phases add startup role blink,
-// ESP-NOW link background pattern and RSSI pulses on top, in priority order
-// (see the firmware plan's "LED表示設計" section) -- flash() always wins
-// over whatever the lower-priority layers would otherwise be showing.
+// PilotIndicator: external LED2 ("pilot lamp"). Phase 1 implements only the
+// trigger flash; later phases add role/link/RSSI layers on top of it.
 #pragma once
 
 #include <cstdint>
