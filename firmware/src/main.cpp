@@ -23,6 +23,7 @@
 #include "edge_queue.h"
 #include "identity.h"
 #include "lockout.h"
+#include "pilot_indicator.h"
 #include "status_led.h"
 #include "uplink.h"
 #include "uplink_wifi.h"
@@ -33,6 +34,7 @@
 #endif
 
 static StatusLed statusLed;
+static PilotIndicator pilotLed;
 static UplinkWifi uplinkWifi;
 static Uplink *uplink = &uplinkWifi;  // Phase 4 will pick UplinkEspNow instead
                                        // based on the link-select switch.
@@ -66,7 +68,6 @@ static LedPattern patternFor(UplinkState s) {
 }
 
 static void drainEdges(uint32_t nowMs) {
-  (void)nowMs;
   lockout.setWindowMs(uplink->lockoutMs());
 
   int64_t edgeMono;
@@ -84,6 +85,7 @@ static void drainEdges(uint32_t nowMs) {
                                      identity.bootId(), seq, tsWallUs);
     if (len == 0) continue;  // shouldn't happen; buffer is sized generously
     uplink->sendToServer(payload, len, Redundancy::Burst3);
+    pilotLed.flash(nowMs);
     Serial.printf("[trigger] seq=%u ts=%lld\n", seq, (long long)tsWallUs);
   }
 }
@@ -112,6 +114,7 @@ void setup() {
   statusLed.begin(STATUS_LED_GPIO, LED_ACTIVE_LOW);
   statusLed.set(LedPattern::BlinkFast);
   statusLed.poll(millis());
+  pilotLed.begin(PILOT_LED_GPIO);
 
   pinMode(SENSOR_GPIO, INPUT_PULLUP);
 
@@ -150,6 +153,7 @@ void loop() {
 
   drainEdges(nowMs);
   maybeHeartbeat(nowMs);
+  pilotLed.poll(nowMs);
 
   delay(1);
 }
