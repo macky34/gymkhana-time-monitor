@@ -2,311 +2,154 @@
 //
 // Lifecycle (see the Sensor-Device wiki page):
 //   WiFi connect -> SNTP sync against chrony@RPi -> fetch lockout config ->
-//   ready. Trigger sending is inhibited until the clock is synced; the status
-//   LED blinks while unsynced and is solid once ready.
+//   ready. Trigger sending is inhibited until the clock is synced; the
+//   status LED blinks while unsynced and is solid once ready.
 //
 // A falling edge on SENSOR_GPIO (beam broken) is timestamped inside the ISR
-// with esp_timer_get_time() and pushed to a ring buffer; the main loop drains
-// it, applies the debounce lockout (first edge wins), and sends the trigger
-// as a 3-packet UDP burst (50 ms apart) so a single lost datagram does not
-// lose the timing. The wire format matches the Sensor-Device wiki page.
+// with esp_timer_get_time() and pushed to a lock-free queue (EdgeQueue); the
+// main loop drains it, applies the debounce lockout (first edge wins), and
+// sends the trigger as a 3-packet UDP burst (50 ms apart, non-blocking) so a
+// single lost datagram does not lose the timing. The wire format matches the
+// Sensor-Device wiki page.
+//
+// This file is just the setup()/loop() orchestrator; the actual logic lives
+// in lib/ (Arduino-independent, unit-tested under `pio test -e native`) and
+// the other src/ modules (board/status_led/identity/uplink_wifi).
 #include <Arduino.h>
-#include <WiFi.h>
-#include <WiFiUdp.h>
-#include <HTTPClient.h>
-#include <time.h>
-#include "config.h"
+#include <cstring>
 
-// Back-compat fallback defaults for boards (e.g. esp32dev) whose config.h
-// predates these macros.
+#include "board.h"
+#include "config.h"
+#include "edge_queue.h"
+#include "identity.h"
+#include "lockout.h"
+#include "status_led.h"
+#include "uplink.h"
+#include "uplink_wifi.h"
+#include "wire.h"
+
 #ifndef LED_ACTIVE_LOW
 #define LED_ACTIVE_LOW 0
 #endif
-#ifndef USE_EXTERNAL_ANTENNA
-#define USE_EXTERNAL_ANTENNA 0
-#endif
 
-static WiFiUDP udp;
-static uint32_t bootID = 0; // random per boot; part of the dedup key
-static uint32_t triggerSeq = 0;
-static uint32_t hbSeq = 0;
-static uint32_t lockoutMs = DEFAULT_LOCKOUT_MS;
-static volatile int64_t lastEdgeUs = 0;
-static int64_t lastAcceptedUs = 0; // debounce reference (main-loop side)
-
-// --- ISR: timestamp the edge and hand it to the main loop ------------------
-// Kept minimal: read the monotonic clock and store it. Debounce and sending
-// happen in loop() so the ISR never blocks.
-static volatile int64_t pendingEdgeUs = 0;
-static portMUX_TYPE edgeMux = portMUX_INITIALIZER_UNLOCKED;
+static StatusLed statusLed;
+static UplinkWifi uplinkWifi;
+static Uplink *uplink = &uplinkWifi;  // Phase 4 will pick UplinkEspNow instead
+                                       // based on the link-select switch.
+static Identity identity;
+static Lockout lockout;
+static EdgeQueue<8> edgeQueue;
 
 void IRAM_ATTR onEdge() {
-  int64_t t = esp_timer_get_time();
-  portENTER_CRITICAL_ISR(&edgeMux);
-  pendingEdgeUs = t;
-  portEXIT_CRITICAL_ISR(&edgeMux);
+  // Minimal ISR: just timestamp the edge and hand it to loop() via the
+  // lock-free queue. No debounce, no sending here.
+  edgeQueue.pushFromIsr(esp_timer_get_time());
 }
 
-// Wall-clock microseconds in the chrony/SNTP time base (what the server pairs
-// on). esp_timer is only a monotonic uptime clock, so we anchor it to the
-// synced wall clock captured at sync time.
-static int64_t wallAnchorUs = 0;   // wall-clock us at anchor
-static int64_t monoAnchorUs = 0;   // esp_timer us at anchor
-static bool clockSynced = false;
-
-static int64_t nowWallUs() {
-  struct timeval tv;
-  gettimeofday(&tv, nullptr);
-  return (int64_t)tv.tv_sec * 1000000LL + tv.tv_usec;
+static wire::Role roleFromConfig() {
+  return strcmp(SENSOR_ID, "goal") == 0 ? wire::Role::Goal : wire::Role::Start;
 }
 
-// Convert an esp_timer edge timestamp to wall-clock us using the anchor, so
-// the value we send is in the server's time base with monotonic precision.
-static int64_t edgeToWallUs(int64_t edgeMonoUs) {
-  return wallAnchorUs + (edgeMonoUs - monoAnchorUs);
-}
-
-static void sendPacket(const String &json) {
-  udp.beginPacket(RPI_HOST, RPI_UDP_PORT);
-  udp.write((const uint8_t *)json.c_str(), json.length());
-  udp.endPacket();
-}
-
-static void sendTrigger(int64_t tsWallUs) {
-  triggerSeq++;
-  String json = String("{\"type\":\"trigger\",\"sensor_id\":\"") + SENSOR_ID +
-                "\",\"boot_id\":" + String(bootID) +
-                ",\"seq\":" + String(triggerSeq) +
-                ",\"timestamp_us\":" + String((long long)tsWallUs) + "}";
-  for (int i = 0; i < 3; i++) { // 3-packet burst, 50 ms apart
-    sendPacket(json);
-    if (i < 2) delay(50);
+static LedPattern patternFor(UplinkState s) {
+  switch (s) {
+    case UplinkState::Init:
+    case UplinkState::Connecting:
+      return LedPattern::BlinkFast;
+    case UplinkState::Syncing:
+      return LedPattern::BlinkSlow;
+    case UplinkState::Ready:
+      return LedPattern::Solid;
+    case UplinkState::Failed:
+      return LedPattern::Off;
   }
-  Serial.printf("[trigger] seq=%u ts=%lld\n", triggerSeq, (long long)tsWallUs);
+  return LedPattern::Off;
 }
 
-static void sendHeartbeat() {
-  hbSeq++;
+static void drainEdges(uint32_t nowMs) {
+  (void)nowMs;
+  lockout.setWindowMs(uplink->lockoutMs());
+
+  int64_t edgeMono;
+  while (edgeQueue.pop(&edgeMono)) {
+    // Edges are dropped entirely while unsynced (same as the original
+    // clockSynced check) -- not even the lockout window is updated, so the
+    // first edge after sync still gets sent.
+    if (!uplink->timebase().synced()) continue;
+    if (!lockout.accept(edgeMono)) continue;  // inside the debounce window
+
+    int64_t tsWallUs = uplink->timebase().toWallUs(edgeMono);
+    uint32_t seq = identity.nextTriggerSeq();
+    char payload[192];
+    size_t len = wire::buildTrigger(payload, sizeof(payload), identity.role(),
+                                     identity.bootId(), seq, tsWallUs);
+    if (len == 0) continue;  // shouldn't happen; buffer is sized generously
+    uplink->sendToServer(payload, len, Redundancy::Burst3);
+    Serial.printf("[trigger] seq=%u ts=%lld\n", seq, (long long)tsWallUs);
+  }
+}
+
+static void maybeHeartbeat(uint32_t nowMs) {
+  static uint32_t lastHbMs = 0;
+  if (nowMs - lastHbMs < 5000) return;
+  lastHbMs = nowMs;
+
+  uint32_t seq = identity.nextHbSeq();
+  char payload[192];
   // ntp_offset_ms: best-effort estimate; 0 is acceptable when we cannot
-  // measure it (the server treats it as informational).
-  String json = String("{\"type\":\"hb\",\"sensor_id\":\"") + SENSOR_ID +
-                "\",\"boot_id\":" + String(bootID) +
-                ",\"seq\":" + String(hbSeq) +
-                ",\"ntp_offset_ms\":0.0}";
-  sendPacket(json);
-}
-
-static void setLed(bool on) {
-  bool level = LED_ACTIVE_LOW ? !on : on;
-  digitalWrite(STATUS_LED_GPIO, level ? HIGH : LOW);
-}
-
-static void syncClock() {
-  // chrony on the RPi answers SNTP; anchor esp_timer to the synced wall clock.
-  configTime(0, 0, RPI_HOST);
-  struct tm tm;
-  clockSynced = false;
-  for (int i = 0; i < 40; i++) { // up to ~8s waiting for first sync
-    if (getLocalTime(&tm, 200)) {
-      wallAnchorUs = nowWallUs();
-      monoAnchorUs = esp_timer_get_time();
-      clockSynced = true;
-      Serial.println("[sync] clock synced");
-      return;
-    }
-    setLed(i % 2); // blink while syncing
-    delay(200);
-  }
-  Serial.println("[sync] FAILED (will retry)");
-}
-
-// parseLockoutMs scans body for a "lockout_sec":N field and, if found and
-// positive, updates lockoutMs (converting the wire-protocol seconds value to
-// the internal millisecond representation lockoutMs keeps for debounce
-// comparisons). Shared by fetchConfig() (the one-shot HTTP fetch at boot)
-// and the UDP "config" reply piggybacked on heartbeats (see loop()), so a
-// lockout change made in the admin UI reaches the sensor within one
-// heartbeat interval instead of requiring a reboot (issue #18). logIfChanged
-// reports a value change to Serial (used for the UDP path so a live config
-// change is visible without restarting the device; the boot-time HTTP fetch
-// already logs its own result separately).
-static void parseLockoutMs(const String &body, bool logIfChanged = false) {
-  int idx = body.indexOf("lockout_sec");
-  if (idx < 0) return;
-  int colon = body.indexOf(':', idx);
-  if (colon < 0) return;
-  double sec = body.substring(colon + 1).toDouble();
-  if (sec <= 0) return;
-  uint32_t newMs = (uint32_t)(sec * 1000.0 + 0.5);
-  if (logIfChanged && newMs != lockoutMs) {
-    Serial.printf("[config] lockout updated: %.3f -> %.3f sec\n", lockoutMs / 1000.0, newMs / 1000.0);
-  }
-  lockoutMs = newMs;
-}
-
-static void fetchConfig() {
-  HTTPClient http;
-  String url = String("http://") + RPI_HOST + ":" + String(RPI_HTTP_PORT) +
-               "/api/internal/sensor-config";
-  http.begin(url);
-  int code = http.GET();
-  if (code == 200) {
-    String body = http.getString();
-    parseLockoutMs(body);
-    Serial.printf("[config] lockout=%.3f sec\n", lockoutMs / 1000.0);
-  } else {
-    Serial.printf("[config] fetch failed (%d), using default %u\n", code, lockoutMs);
-  }
-  http.end();
+  // measure it (the server treats it as informational). A WiFi-direct
+  // uplink never measures it; an ESP-NOW client will (Phase 5).
+  size_t len = wire::buildHeartbeat(payload, sizeof(payload), identity.role(),
+                                    identity.bootId(), seq, 0.0);
+  if (len == 0) return;
+  uplink->sendToServer(payload, len, Redundancy::Once);
 }
 
 void setup() {
   Serial.begin(115200);
 
-#if defined(CONFIG_IDF_TARGET_ESP32C6)
-  // XIAO ESP32C6 antenna select (Seeed Wiki): GPIO3 enables the RF switch
-  // (active low), GPIO14 picks onboard chip antenna (LOW) vs external u.FL
-  // (HIGH). Must run before WiFi.begin().
-  pinMode(3, OUTPUT);
-  digitalWrite(3, LOW);
-  pinMode(14, OUTPUT);
-  digitalWrite(14, USE_EXTERNAL_ANTENNA ? HIGH : LOW);
-#endif
-  // C5 has no GPIO-controlled antenna switch (fixed onboard u.FL antenna),
-  // so USE_EXTERNAL_ANTENNA is a no-op there.
+  board::earlyInit();  // must run before WiFi.begin()
 
-  pinMode(STATUS_LED_GPIO, OUTPUT);
+  statusLed.begin(STATUS_LED_GPIO, LED_ACTIVE_LOW);
+  statusLed.set(LedPattern::BlinkFast);
+  statusLed.poll(millis());
+
   pinMode(SENSOR_GPIO, INPUT_PULLUP);
-  setLed(false);
 
-  bootID = esp_random();
+  wire::Role role = roleFromConfig();
+  uplink->begin();
+  // Must run after uplink->begin() (which calls WiFi.mode(WIFI_STA)): the RF
+  // hardware needs to be initialized for esp_random() to be a true hardware
+  // RNG (see identity.h).
+  identity.begin(role);
 
-  WiFi.mode(WIFI_STA);
-#if defined(CONFIG_IDF_TARGET_ESP32C5)
-  // C5 is 2.4/5GHz dual-band; the venue AP is 2.4GHz-only, so pin the band
-  // to skip scanning 5GHz (faster connect/reconnect). setBandMode() requires
-  // STA to already be started, hence after mode() rather than before.
-  WiFi.setBandMode(WIFI_BAND_MODE_2G_ONLY);
-#endif
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
-  uint32_t wifiStartMs = millis();
-  while (WiFi.status() != WL_CONNECTED) {
-    setLed(millis() / 250 % 2); // fast blink while connecting
-    // If the AP isn't up yet (or never comes up) at boot, don't wait
-    // forever: a full restart re-runs esp_wifi init from scratch, which is
-    // more reliable than anything we could do from inside a stuck STA state
-    // (see the loop() reconnect comment below for the same reasoning).
-    if (millis() - wifiStartMs > 60UL * 1000UL) {
-      Serial.println("[wifi] initial connect timed out after 60s, restarting");
-      ESP.restart();
-    }
-    delay(50);
+  // Block here (matching the original setup()'s behavior) until the uplink
+  // reaches a terminal startup state, driving the same loop-based state
+  // machine so the LED updates normally instead of duplicating connect/sync
+  // logic here.
+  while (uplink->state() != UplinkState::Ready && uplink->state() != UplinkState::Failed) {
+    uint32_t now = millis();
+    uplink->loop(now);
+    statusLed.set(patternFor(uplink->state()));
+    statusLed.poll(now);
+    delay(1);
   }
-  Serial.printf("[wifi] connected, ip=%s boot_id=%u\n",
-                WiFi.localIP().toString().c_str(), bootID);
+  statusLed.set(patternFor(uplink->state()));
+  statusLed.poll(millis());
 
-  // Bind to a fixed local port so we can both send heartbeats/triggers and
-  // receive the server's piggybacked "config" reply (issue #18) on the same
-  // socket.
-  udp.begin(LOCAL_UDP_PORT);
-
-  syncClock();
-  fetchConfig();
-
+  // Interrupt registration happens after clock sync / config fetch settle,
+  // same ordering as the original.
   attachInterrupt(digitalPinToInterrupt(SENSOR_GPIO), onEdge, FALLING);
-  setLed(clockSynced); // solid when ready
 }
 
 void loop() {
-  static uint32_t lastHbMs = 0;
-  static uint32_t lastResyncMs = 0;
-  static uint32_t lastReconnectAttemptMs = 0;
-  static uint32_t wifiDownSinceMs = 0;
-  static bool wasDisconnected = false;
   uint32_t nowMs = millis();
 
-  // Periodic re-sync (hourly) and WiFi recovery.
-  if (WiFi.status() != WL_CONNECTED) {
-    setLed(nowMs / 250 % 2);
-    wasDisconnected = true;
-    if (wifiDownSinceMs == 0) wifiDownSinceMs = nowMs;
-    // Calling WiFi.reconnect() every loop (every ~200ms) races the previous
-    // connect attempt: esp_wifi logs "sta is connecting, return error" and
-    // the STA state machine never gets a chance to finish NO_AP_FOUND /
-    // STA_LEAVING and settle, so it never recovers on its own (issue #35 -
-    // reported as "needs a manual reboot to reconnect"). Throttle attempts
-    // and disconnect first so each attempt starts from a clean STA state.
-    if (nowMs - lastReconnectAttemptMs > 5000) {
-      lastReconnectAttemptMs = nowMs;
-      Serial.println("[wifi] disconnected, reconnecting...");
-      WiFi.disconnect();
-      WiFi.begin(WIFI_SSID, WIFI_PASS);
-    }
-    // Belt-and-suspenders: if the above still can't recover the link within
-    // 5 minutes, restart rather than sit there indefinitely - a full reboot
-    // re-runs esp_wifi init from scratch and is what operators were doing
-    // manually anyway.
-    if (nowMs - wifiDownSinceMs > 5UL * 60UL * 1000UL) {
-      Serial.println("[wifi] down for >5min, restarting");
-      ESP.restart();
-    }
-    delay(50);
-    return;
-  }
-  wifiDownSinceMs = 0;
-  if (wasDisconnected) {
-    // Just reconnected: the LED was left blinking at whatever phase the
-    // ~250ms toggle happened to be at when WiFi came back (issue #35
-    // follow-up - looked like a "coin flip" between lit/unlit after a
-    // reconnect). Re-sync the clock (it may have drifted while we were
-    // disconnected) and set the LED to the real ready state instead of
-    // leaving it wherever the blink loop last left it.
-    wasDisconnected = false;
-    lastResyncMs = nowMs;
-    syncClock();
-    setLed(clockSynced);
-  }
-  if (nowMs - lastResyncMs > 3600UL * 1000UL) {
-    lastResyncMs = nowMs;
-    syncClock();
-    setLed(clockSynced);
-  }
+  uplink->loop(nowMs);
+  statusLed.set(patternFor(uplink->state()));
+  statusLed.poll(nowMs);
 
-  // Drain a pending edge (if any) and apply debounce lockout.
-  int64_t edge = 0;
-  portENTER_CRITICAL(&edgeMux);
-  if (pendingEdgeUs != 0) {
-    edge = pendingEdgeUs;
-    pendingEdgeUs = 0;
-  }
-  portEXIT_CRITICAL(&edgeMux);
-
-  if (edge != 0 && clockSynced) {
-    if (lastAcceptedUs == 0 || (edge - lastAcceptedUs) >= (int64_t)lockoutMs * 1000) {
-      lastAcceptedUs = edge;
-      sendTrigger(edgeToWallUs(edge)); // first edge wins; timestamp is the edge
-    }
-    // edges inside the lockout window are dropped (debounce)
-  }
-
-  if (nowMs - lastHbMs >= 5000) { // heartbeat every 5s
-    lastHbMs = nowMs;
-    sendHeartbeat();
-  }
-
-  // Non-blocking check for the server's "config" reply, piggybacked on our
-  // heartbeat (the RPi replies to whichever UDP source port sent the hb).
-  // This is how a lockout change made in the admin UI reaches us without a
-  // reboot (issue #18): applied within one heartbeat interval (<=5s).
-  int packetSize = udp.parsePacket();
-  if (packetSize > 0) {
-    char buf[128];
-    int len = udp.read(buf, sizeof(buf) - 1);
-    if (len > 0) {
-      buf[len] = '\0';
-      parseLockoutMs(String(buf), true);
-    }
-  }
+  drainEdges(nowMs);
+  maybeHeartbeat(nowMs);
 
   delay(1);
 }
