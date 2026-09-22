@@ -4,9 +4,15 @@
 
 #include <cstdint>
 
+#include "wire.h"
+
 class PilotIndicator {
  public:
   void begin(uint8_t gpio);
+
+  // Blocking one-shot blink sequence (Start = one long flash, Goal = two
+  // short flashes). Call once at startup, right after begin().
+  void playRoleIntro(wire::Role role);
 
   // Starts (or restarts) a one-shot flash. Call once per accepted trigger.
   void flash(uint32_t nowMs);

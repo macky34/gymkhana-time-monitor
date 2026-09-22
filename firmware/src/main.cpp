@@ -16,13 +16,13 @@
 // in lib/ (Arduino-independent, unit-tested under `pio test -e native`) and
 // the other src/ modules (board/status_led/identity/uplink_wifi).
 #include <Arduino.h>
-#include <cstring>
 
 #include "board.h"
 #include "config.h"
 #include "edge_queue.h"
 #include "identity.h"
 #include "lockout.h"
+#include "mode_switch.h"
 #include "pilot_indicator.h"
 #include "status_led.h"
 #include "uplink.h"
@@ -35,21 +35,20 @@
 
 static StatusLed statusLed;
 static PilotIndicator pilotLed;
+static ModeSwitch modeSwitch;
 static UplinkWifi uplinkWifi;
 static Uplink *uplink = &uplinkWifi;  // Phase 4 will pick UplinkEspNow instead
                                        // based on the link-select switch.
 static Identity identity;
 static Lockout lockout;
 static EdgeQueue<8> edgeQueue;
+static uint32_t lastTriggerAcceptedMs = 0;  // 0 = never; used to hold off a
+                                             // role-change restart mid-run.
 
 void IRAM_ATTR onEdge() {
   // Minimal ISR: just timestamp the edge and hand it to loop() via the
   // lock-free queue. No debounce, no sending here.
   edgeQueue.pushFromIsr(esp_timer_get_time());
-}
-
-static wire::Role roleFromConfig() {
-  return strcmp(SENSOR_ID, "goal") == 0 ? wire::Role::Goal : wire::Role::Start;
 }
 
 static LedPattern patternFor(UplinkState s) {
@@ -86,6 +85,7 @@ static void drainEdges(uint32_t nowMs) {
     if (len == 0) continue;  // shouldn't happen; buffer is sized generously
     uplink->sendToServer(payload, len, Redundancy::Burst3);
     pilotLed.flash(nowMs);
+    lastTriggerAcceptedMs = nowMs;
     Serial.printf("[trigger] seq=%u ts=%lld\n", seq, (long long)tsWallUs);
   }
 }
@@ -106,6 +106,18 @@ static void maybeHeartbeat(uint32_t nowMs) {
   uplink->sendToServer(payload, len, Redundancy::Once);
 }
 
+// Restarts on a confirmed role-switch flip, unless a trigger was accepted
+// within the current lockout window (stays pending and retries next loop()).
+static void maybeRestartOnRoleChange(uint32_t nowMs) {
+  if (!modeSwitch.changed()) return;
+  bool recentlyTriggered = lastTriggerAcceptedMs != 0 &&
+      (nowMs - lastTriggerAcceptedMs) < lockout.windowMs();
+  if (recentlyTriggered) return;
+  Serial.println("[mode] role changed, restarting");
+  delay(50);
+  ESP.restart();
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -115,10 +127,12 @@ void setup() {
   statusLed.set(LedPattern::BlinkFast);
   statusLed.poll(millis());
   pilotLed.begin(PILOT_LED_GPIO);
+  modeSwitch.begin(MODE_SWITCH_GPIO);
+  wire::Role role = modeSwitch.role();
+  pilotLed.playRoleIntro(role);
 
   pinMode(SENSOR_GPIO, INPUT_PULLUP);
 
-  wire::Role role = roleFromConfig();
   uplink->begin();
   // Must run after uplink->begin() (which calls WiFi.mode(WIFI_STA)): the RF
   // hardware needs to be initialized for esp_random() to be a true hardware
@@ -154,6 +168,9 @@ void loop() {
   drainEdges(nowMs);
   maybeHeartbeat(nowMs);
   pilotLed.poll(nowMs);
+
+  modeSwitch.poll(nowMs);
+  maybeRestartOnRoleChange(nowMs);
 
   delay(1);
 }
