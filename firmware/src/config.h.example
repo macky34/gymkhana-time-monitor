@@ -20,8 +20,9 @@
 
 // --- Seeed Studio XIAO ESP32C5 (env:seeed_xiao_esp32c5), the default board --
 #define SENSOR_GPIO 0        // D1 pin (GPIO0)
-#define STATUS_LED_GPIO 27   // onboard LED, active-low
-#define LED_ACTIVE_LOW 1     // onboard LED is lit when driven LOW
+#define STATUS_LED_GPIO 24   // D5, external LED1 via MOSFET (GPIO27 is LED_BUILTIN-only, not header-accessible)
+#define LED_ACTIVE_LOW 0     // external LED1 is lit when the GPIO is driven HIGH (MOSFET gate)
+#define PILOT_LED_GPIO 11    // D6, external LED2 (pilot lamp) via its own MOSFET, active-high
 // USE_EXTERNAL_ANTENNA has no effect on the C5 (no antenna switch; fixed
 // onboard u.FL antenna) -- leave it undefined. WiFi band is pinned to 2.4GHz
 // in main.cpp since the C5 is dual-band and the venue AP is 2.4GHz-only.
@@ -34,6 +35,7 @@
 // --- Seeed Studio XIAO ESP32C6 (env:seeed_xiao_esp32c6) ---------------------
 // Uncomment/replace the above when building for the XIAO ESP32C6 instead:
 //   #define SENSOR_GPIO 1        // D1 pin (GPIO1)
-//   #define STATUS_LED_GPIO 15   // onboard LED, active-low
-//   #define LED_ACTIVE_LOW 1     // onboard LED is lit when driven LOW
+//   #define STATUS_LED_GPIO 23   // D5, external LED1 via its own MOSFET (see C5 comment above)
+//   #define LED_ACTIVE_LOW 0     // external LED1 is lit when driven HIGH (MOSFET gate)
+//   #define PILOT_LED_GPIO 16    // D6, external LED2 (pilot lamp) via its own MOSFET, active-high
 //   #define USE_EXTERNAL_ANTENNA 0  // 0 = onboard chip antenna, 1 = external (u.FL)
