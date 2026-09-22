@@ -2,7 +2,11 @@
 // physical sensor keeps its own build-time identity.
 #pragma once
 
-// Venue WiFi (the RPi's hotspot / LAN).
+// Venue WiFi (the RPi's hotspot / LAN). Leave BOTH undefined for a
+// distribution build (e.g. CI): the binary then never embeds a password,
+// and prompts for SSID/pass once over Serial on first boot, saving them to
+// NVS (see wifi_provision.h). Define both here only for a development
+// build where embedding credentials is convenient.
 #define WIFI_SSID "timemon-lan"
 #define WIFI_PASS "changeme"
 

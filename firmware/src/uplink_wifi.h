@@ -10,6 +10,7 @@
 #include "espnow_bridge.h"
 #include "timebase.h"
 #include "uplink.h"
+#include "wifi_provision.h"
 
 // UplinkWifi always carries an EspNowBridge: a WiFi-direct sensor doubles
 // as a potential relay host for an ESP-NOW client sensor (see the plan's
@@ -43,6 +44,8 @@ class UplinkWifi : public Uplink {
 
   wire::Role role_ = wire::Role::Start;
   EspNowBridge bridge_;
+  char ssid_[wifi_provision::kMaxSsidLen + 1] = {0};
+  char pass_[wifi_provision::kMaxPassLen + 1] = {0};
 
   void startConnect(uint32_t nowMs);
   void handleConnecting(uint32_t nowMs);

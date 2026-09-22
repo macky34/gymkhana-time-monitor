@@ -21,6 +21,7 @@ int64_t nowWallUs() {
 
 void UplinkWifi::begin() {
   lockoutMs_ = DEFAULT_LOCKOUT_MS;
+  wifi_provision::getCredentials(ssid_, pass_);
 
   WiFi.mode(WIFI_STA);
 #if defined(CONFIG_IDF_TARGET_ESP32C5)
@@ -29,7 +30,7 @@ void UplinkWifi::begin() {
   // STA to already be started, hence after mode() rather than before.
   WiFi.setBandMode(WIFI_BAND_MODE_2G_ONLY);
 #endif
-  WiFi.begin(WIFI_SSID, WIFI_PASS);
+  WiFi.begin(ssid_, pass_);
   // Required for ESP-NOW: modem sleep would otherwise drop received frames
   // while this device is (also) acting as a relay host.
   WiFi.setSleep(false);
@@ -62,7 +63,7 @@ void UplinkWifi::loop(uint32_t nowMs) {
       lastReconnectAttemptMs_ = nowMs;
       Serial.println("[wifi] disconnected, reconnecting...");
       WiFi.disconnect();
-      WiFi.begin(WIFI_SSID, WIFI_PASS);
+      WiFi.begin(ssid_, pass_);
     }
 
     // Initial connect gets a shorter timeout (matching the original
