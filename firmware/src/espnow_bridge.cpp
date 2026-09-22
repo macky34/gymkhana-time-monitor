@@ -5,6 +5,7 @@
 #include <cstring>
 #include <sys/time.h>
 
+#include "config.h"
 #include "link_frame.h"
 
 namespace {
@@ -22,6 +23,11 @@ void EspNowBridge::begin(wire::Role hostRole, RelayToServerFn relayFn, void *rel
   relayFn_ = relayFn;
   relayCtx_ = relayCtx;
   radio_.begin();
+#ifdef ESPNOW_LR_MODE
+  if (!radio_.enableLongRange()) {
+    Serial.println("[espnow] LR mode request failed, staying at normal rate");
+  }
+#endif
   lastAnnounceMs_ = 0;
   haveClient_ = false;
 }

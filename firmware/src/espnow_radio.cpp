@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
+#include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <cstring>
@@ -58,4 +59,9 @@ bool EspNowRadio::sendBroadcast(const uint8_t *data, size_t len) {
 bool EspNowRadio::poll(EspNowPacket *out) {
   if (!g_rxQueue) return false;
   return xQueueReceive(g_rxQueue, out, 0) == pdTRUE;
+}
+
+bool EspNowRadio::enableLongRange() {
+  uint8_t bitmap = WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N | WIFI_PROTOCOL_LR;
+  return esp_wifi_set_protocol(WIFI_IF_STA, bitmap) == ESP_OK;
 }
