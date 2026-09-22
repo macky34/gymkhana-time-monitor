@@ -28,6 +28,8 @@ class StatusLed {
   // loop() iteration; non-blocking.
   void poll(uint32_t nowMs);
 
+  LedPattern pattern() const { return pattern_; }
+
  private:
   void write(bool on);
 

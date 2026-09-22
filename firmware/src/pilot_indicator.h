@@ -28,6 +28,7 @@ class PilotIndicator {
   void flash(uint32_t nowMs);
 
   void setLinkBackground(LinkBackground bg) { background_ = bg; }
+  LinkBackground linkBackground() const { return background_; }
 
   // Drives the GPIO; non-blocking. Call every loop() iteration.
   void poll(uint32_t nowMs);
