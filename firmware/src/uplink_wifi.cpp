@@ -30,6 +30,11 @@ void UplinkWifi::begin() {
   WiFi.setBandMode(WIFI_BAND_MODE_2G_ONLY);
 #endif
   WiFi.begin(WIFI_SSID, WIFI_PASS);
+  // Required for ESP-NOW: modem sleep would otherwise drop received frames
+  // while this device is (also) acting as a relay host.
+  WiFi.setSleep(false);
+
+  bridge_.begin(role_, &UplinkWifi::relayToServerCallback, this);
 
   state_ = UplinkState::Connecting;
   // wifiDownSinceMs_ is set on the first loop() call that observes
@@ -69,6 +74,10 @@ void UplinkWifi::loop(uint32_t nowMs) {
       Serial.println("[wifi] down too long, restarting");
       ESP.restart();
     }
+    // ESP-NOW keeps working even while the AP link is down (it doesn't
+    // depend on association), so the bridge still answers Discover/relays.
+    bridge_.setUplinkUp(false);
+    bridge_.loop(nowMs);
     return;
   }
 
@@ -100,6 +109,9 @@ void UplinkWifi::loop(uint32_t nowMs) {
 
   pollBurst(nowMs);
   pollConfigReply();
+
+  bridge_.setUplinkUp(state_ == UplinkState::Ready);
+  bridge_.loop(nowMs);
 }
 
 void UplinkWifi::startSync(uint32_t nowMs) {
@@ -165,6 +177,8 @@ void UplinkWifi::pollConfigReply() {
   int len = udp_.read(buf, sizeof(buf) - 1);
   if (len <= 0) return;
 
+  bridge_.forwardConfigToClient(buf, (size_t)len);
+
   uint32_t newMs = 0;
   if (wire::parseLockoutMs(buf, (size_t)len, &newMs)) {
     if (newMs != lockoutMs_) {
@@ -205,6 +219,12 @@ void UplinkWifi::pollBurst(uint32_t nowMs) {
   } else {
     burst_.nextAtMs = nowMs + 50;
   }
+}
+
+bool UplinkWifi::relayToServer(const char *payload, size_t len) {
+  if (len >= sizeof(burst_.payload)) return false;
+  sendPacketNow(payload, len);
+  return true;
 }
 
 void UplinkWifi::sendPacketNow(const char *payload, size_t len) {

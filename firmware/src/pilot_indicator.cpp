@@ -24,9 +24,22 @@ void PilotIndicator::flash(uint32_t nowMs) {
   flashStartMs_ = nowMs;
 }
 
+bool PilotIndicator::backgroundLevel(uint32_t nowMs) const {
+  switch (background_) {
+    case LinkBackground::None:
+    case LinkBackground::Linked:
+      return false;
+    case LinkBackground::Searching:
+      return (nowMs / 500) % 2 == 0;
+    case LinkBackground::UplinkDown:
+      return (nowMs / 150) % 2 == 0;
+  }
+  return false;
+}
+
 void PilotIndicator::poll(uint32_t nowMs) {
   if (flashing_ && nowMs - flashStartMs_ >= kFlashMs) {
     flashing_ = false;
   }
-  digitalWrite(gpio_, flashing_ ? HIGH : LOW);
+  digitalWrite(gpio_, flashing_ ? HIGH : backgroundLevel(nowMs));
 }
