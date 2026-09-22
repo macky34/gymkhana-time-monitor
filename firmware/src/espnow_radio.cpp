@@ -18,6 +18,7 @@ void onRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
   memcpy(pkt.mac, info->src_addr, 6);
   memcpy(pkt.data, data, len);
   pkt.len = (size_t)len;
+  pkt.rssi = info->rx_ctrl ? info->rx_ctrl->rssi : 0;
   // Runs on the WiFi task, not an ISR, so a plain (not FromISR) send.
   xQueueSend(g_rxQueue, &pkt, 0);
 }

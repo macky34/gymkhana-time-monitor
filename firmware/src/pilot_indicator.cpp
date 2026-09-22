@@ -33,13 +33,47 @@ bool PilotIndicator::backgroundLevel(uint32_t nowMs) const {
       return (nowMs / 500) % 2 == 0;
     case LinkBackground::UplinkDown:
       return (nowMs / 150) % 2 == 0;
+    case LinkBackground::RoleCollision:
+      return (nowMs / 80) % 2 == 0;
   }
   return false;
+}
+
+void PilotIndicator::startPulses(uint32_t nowMs, int count) {
+  if (count <= 0) return;
+  pulsing_ = true;
+  pulseOn_ = true;
+  pulsesRemaining_ = count;
+  pulsePhaseStartMs_ = nowMs;
+}
+
+void PilotIndicator::updatePulse(uint32_t nowMs) {
+  uint32_t phaseMs = pulseOn_ ? kPulseOnMs : kPulseGapMs;
+  if (nowMs - pulsePhaseStartMs_ < phaseMs) return;
+  pulsePhaseStartMs_ = nowMs;
+  if (pulseOn_) {
+    pulseOn_ = false;
+    pulsesRemaining_--;
+    if (pulsesRemaining_ <= 0) pulsing_ = false;
+  } else {
+    pulseOn_ = true;
+  }
 }
 
 void PilotIndicator::poll(uint32_t nowMs) {
   if (flashing_ && nowMs - flashStartMs_ >= kFlashMs) {
     flashing_ = false;
   }
-  digitalWrite(gpio_, flashing_ ? HIGH : backgroundLevel(nowMs));
+  if (flashing_) {
+    digitalWrite(gpio_, HIGH);
+    return;
+  }
+
+  if (pulsing_) {
+    updatePulse(nowMs);
+    digitalWrite(gpio_, pulsing_ && pulseOn_ ? HIGH : LOW);
+    return;
+  }
+
+  digitalWrite(gpio_, backgroundLevel(nowMs));
 }

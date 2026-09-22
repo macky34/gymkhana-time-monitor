@@ -16,6 +16,7 @@ struct EspNowPacket {
   uint8_t mac[6];
   uint8_t data[kEspNowMaxPayload];
   size_t len;
+  int8_t rssi;
 };
 
 class EspNowRadio {

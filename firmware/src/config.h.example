@@ -22,7 +22,6 @@
 #define PILOT_LED_GPIO 11    // D6, external LED2 (pilot lamp) via its own MOSFET, active-high
 #define MODE_SWITCH_GPIO 8   // D8, start/goal role switch (INPUT_PULLUP, GND=Goal, OPEN=Start)
 #define LINK_SWITCH_GPIO 9   // D9, ESP-NOW enable switch (INPUT_PULLUP, GND=ESP-NOW client, OPEN=WiFi-direct)
-#define ESPNOW_CHANNEL 6     // Phase 3: fixed channel (match the venue AP's channel); Phase 4 adds a sweep
 // USE_EXTERNAL_ANTENNA has no effect on the C5 (no antenna switch; fixed
 // onboard u.FL antenna) -- leave it undefined. WiFi band is pinned to 2.4GHz
 // in main.cpp since the C5 is dual-band and the venue AP is 2.4GHz-only.
@@ -53,5 +52,4 @@
 //   #define PILOT_LED_GPIO 16    // D6, external LED2 (pilot lamp) via its own MOSFET, active-high
 //   #define MODE_SWITCH_GPIO 19  // D8, start/goal role switch (INPUT_PULLUP, GND=Goal, OPEN=Start)
 //   #define LINK_SWITCH_GPIO 20  // D9, ESP-NOW enable switch (INPUT_PULLUP, GND=ESP-NOW client, OPEN=WiFi-direct)
-//   #define ESPNOW_CHANNEL 6     // Phase 3: fixed channel (match the venue AP's channel); Phase 4 adds a sweep
 //   #define USE_EXTERNAL_ANTENNA 0  // 0 = onboard chip antenna, 1 = external (u.FL)
