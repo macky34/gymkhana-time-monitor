@@ -206,7 +206,7 @@ void setup() {
   identity.begin(role);
 
 #ifdef DEBUG_VERBOSE
-  debugMonitor.begin(&statusLed, &pilotLed, uplink);
+  debugMonitor.begin(&statusLed, &pilotLed, uplink, &uplinkEspNow);
 #endif
 
   serialConsole.begin(role, espNowEnabled, uplink, &uplinkEspNow);
