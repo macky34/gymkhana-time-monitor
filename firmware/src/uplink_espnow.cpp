@@ -10,6 +10,11 @@
 
 void UplinkEspNow::begin() {
   WiFi.mode(WIFI_STA);
+#if defined(CONFIG_IDF_TARGET_ESP32C5)
+  // Required for esp_wifi_set_protocol() (used by enableLongRange() below)
+  // to succeed on this dual-band chip -- it fails under WIFI_BAND_MODE_AUTO.
+  WiFi.setBandMode(WIFI_BAND_MODE_2G_ONLY);
+#endif
   WiFi.persistent(false);
   WiFi.setAutoReconnect(false);
   WiFi.disconnect(false, true);  // kill any saved-credential auto-connect
