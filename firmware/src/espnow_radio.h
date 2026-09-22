@@ -17,6 +17,9 @@ struct EspNowPacket {
   uint8_t data[kEspNowMaxPayload];
   size_t len;
   int8_t rssi;
+  // Wall-clock microseconds, captured in the recv callback (as close to
+  // wire arrival as this stack gets) -- this is TimeResp's t2rx.
+  int64_t rxTimestampUs;
 };
 
 class EspNowRadio {
@@ -31,4 +34,11 @@ class EspNowRadio {
 
   // Non-blocking pop from the receive queue. Returns false if empty.
   bool poll(EspNowPacket *out);
+
+  // Adds WIFI_PROTOCOL_LR to the STA protocol bitmap (kept alongside
+  // 11b/g/n, not instead of -- LR devices still need to interoperate with
+  // any legacy-rate peer). Returns false (protocol left unchanged) if the
+  // underlying esp_wifi_set_protocol() call fails; callers should treat
+  // that as "stay on normal rate" rather than a fatal error.
+  bool enableLongRange();
 };

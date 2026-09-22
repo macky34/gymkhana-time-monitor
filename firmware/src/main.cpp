@@ -99,6 +99,7 @@ static void drainEdges(uint32_t nowMs) {
                                      identity.bootId(), seq, tsWallUs);
     if (len == 0) continue;  // shouldn't happen; buffer is sized generously
     uplink->sendToServer(payload, len, Redundancy::Burst3);
+    uplink->onTriggerAccepted(nowMs);
     pilotLed.flash(nowMs);
     lastTriggerAcceptedMs = nowMs;
     Serial.printf("[trigger] seq=%u ts=%lld\n", seq, (long long)tsWallUs);
@@ -112,11 +113,8 @@ static void maybeHeartbeat(uint32_t nowMs) {
 
   uint32_t seq = identity.nextHbSeq();
   char payload[192];
-  // ntp_offset_ms: best-effort estimate; 0 is acceptable when we cannot
-  // measure it (the server treats it as informational). A WiFi-direct
-  // uplink never measures it; an ESP-NOW client will (Phase 5).
   size_t len = wire::buildHeartbeat(payload, sizeof(payload), identity.role(),
-                                    identity.bootId(), seq, 0.0);
+                                    identity.bootId(), seq, uplink->ntpOffsetMs());
   if (len == 0) return;
   uplink->sendToServer(payload, len, Redundancy::Once);
 }

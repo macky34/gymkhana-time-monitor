@@ -31,6 +31,13 @@
 // fallback stays in ms to match lockoutMs's internal representation).
 #define DEFAULT_LOCKOUT_MS 10000  // 10 seconds
 
+// Uncomment to try ESP-NOW Long Range mode (longer range, lower rate).
+// Falls back to normal rate automatically if the underlying esp_wifi call
+// fails. Both sensors run the same firmware, so this stays in sync between
+// host and client without needing runtime negotiation. Default off --
+// enable only after comparing range/RSSI against normal mode outdoors.
+// #define ESPNOW_LR_MODE
+
 // --- Debug mode (issue #44) -------------------------------------------------
 // Uncomment ONE of these to override the physical role/link switch at boot
 // (for bench testing without wiring a switch). Leave both undefined to use

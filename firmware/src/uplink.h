@@ -52,4 +52,15 @@ class Uplink {
   // calls rather than via delay(). Returns false if payload/len don't fit
   // the implementation's send buffer (nothing is queued in that case).
   virtual bool sendToServer(const char *payload, size_t len, Redundancy r) = 0;
+
+  // Estimated uncertainty of this uplink's time sync, in milliseconds, for
+  // the hb payload's ntp_offset_ms field. 0.0 for a WiFi-direct uplink
+  // (SNTP has no per-message uncertainty estimate); an ESP-NOW client
+  // reports half the round-trip delay of its best TimeReq/TimeResp sample.
+  virtual double ntpOffsetMs() const { return 0.0; }
+
+  // Called whenever a trigger is accepted (sent), so an uplink performing
+  // periodic re-synchronization (ESP-NOW's TimeReq/TimeResp) can avoid
+  // re-anchoring mid-run and causing a timestamp jump. Default no-op.
+  virtual void onTriggerAccepted(uint32_t nowMs) { (void)nowMs; }
 };

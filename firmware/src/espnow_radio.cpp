@@ -3,9 +3,11 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <esp_now.h>
+#include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
 #include <cstring>
+#include <sys/time.h>
 
 const uint8_t kEspNowBroadcastMac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
@@ -19,6 +21,9 @@ void onRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
   memcpy(pkt.data, data, len);
   pkt.len = (size_t)len;
   pkt.rssi = info->rx_ctrl ? info->rx_ctrl->rssi : 0;
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  pkt.rxTimestampUs = (int64_t)tv.tv_sec * 1000000LL + tv.tv_usec;
   // Runs on the WiFi task, not an ISR, so a plain (not FromISR) send.
   xQueueSend(g_rxQueue, &pkt, 0);
 }
@@ -54,4 +59,9 @@ bool EspNowRadio::sendBroadcast(const uint8_t *data, size_t len) {
 bool EspNowRadio::poll(EspNowPacket *out) {
   if (!g_rxQueue) return false;
   return xQueueReceive(g_rxQueue, out, 0) == pdTRUE;
+}
+
+bool EspNowRadio::enableLongRange() {
+  uint8_t bitmap = WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N | WIFI_PROTOCOL_LR;
+  return esp_wifi_set_protocol(WIFI_IF_STA, bitmap) == ESP_OK;
 }

@@ -15,6 +15,9 @@ enum class FrameType : uint8_t {
   Announce = 2,  // host -> broadcast, every 2s: host info + status
   Relay = 3,     // client -> host: trigger/hb JSON, forwarded verbatim
   Config = 4,    // host -> client: server's config reply, forwarded verbatim
+  TimeReq = 5,   // client -> host: t1 (client's mono clock at send time)
+  TimeResp = 6,  // host -> client: t1 echoed back, plus t2rx/t2tx (host's
+                 // wall clock at recv/send time) -- the 4-point NTP exchange
 };
 
 // Reads just the type byte. Returns false if data is empty.
@@ -41,5 +44,19 @@ size_t decodeRelay(const uint8_t *data, size_t len, const char **outPayload);
 
 size_t encodeConfig(uint8_t *out, size_t cap, const char *payload, size_t payloadLen);
 size_t decodeConfig(const uint8_t *data, size_t len, const char **outPayload);
+
+// 4-point NTP-style exchange (see Sensor-Device wiki page's time sync
+// section for the offset/delay formulas). t1/t2rx/t2tx are raw esp_timer /
+// wall-clock microsecond readings, not yet combined into an offset.
+size_t encodeTimeReq(uint8_t *out, size_t cap, int64_t t1);
+bool decodeTimeReq(const uint8_t *data, size_t len, int64_t *outT1);
+
+struct TimeRespInfo {
+  int64_t t1;    // echoed back from the TimeReq
+  int64_t t2rx;  // host wall clock, recv callback entry
+  int64_t t2tx;  // host wall clock, just before esp_now_send()
+};
+size_t encodeTimeResp(uint8_t *out, size_t cap, const TimeRespInfo &info);
+bool decodeTimeResp(const uint8_t *data, size_t len, TimeRespInfo *out);
 
 }  // namespace linkproto

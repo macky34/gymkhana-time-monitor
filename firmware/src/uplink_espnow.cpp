@@ -20,6 +20,11 @@ void UplinkEspNow::begin() {
   channelSwitchMs_ = 0;
 
   radio_.begin();
+#ifdef ESPNOW_LR_MODE
+  if (!radio_.enableLongRange()) {
+    Serial.println("[espnow] LR mode request failed, staying at normal rate");
+  }
+#endif
   haveHost_ = false;
   roleCollision_ = false;
   state_ = UplinkState::Connecting;
@@ -80,6 +85,23 @@ void UplinkEspNow::handlePacket(const EspNowPacket &pkt, uint32_t nowMs) {
       }
       break;
     }
+    case linkproto::FrameType::TimeResp: {
+      linkproto::TimeRespInfo info;
+      if (!linkproto::decodeTimeResp(pkt.data, pkt.len, &info)) return;
+      if (syncPhase_ != SyncPhase::Exchanging) return;
+
+      int64_t t3 = esp_timer_get_time();
+      offsetFilter_.addSample(info.t1, info.t2rx, info.t2tx, t3);
+
+      syncExchangesDone_++;
+      if (syncExchangesDone_ >= kSyncExchangeCount) {
+        finishTimeSync(nowMs);
+      } else {
+        syncExchangeStartMs_ = nowMs;
+        sendTimeReq(nowMs);
+      }
+      break;
+    }
     default:
       break;
   }
@@ -106,13 +128,80 @@ void UplinkEspNow::loop(uint32_t nowMs) {
     Serial.println("[espnow] host announce timed out, re-sweeping");
     haveHost_ = false;
     roleCollision_ = false;
+    timebase_.invalidate();
+    syncPhase_ = SyncPhase::Idle;
+    lastSyncStartMs_ = 0;
     state_ = UplinkState::Connecting;
     pollPendingTrigger(nowMs);
     return;
   }
 
   state_ = roleCollision_ ? UplinkState::Failed : UplinkState::Ready;
+
+  pollTimeSync(nowMs);
+  if (syncPhase_ == SyncPhase::Idle && linkUsable() &&
+      (lastSyncStartMs_ == 0 || nowMs - lastSyncStartMs_ >= kResyncIntervalMs)) {
+    startTimeSync(nowMs);
+  }
+
   pollPendingTrigger(nowMs);
+}
+
+void UplinkEspNow::startTimeSync(uint32_t nowMs) {
+  offsetFilter_.reset();
+  syncPhase_ = SyncPhase::Exchanging;
+  syncExchangesDone_ = 0;
+  syncExchangeStartMs_ = nowMs;
+  lastSyncStartMs_ = nowMs;
+  sendTimeReq(nowMs);
+}
+
+void UplinkEspNow::sendTimeReq(uint32_t nowMs) {
+  (void)nowMs;
+  int64_t t1 = esp_timer_get_time();
+  uint8_t buf[16];
+  size_t n = linkproto::encodeTimeReq(buf, sizeof(buf), t1);
+  if (n == 0) return;
+  radio_.send(hostMac_, buf, n);
+}
+
+void UplinkEspNow::pollTimeSync(uint32_t nowMs) {
+  if (syncPhase_ != SyncPhase::Exchanging) return;
+  if (nowMs - syncExchangeStartMs_ <= kSyncExchangeTimeoutMs) return;
+
+  // No TimeResp within the timeout: count this exchange as done (dropped)
+  // and move on rather than stalling the whole sync indefinitely.
+  syncExchangesDone_++;
+  if (syncExchangesDone_ >= kSyncExchangeCount) {
+    finishTimeSync(nowMs);
+  } else {
+    syncExchangeStartMs_ = nowMs;
+    sendTimeReq(nowMs);
+  }
+}
+
+void UplinkEspNow::finishTimeSync(uint32_t nowMs) {
+  syncPhase_ = SyncPhase::Idle;
+  if (!offsetFilter_.hasSample()) {
+    Serial.println("[espnow] time sync: no usable sample, will retry at next resync");
+    return;
+  }
+
+  // Avoid a mid-run timestamp jump: skip re-anchoring (but keep the
+  // existing anchor) if a trigger was accepted within the current lockout
+  // window.
+  bool recentlyTriggered = lastTriggerAcceptedMs_ != 0 &&
+      (nowMs - lastTriggerAcceptedMs_) < lockoutMs_;
+  if (timebase_.synced() && recentlyTriggered) {
+    Serial.println("[espnow] time sync: deferring re-anchor (recent trigger)");
+    return;
+  }
+
+  int64_t nowMono = esp_timer_get_time();
+  int64_t nowWall = nowMono + offsetFilter_.bestOffsetUs();
+  timebase_.anchor(nowWall, nowMono);
+  ntpOffsetMs_ = offsetFilter_.bestDelayUs() / 2 / 1000.0;
+  Serial.printf("[espnow] time synced, offset_uncertainty=%.3fms\n", ntpOffsetMs_);
 }
 
 bool UplinkEspNow::sendRelay(const char *payload, size_t len) {
