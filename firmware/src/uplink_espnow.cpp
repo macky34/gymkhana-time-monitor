@@ -20,6 +20,11 @@ void UplinkEspNow::begin() {
   channelSwitchMs_ = 0;
 
   radio_.begin();
+#ifdef ESPNOW_LR_MODE
+  if (!radio_.enableLongRange()) {
+    Serial.println("[espnow] LR mode request failed, staying at normal rate");
+  }
+#endif
   haveHost_ = false;
   roleCollision_ = false;
   state_ = UplinkState::Connecting;

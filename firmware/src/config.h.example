@@ -31,6 +31,13 @@
 // fallback stays in ms to match lockoutMs's internal representation).
 #define DEFAULT_LOCKOUT_MS 10000  // 10 seconds
 
+// Uncomment to try ESP-NOW Long Range mode (longer range, lower rate).
+// Falls back to normal rate automatically if the underlying esp_wifi call
+// fails. Both sensors run the same firmware, so this stays in sync between
+// host and client without needing runtime negotiation. Default off --
+// enable only after comparing range/RSSI against normal mode outdoors.
+// #define ESPNOW_LR_MODE
+
 // --- Seeed Studio XIAO ESP32C6 (env:seeed_xiao_esp32c6) ---------------------
 // Uncomment/replace the above when building for the XIAO ESP32C6 instead:
 //   #define SENSOR_GPIO 1        // D1 pin (GPIO1)
