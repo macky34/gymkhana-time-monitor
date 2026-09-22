@@ -7,11 +7,18 @@
 
 #include <WiFiUdp.h>
 
+#include "espnow_bridge.h"
 #include "timebase.h"
 #include "uplink.h"
 
+// UplinkWifi always carries an EspNowBridge: a WiFi-direct sensor doubles
+// as a potential relay host for an ESP-NOW client sensor (see the plan's
+// "OFF=WiFi直結+ESP-NOW常時受信"). setRole() must be called before begin()
+// so the bridge can announce this device's role for collision detection.
 class UplinkWifi : public Uplink {
  public:
+  void setRole(wire::Role role) { role_ = role; }
+
   void begin() override;
   void loop(uint32_t nowMs) override;
 
@@ -21,7 +28,22 @@ class UplinkWifi : public Uplink {
 
   bool sendToServer(const char *payload, size_t len, Redundancy r) override;
 
+  // Forwards a payload from an ESP-NOW client to the server verbatim, once
+  // (no burst retry -- matches how this device's own hb is sent). Uses a
+  // separate send path from sendToServer()'s burst_ so a relay can't
+  // collide with this device's own in-flight trigger burst.
+  bool relayToServer(const char *payload, size_t len);
+
  private:
+  // C-callback adapter: EspNowBridge holds a plain function pointer (see
+  // its header) rather than a C++ member-function pointer.
+  static bool relayToServerCallback(void *ctx, const char *payload, size_t len) {
+    return static_cast<UplinkWifi *>(ctx)->relayToServer(payload, len);
+  }
+
+  wire::Role role_ = wire::Role::Start;
+  EspNowBridge bridge_;
+
   void startConnect(uint32_t nowMs);
   void handleConnecting(uint32_t nowMs);
   void handleSyncing(uint32_t nowMs);

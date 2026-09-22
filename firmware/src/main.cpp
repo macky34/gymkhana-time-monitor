@@ -21,11 +21,13 @@
 #include "config.h"
 #include "edge_queue.h"
 #include "identity.h"
+#include "link_switch.h"
 #include "lockout.h"
 #include "mode_switch.h"
 #include "pilot_indicator.h"
 #include "status_led.h"
 #include "uplink.h"
+#include "uplink_espnow.h"
 #include "uplink_wifi.h"
 #include "wire.h"
 
@@ -36,9 +38,10 @@
 static StatusLed statusLed;
 static PilotIndicator pilotLed;
 static ModeSwitch modeSwitch;
+static LinkSwitch linkSwitch;
 static UplinkWifi uplinkWifi;
-static Uplink *uplink = &uplinkWifi;  // Phase 4 will pick UplinkEspNow instead
-                                       // based on the link-select switch.
+static UplinkEspNow uplinkEspNow;
+static Uplink *uplink = &uplinkWifi;  // picked in setup() based on linkSwitch
 static Identity identity;
 static Lockout lockout;
 static EdgeQueue<8> edgeQueue;
@@ -106,10 +109,27 @@ static void maybeHeartbeat(uint32_t nowMs) {
   uplink->sendToServer(payload, len, Redundancy::Once);
 }
 
-// Restarts on a confirmed role-switch flip, unless a trigger was accepted
-// within the current lockout window (stays pending and retries next loop()).
-static void maybeRestartOnRoleChange(uint32_t nowMs) {
-  if (!modeSwitch.changed()) return;
+// Reflects the ESP-NOW client's link state on the pilot lamp's background
+// layer; a WiFi-direct device (including a relay host) always shows None.
+static void updateLinkBackground() {
+  if (uplink != static_cast<Uplink *>(&uplinkEspNow)) {
+    pilotLed.setLinkBackground(PilotIndicator::LinkBackground::None);
+    return;
+  }
+  if (uplinkEspNow.state() != UplinkState::Ready) {
+    pilotLed.setLinkBackground(PilotIndicator::LinkBackground::Searching);
+  } else if (!uplinkEspNow.hostUplinkUp()) {
+    pilotLed.setLinkBackground(PilotIndicator::LinkBackground::UplinkDown);
+  } else {
+    pilotLed.setLinkBackground(PilotIndicator::LinkBackground::Linked);
+  }
+}
+
+// Restarts on a confirmed role- or link-switch flip, unless a trigger was
+// accepted within the current lockout window (stays pending and retries
+// next loop()).
+static void maybeRestartOnSwitchChange(uint32_t nowMs) {
+  if (!modeSwitch.changed() && !linkSwitch.changed()) return;
   bool recentlyTriggered = lastTriggerAcceptedMs != 0 &&
       (nowMs - lastTriggerAcceptedMs) < lockout.windowMs();
   if (recentlyTriggered) return;
@@ -128,11 +148,16 @@ void setup() {
   statusLed.poll(millis());
   pilotLed.begin(PILOT_LED_GPIO);
   modeSwitch.begin(MODE_SWITCH_GPIO);
+  linkSwitch.begin(LINK_SWITCH_GPIO);
   wire::Role role = modeSwitch.role();
   pilotLed.playRoleIntro(role);
 
   pinMode(SENSOR_GPIO, INPUT_PULLUP);
 
+  uplinkWifi.setRole(role);
+  uplinkEspNow.setRole(role);
+  uplink = linkSwitch.espNowEnabled() ? static_cast<Uplink *>(&uplinkEspNow)
+                                       : static_cast<Uplink *>(&uplinkWifi);
   uplink->begin();
   // Must run after uplink->begin() (which calls WiFi.mode(WIFI_STA)): the RF
   // hardware needs to be initialized for esp_random() to be a true hardware
@@ -167,10 +192,12 @@ void loop() {
 
   drainEdges(nowMs);
   maybeHeartbeat(nowMs);
+  updateLinkBackground();
   pilotLed.poll(nowMs);
 
   modeSwitch.poll(nowMs);
-  maybeRestartOnRoleChange(nowMs);
+  linkSwitch.poll(nowMs);
+  maybeRestartOnSwitchChange(nowMs);
 
   delay(1);
 }
