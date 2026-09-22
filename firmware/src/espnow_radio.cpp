@@ -9,6 +9,12 @@
 #include <cstring>
 #include <sys/time.h>
 
+#include "config.h"
+
+#ifdef ESPNOW_LMK
+static_assert(sizeof(ESPNOW_LMK) - 1 == 16, "ESPNOW_LMK must be exactly 16 bytes");
+#endif
+
 const uint8_t kEspNowBroadcastMac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 namespace {
@@ -31,20 +37,30 @@ void onRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
 
 bool EspNowRadio::begin() {
   if (esp_now_init() != ESP_OK) return false;
+#ifdef ESPNOW_LMK
+  esp_now_set_pmk(reinterpret_cast<const uint8_t *>(ESPNOW_LMK));
+#endif
   if (!g_rxQueue) {
     g_rxQueue = xQueueCreate(8, sizeof(EspNowPacket));
   }
   esp_now_register_recv_cb(onRecv);
-  return addPeer(kEspNowBroadcastMac);
+  return addPeer(kEspNowBroadcastMac);  // broadcast: always unencrypted
 }
 
-bool EspNowRadio::addPeer(const uint8_t mac[6]) {
+bool EspNowRadio::addPeer(const uint8_t mac[6], bool encrypt) {
   if (esp_now_is_peer_exist(mac)) return true;
   esp_now_peer_info_t peer{};
   memcpy(peer.peer_addr, mac, 6);
   peer.channel = 0;  // use whatever channel STA is currently on
   peer.ifidx = WIFI_IF_STA;
+#ifdef ESPNOW_LMK
+  peer.encrypt = encrypt;
+  if (encrypt) {
+    memcpy(peer.lmk, ESPNOW_LMK, 16);
+  }
+#else
   peer.encrypt = false;
+#endif
   return esp_now_add_peer(&peer) == ESP_OK;
 }
 

@@ -50,7 +50,7 @@ void EspNowBridge::handlePacket(const EspNowPacket &pkt) {
     case linkproto::FrameType::Discover: {
       wire::Role clientRole;
       if (!linkproto::decodeDiscover(pkt.data, pkt.len, &clientRole)) return;
-      radio_.addPeer(pkt.mac);
+      radio_.addPeer(pkt.mac, true);
       memcpy(lastClientMac_, pkt.mac, 6);
       haveClient_ = true;
       sendAnnounce(pkt.mac);
@@ -61,7 +61,7 @@ void EspNowBridge::handlePacket(const EspNowPacket &pkt) {
       const char *payload = nullptr;
       size_t len = linkproto::decodeRelay(pkt.data, pkt.len, &payload);
       if (len == 0 || !relayFn_) return;
-      radio_.addPeer(pkt.mac);
+      radio_.addPeer(pkt.mac, true);
       memcpy(lastClientMac_, pkt.mac, 6);
       haveClient_ = true;
       bool ok = relayFn_(relayCtx_, payload, len);

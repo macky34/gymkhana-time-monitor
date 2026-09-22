@@ -28,7 +28,11 @@ class EspNowRadio {
   // broadcast address as a peer (needed for Discover/Announce).
   bool begin();
 
-  bool addPeer(const uint8_t mac[6]);
+  // encrypt: true encrypts unicast traffic to/from this peer, using
+  // config.h's ESPNOW_LMK as both PMK (set once in begin()) and this
+  // peer's LMK. Only meaningful when ESPNOW_LMK is defined; broadcast
+  // peers must stay unencrypted (ESP-NOW can't encrypt broadcast frames).
+  bool addPeer(const uint8_t mac[6], bool encrypt = false);
   bool send(const uint8_t mac[6], const uint8_t *data, size_t len);
   bool sendBroadcast(const uint8_t *data, size_t len);
 

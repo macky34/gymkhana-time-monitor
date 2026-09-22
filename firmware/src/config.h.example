@@ -42,6 +42,14 @@
 // enable only after comparing range/RSSI against normal mode outdoors.
 // #define ESPNOW_LR_MODE
 
+// Uncomment and fill in a 16-byte key to encrypt unicast ESP-NOW traffic
+// (Relay/Config/TimeReq/TimeResp) between host and client. Used as both the
+// PMK and each peer's LMK. Broadcast frames (Discover/Announce) are never
+// encrypted -- ESP-NOW doesn't support that. Both sensors run the same
+// firmware, so this stays in sync automatically. Default off (unencrypted,
+// matching all prior phases).
+// #define ESPNOW_LMK "0123456789abcdef"
+
 // --- Debug mode (issue #44) -------------------------------------------------
 // Uncomment ONE of these to override the physical role/link switch at boot
 // (for bench testing without wiring a switch). Leave both undefined to use
