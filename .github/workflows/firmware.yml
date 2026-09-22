@@ -6,6 +6,7 @@ name: firmware
 on:
   push:
     branches: [main]
+    tags: ['v*']
     paths:
       - 'firmware/**'
       - '.github/workflows/firmware.yml'
@@ -61,3 +62,87 @@ jobs:
       - name: Build
         working-directory: firmware
         run: pio run -e ${{ matrix.env }}
+
+  # タグ push(vX.Y.Z)時のみ: WiFi認証情報を含まない配布用バイナリをビルドし、
+  # merge_bin で単一の .bin ファイルに結合して GitHub Release へ添付する。
+  # config.h.example から生成する config.h は WIFI_SSID/WIFI_PASS を持たない
+  # ため、実機は初回起動時にシリアル経由のプロビジョニング(wifi_provision.cpp)
+  # に入る -- バイナリにパスワードは一切埋め込まれない。
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    name: release (${{ matrix.env }})
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - env: seeed_xiao_esp32c5
+            chip: esp32c5
+            bootloader_offset: '0x2000'
+          - env: seeed_xiao_esp32c6
+            chip: esp32c6
+            bootloader_offset: '0x0'
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.platformio
+            ~/.cache/pip
+          key: pio-${{ runner.os }}-${{ matrix.env }}-${{ hashFiles('firmware/platformio.ini') }}
+          restore-keys: |
+            pio-${{ runner.os }}-${{ matrix.env }}-
+
+      - name: Install PlatformIO
+        run: pip install --upgrade platformio intelhex reedsolo bitstring ecdsa pyserial cryptography pyyaml
+
+      - name: Generate distribution config.h (no WiFi credentials)
+        run: python3 firmware/tools/gen_dist_config.py ${{ matrix.env }} < firmware/src/config.h.example > firmware/src/config.h
+
+      - name: Build
+        working-directory: firmware
+        run: pio run -e ${{ matrix.env }}
+
+      - name: Merge into a single flashable image
+        working-directory: firmware
+        run: |
+          ESPTOOL=$(find ~/.platformio -maxdepth 3 -path '*tool-esptoolpy/esptool.py')
+          python3 "$ESPTOOL" --chip ${{ matrix.chip }} merge_bin \
+            -o timemon-firmware-${{ matrix.chip }}.bin \
+            ${{ matrix.bootloader_offset }} .pio/build/${{ matrix.env }}/bootloader.bin \
+            0x8000 .pio/build/${{ matrix.env }}/partitions.bin \
+            0x10000 .pio/build/${{ matrix.env }}/firmware.bin
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: timemon-firmware-${{ matrix.chip }}
+          path: firmware/timemon-firmware-${{ matrix.chip }}.bin
+          retention-days: 30
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v6
+        with:
+          path: artifacts
+
+      - name: Flatten release assets
+        run: |
+          mkdir -p dist
+          find artifacts -type f -name 'timemon-firmware-*.bin' -exec cp {} dist/ \;
+          ls -l dist
+
+      - uses: softprops/action-gh-release@v3
+        with:
+          files: dist/*
