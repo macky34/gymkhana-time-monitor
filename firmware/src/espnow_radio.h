@@ -17,6 +17,9 @@ struct EspNowPacket {
   uint8_t data[kEspNowMaxPayload];
   size_t len;
   int8_t rssi;
+  // Wall-clock microseconds, captured in the recv callback (as close to
+  // wire arrival as this stack gets) -- this is TimeResp's t2rx.
+  int64_t rxTimestampUs;
 };
 
 class EspNowRadio {
