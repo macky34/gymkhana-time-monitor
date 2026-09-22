@@ -118,7 +118,8 @@ void UplinkEspNow::loop(uint32_t nowMs) {
   }
 
   if (!haveHost_) {
-    state_ = UplinkState::Connecting;
+    // Without this, a role collision leaves state() stuck at Connecting forever.
+    state_ = roleCollision_ ? UplinkState::Failed : UplinkState::Connecting;
     sweepChannel(nowMs);
     pollPendingTrigger(nowMs);
     return;

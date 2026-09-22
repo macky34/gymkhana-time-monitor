@@ -20,6 +20,7 @@ const char *backgroundName(PilotIndicator::LinkBackground bg) {
     case PilotIndicator::LinkBackground::Searching: return "searching";
     case PilotIndicator::LinkBackground::Linked: return "linked";
     case PilotIndicator::LinkBackground::UplinkDown: return "uplink_down";
+    case PilotIndicator::LinkBackground::RoleCollision: return "role_collision";
   }
   return "?";
 }
@@ -28,10 +29,12 @@ const char *backgroundName(PilotIndicator::LinkBackground bg) {
 
 void DebugMonitor::begin(const StatusLed *statusLed,
                           const PilotIndicator *pilotLed,
-                          const Uplink *uplink) {
+                          const Uplink *uplink,
+                          const UplinkEspNow *uplinkEspNow) {
   statusLed_ = statusLed;
   pilotLed_ = pilotLed;
   uplink_ = uplink;
+  uplinkEspNow_ = uplinkEspNow;
   lastPattern_ = statusLed_->pattern();
   lastBackground_ = pilotLed_->linkBackground();
   lastStatusMs_ = 0;
@@ -53,5 +56,10 @@ void DebugMonitor::poll(uint32_t nowMs) {
 
   if (nowMs - lastStatusMs_ < kStatusIntervalMs) return;
   lastStatusMs_ = nowMs;
-  Serial.printf("[debug] ntp_synced=%d\n", uplink_->timebase().synced());
+  Serial.printf("[debug] ntp_synced=%d ntp_offset_ms=%.3f\n",
+                uplink_->timebase().synced(), uplink_->ntpOffsetMs());
+  if (uplink_ == static_cast<const Uplink *>(uplinkEspNow_)) {
+    Serial.printf("[debug] rssi=%d role_collision=%d\n", uplinkEspNow_->rssi(),
+                  uplinkEspNow_->roleCollision());
+  }
 }
