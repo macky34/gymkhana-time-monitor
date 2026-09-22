@@ -26,6 +26,7 @@
 #include "lockout.h"
 #include "mode_switch.h"
 #include "pilot_indicator.h"
+#include "serial_console.h"
 #include "status_led.h"
 #include "uplink.h"
 #include "uplink_espnow.h"
@@ -56,6 +57,7 @@ static UplinkEspNow uplinkEspNow;
 static Uplink *uplink = &uplinkWifi;  // picked in setup() based on linkSwitch
 static Identity identity;
 static Lockout lockout;
+static SerialConsole serialConsole;
 static EdgeQueue<8> edgeQueue;
 static uint32_t lastTriggerAcceptedMs = 0;  // 0 = never; used to hold off a
                                              // role-change restart mid-run.
@@ -207,6 +209,8 @@ void setup() {
   debugMonitor.begin(&statusLed, &pilotLed, uplink);
 #endif
 
+  serialConsole.begin(role, espNowEnabled, uplink, &uplinkEspNow);
+
   // Block here (matching the original setup()'s behavior) until the uplink
   // reaches a terminal startup state, driving the same loop-based state
   // machine so the LED updates normally instead of duplicating connect/sync
@@ -246,6 +250,8 @@ void loop() {
 #ifdef DEBUG_VERBOSE
   debugMonitor.poll(nowMs);
 #endif
+
+  serialConsole.poll(nowMs);
 
   delay(1);
 }
