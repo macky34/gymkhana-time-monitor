@@ -3,13 +3,16 @@
 // that channel. Detects a role collision (host announcing the same role as
 // this client) and refuses to link. A trigger (Burst3) queues for up to 3s
 // if the link isn't usable yet, then is dropped; hb (Once) is never queued.
-// Time sync via TimeReq/TimeResp lands in Phase 5, so timebase() never
-// syncs here -- trigger send is naturally gated off by drainEdges()'s
-// existing "drop while unsynced" check in main.cpp, independent of the
-// queueing here (which exists for when Phase 5 makes triggers flow).
+//
+// Time sync: once linked, exchanges 5 TimeReq/TimeResp round trips (see
+// link_frame.h), keeps the lowest-delay sample (lib/timebase's
+// OffsetFilter, an NTP minimum filter), and anchors timebase() from it.
+// Re-syncs every 5 minutes; skips re-anchoring if a trigger was accepted
+// within the current lockout window, to avoid a mid-run timestamp jump.
 #pragma once
 
 #include "espnow_radio.h"
+#include "offset_filter.h"
 #include "uplink.h"
 #include "wire.h"
 
@@ -25,6 +28,8 @@ class UplinkEspNow : public Uplink {
   uint32_t lockoutMs() const override { return lockoutMs_; }
 
   bool sendToServer(const char *payload, size_t len, Redundancy r) override;
+  double ntpOffsetMs() const override { return ntpOffsetMs_; }
+  void onTriggerAccepted(uint32_t nowMs) override { lastTriggerAcceptedMs_ = nowMs; }
 
   // Whether the last Announce from our host reported its own uplink to the
   // server as up. Drives the pilot lamp's UplinkDown background pattern.
@@ -45,6 +50,11 @@ class UplinkEspNow : public Uplink {
   bool sendRelay(const char *payload, size_t len);
   void pollPendingTrigger(uint32_t nowMs);
   bool linkUsable() const;
+
+  void startTimeSync(uint32_t nowMs);
+  void sendTimeReq(uint32_t nowMs);
+  void pollTimeSync(uint32_t nowMs);
+  void finishTimeSync(uint32_t nowMs);
 
   EspNowRadio radio_;
   wire::Role role_ = wire::Role::Start;
@@ -73,4 +83,17 @@ class UplinkEspNow : public Uplink {
     bool active = false;
   } pendingTrigger_;
   static constexpr uint32_t kTriggerRetryMs = 3000;
+
+  // 4-point time sync (TimeReq/TimeResp).
+  enum class SyncPhase : uint8_t { Idle, Exchanging };
+  OffsetFilter offsetFilter_;
+  SyncPhase syncPhase_ = SyncPhase::Idle;
+  int syncExchangesDone_ = 0;
+  uint32_t syncExchangeStartMs_ = 0;
+  uint32_t lastSyncStartMs_ = 0;  // 0 = never yet synced
+  uint32_t lastTriggerAcceptedMs_ = 0;  // 0 = never
+  double ntpOffsetMs_ = 0.0;
+  static constexpr int kSyncExchangeCount = 5;
+  static constexpr uint32_t kSyncExchangeTimeoutMs = 200;
+  static constexpr uint32_t kResyncIntervalMs = 5UL * 60UL * 1000UL;  // 5 min
 };
