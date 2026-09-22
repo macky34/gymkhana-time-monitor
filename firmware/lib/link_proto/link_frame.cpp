@@ -74,4 +74,44 @@ size_t decodeConfig(const uint8_t *data, size_t len, const char **outPayload) {
   return len - kHeaderLen;
 }
 
+size_t encodeTimeReq(uint8_t *out, size_t cap, int64_t t1) {
+  if (cap < kHeaderLen + sizeof(int64_t)) return 0;
+  out[0] = static_cast<uint8_t>(FrameType::TimeReq);
+  memcpy(out + kHeaderLen, &t1, sizeof(int64_t));
+  return kHeaderLen + sizeof(int64_t);
+}
+
+bool decodeTimeReq(const uint8_t *data, size_t len, int64_t *outT1) {
+  if (len < kHeaderLen + sizeof(int64_t) || !typeMatches(data, len, FrameType::TimeReq)) {
+    return false;
+  }
+  memcpy(outT1, data + kHeaderLen, sizeof(int64_t));
+  return true;
+}
+
+size_t encodeTimeResp(uint8_t *out, size_t cap, const TimeRespInfo &info) {
+  size_t need = kHeaderLen + 3 * sizeof(int64_t);
+  if (cap < need) return 0;
+  out[0] = static_cast<uint8_t>(FrameType::TimeResp);
+  size_t off = kHeaderLen;
+  memcpy(out + off, &info.t1, sizeof(int64_t));
+  off += sizeof(int64_t);
+  memcpy(out + off, &info.t2rx, sizeof(int64_t));
+  off += sizeof(int64_t);
+  memcpy(out + off, &info.t2tx, sizeof(int64_t));
+  return need;
+}
+
+bool decodeTimeResp(const uint8_t *data, size_t len, TimeRespInfo *out) {
+  size_t need = kHeaderLen + 3 * sizeof(int64_t);
+  if (len < need || !typeMatches(data, len, FrameType::TimeResp)) return false;
+  size_t off = kHeaderLen;
+  memcpy(&out->t1, data + off, sizeof(int64_t));
+  off += sizeof(int64_t);
+  memcpy(&out->t2rx, data + off, sizeof(int64_t));
+  off += sizeof(int64_t);
+  memcpy(&out->t2tx, data + off, sizeof(int64_t));
+  return true;
+}
+
 }  // namespace linkproto

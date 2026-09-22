@@ -85,6 +85,43 @@ static void test_config_round_trip(void) {
   TEST_ASSERT_EQUAL_MEMORY(payload, out, payloadLen);
 }
 
+static void test_time_req_round_trip(void) {
+  uint8_t buf[16];
+  size_t n = linkproto::encodeTimeReq(buf, sizeof(buf), 1234567890123LL);
+  TEST_ASSERT_EQUAL_size_t(9, n);
+
+  int64_t t1 = 0;
+  TEST_ASSERT_TRUE(linkproto::decodeTimeReq(buf, n, &t1));
+  TEST_ASSERT_EQUAL_INT64(1234567890123LL, t1);
+}
+
+static void test_time_req_buffer_too_small_returns_zero(void) {
+  uint8_t buf[4];
+  size_t n = linkproto::encodeTimeReq(buf, sizeof(buf), 1);
+  TEST_ASSERT_EQUAL_size_t(0, n);
+}
+
+static void test_time_resp_round_trip(void) {
+  uint8_t buf[32];
+  linkproto::TimeRespInfo info{100, 2000, 2005};
+  size_t n = linkproto::encodeTimeResp(buf, sizeof(buf), info);
+  TEST_ASSERT_EQUAL_size_t(25, n);
+
+  linkproto::TimeRespInfo out{};
+  TEST_ASSERT_TRUE(linkproto::decodeTimeResp(buf, n, &out));
+  TEST_ASSERT_EQUAL_INT64(100, out.t1);
+  TEST_ASSERT_EQUAL_INT64(2000, out.t2rx);
+  TEST_ASSERT_EQUAL_INT64(2005, out.t2tx);
+}
+
+static void test_time_resp_rejects_wrong_type(void) {
+  uint8_t buf[32];
+  linkproto::encodeTimeReq(buf, sizeof(buf), 1);
+
+  linkproto::TimeRespInfo out{};
+  TEST_ASSERT_FALSE(linkproto::decodeTimeResp(buf, 9, &out));
+}
+
 static void test_peek_type(void) {
   uint8_t buf[8];
   linkproto::encodeAnnounce(buf, sizeof(buf), {1, wire::Role::Start, true});
@@ -109,6 +146,10 @@ int main(int argc, char **argv) {
   RUN_TEST(test_relay_buffer_too_small_returns_zero);
   RUN_TEST(test_decode_relay_rejects_wrong_type);
   RUN_TEST(test_config_round_trip);
+  RUN_TEST(test_time_req_round_trip);
+  RUN_TEST(test_time_req_buffer_too_small_returns_zero);
+  RUN_TEST(test_time_resp_round_trip);
+  RUN_TEST(test_time_resp_rejects_wrong_type);
   RUN_TEST(test_peek_type);
   RUN_TEST(test_peek_type_empty_buffer_returns_false);
   return UNITY_END();
