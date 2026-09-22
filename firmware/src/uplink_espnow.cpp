@@ -8,11 +8,6 @@
 #include "config.h"
 #include "link_frame.h"
 
-namespace {
-constexpr uint32_t kDiscoverIntervalMs = 2000;
-constexpr uint32_t kAnnounceTimeoutMs = 10000;  // re-discover if the host goes quiet
-}  // namespace
-
 void UplinkEspNow::begin() {
   WiFi.mode(WIFI_STA);
   WiFi.persistent(false);
@@ -20,13 +15,14 @@ void UplinkEspNow::begin() {
   WiFi.disconnect(false, true);  // kill any saved-credential auto-connect
   WiFi.setSleep(false);
 
-  // Phase 3: fixed channel from config.h; Phase 4 adds the discovery sweep.
-  esp_wifi_set_channel(ESPNOW_CHANNEL, WIFI_SECOND_CHAN_NONE);
+  currentChannel_ = 1;
+  esp_wifi_set_channel(currentChannel_, WIFI_SECOND_CHAN_NONE);
+  channelSwitchMs_ = 0;
 
   radio_.begin();
   haveHost_ = false;
+  roleCollision_ = false;
   state_ = UplinkState::Connecting;
-  lastDiscoverMs_ = 0;
 }
 
 void UplinkEspNow::sendDiscover() {
@@ -34,6 +30,14 @@ void UplinkEspNow::sendDiscover() {
   size_t n = linkproto::encodeDiscover(buf, sizeof(buf), role_);
   if (n == 0) return;
   radio_.sendBroadcast(buf, n);
+}
+
+void UplinkEspNow::sweepChannel(uint32_t nowMs) {
+  if (channelSwitchMs_ != 0 && nowMs - channelSwitchMs_ < kChannelDwellMs) return;
+  channelSwitchMs_ = nowMs;
+  sendDiscover();
+  currentChannel_ = (currentChannel_ % 13) + 1;  // wrap 1..13
+  esp_wifi_set_channel(currentChannel_, WIFI_SECOND_CHAN_NONE);
 }
 
 void UplinkEspNow::handlePacket(const EspNowPacket &pkt, uint32_t nowMs) {
@@ -44,6 +48,17 @@ void UplinkEspNow::handlePacket(const EspNowPacket &pkt, uint32_t nowMs) {
     case linkproto::FrameType::Announce: {
       linkproto::AnnounceInfo info;
       if (!linkproto::decodeAnnounce(pkt.data, pkt.len, &info)) return;
+
+      if (info.hostRole == role_) {
+        if (!roleCollision_) {
+          Serial.println("[espnow] ROLE COLLISION: host announced the same "
+                          "role as this client, refusing to link");
+        }
+        roleCollision_ = true;
+        return;
+      }
+      roleCollision_ = false;
+
       if (!haveHost_) {
         memcpy(hostMac_, pkt.mac, 6);
         radio_.addPeer(hostMac_);
@@ -52,6 +67,7 @@ void UplinkEspNow::handlePacket(const EspNowPacket &pkt, uint32_t nowMs) {
       }
       lastAnnounceRxMs_ = nowMs;
       hostUplinkUp_ = info.uplinkUp;
+      lastRssi_ = pkt.rssi;
       break;
     }
     case linkproto::FrameType::Config: {
@@ -69,6 +85,10 @@ void UplinkEspNow::handlePacket(const EspNowPacket &pkt, uint32_t nowMs) {
   }
 }
 
+bool UplinkEspNow::linkUsable() const {
+  return haveHost_ && !roleCollision_ && hostUplinkUp_;
+}
+
 void UplinkEspNow::loop(uint32_t nowMs) {
   EspNowPacket pkt;
   while (radio_.poll(&pkt)) {
@@ -77,29 +97,56 @@ void UplinkEspNow::loop(uint32_t nowMs) {
 
   if (!haveHost_) {
     state_ = UplinkState::Connecting;
-    if (nowMs - lastDiscoverMs_ >= kDiscoverIntervalMs) {
-      lastDiscoverMs_ = nowMs;
-      sendDiscover();
-    }
+    sweepChannel(nowMs);
+    pollPendingTrigger(nowMs);
     return;
   }
 
   if (nowMs - lastAnnounceRxMs_ > kAnnounceTimeoutMs) {
-    Serial.println("[espnow] host announce timed out, re-discovering");
+    Serial.println("[espnow] host announce timed out, re-sweeping");
     haveHost_ = false;
+    roleCollision_ = false;
     state_ = UplinkState::Connecting;
+    pollPendingTrigger(nowMs);
     return;
   }
 
-  state_ = UplinkState::Ready;
+  state_ = roleCollision_ ? UplinkState::Failed : UplinkState::Ready;
+  pollPendingTrigger(nowMs);
 }
 
-bool UplinkEspNow::sendToServer(const char *payload, size_t len, Redundancy r) {
-  (void)r;  // Phase 3: hb only (sent with Once anyway); trigger relay and
-            // burst retry over ESP-NOW land in Phase 4.
-  if (!haveHost_) return false;
+bool UplinkEspNow::sendRelay(const char *payload, size_t len) {
   uint8_t buf[kEspNowMaxPayload];
   size_t n = linkproto::encodeRelay(buf, sizeof(buf), payload, len);
   if (n == 0) return false;
   return radio_.send(hostMac_, buf, n);
+}
+
+void UplinkEspNow::pollPendingTrigger(uint32_t nowMs) {
+  if (!pendingTrigger_.active) return;
+  if (linkUsable()) {
+    sendRelay(pendingTrigger_.payload, pendingTrigger_.len);
+    pendingTrigger_.active = false;
+    return;
+  }
+  if (nowMs - pendingTrigger_.queuedAtMs > kTriggerRetryMs) {
+    Serial.println("[espnow] trigger dropped: no usable uplink after 3s retry");
+    pendingTrigger_.active = false;
+  }
+}
+
+bool UplinkEspNow::sendToServer(const char *payload, size_t len, Redundancy r) {
+  if (linkUsable()) return sendRelay(payload, len);
+
+  // hb: don't queue, the next one is 5s away anyway.
+  if (r != Redundancy::Burst3) return false;
+
+  // trigger: queue for up to kTriggerRetryMs rather than dropping it
+  // immediately, in case the host's uplink recovers in time.
+  if (len >= sizeof(pendingTrigger_.payload)) return false;
+  memcpy(pendingTrigger_.payload, payload, len);
+  pendingTrigger_.len = len;
+  pendingTrigger_.queuedAtMs = millis();
+  pendingTrigger_.active = true;
+  return true;
 }

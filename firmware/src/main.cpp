@@ -116,13 +116,30 @@ static void updateLinkBackground() {
     pilotLed.setLinkBackground(PilotIndicator::LinkBackground::None);
     return;
   }
-  if (uplinkEspNow.state() != UplinkState::Ready) {
+  if (uplinkEspNow.roleCollision()) {
+    pilotLed.setLinkBackground(PilotIndicator::LinkBackground::RoleCollision);
+  } else if (uplinkEspNow.state() != UplinkState::Ready) {
     pilotLed.setLinkBackground(PilotIndicator::LinkBackground::Searching);
   } else if (!uplinkEspNow.hostUplinkUp()) {
     pilotLed.setLinkBackground(PilotIndicator::LinkBackground::UplinkDown);
   } else {
     pilotLed.setLinkBackground(PilotIndicator::LinkBackground::Linked);
   }
+}
+
+// Every 5s (matching the hb interval) while ESP-NOW-linked, pulses the
+// pilot lamp to show signal strength: 1 pulse = strong, 2 = medium, 3 =
+// weak (thresholds are rough dBm bands, not calibrated to any spec).
+static void maybeShowRssi(uint32_t nowMs) {
+  static uint32_t lastRssiMs = 0;
+  if (uplink != static_cast<Uplink *>(&uplinkEspNow)) return;
+  if (uplinkEspNow.state() != UplinkState::Ready) return;
+  if (nowMs - lastRssiMs < 5000) return;
+  lastRssiMs = nowMs;
+
+  int8_t rssi = uplinkEspNow.rssi();
+  int pulses = (rssi >= -60) ? 1 : (rssi >= -75) ? 2 : 3;
+  pilotLed.startPulses(nowMs, pulses);
 }
 
 // Restarts on a confirmed role- or link-switch flip, unless a trigger was
@@ -193,6 +210,7 @@ void loop() {
   drainEdges(nowMs);
   maybeHeartbeat(nowMs);
   updateLinkBackground();
+  maybeShowRssi(nowMs);
   pilotLed.poll(nowMs);
 
   modeSwitch.poll(nowMs);
