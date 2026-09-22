@@ -1,9 +1,6 @@
 // Copy to config.h and fill in per device. config.h is gitignored so each
-// physical sensor (start / goal) keeps its own build-time identity.
+// physical sensor keeps its own build-time identity.
 #pragma once
-
-// Which sensor this board is: "start" or "goal".
-#define SENSOR_ID "start"
 
 // Venue WiFi (the RPi's hotspot / LAN).
 #define WIFI_SSID "timemon-lan"
@@ -23,6 +20,7 @@
 #define STATUS_LED_GPIO 24   // D5, external LED1 via MOSFET (GPIO27 is LED_BUILTIN-only, not header-accessible)
 #define LED_ACTIVE_LOW 0     // external LED1 is lit when the GPIO is driven HIGH (MOSFET gate)
 #define PILOT_LED_GPIO 11    // D6, external LED2 (pilot lamp) via its own MOSFET, active-high
+#define MODE_SWITCH_GPIO 8   // D8, start/goal role switch (INPUT_PULLUP, GND=Goal, OPEN=Start)
 // USE_EXTERNAL_ANTENNA has no effect on the C5 (no antenna switch; fixed
 // onboard u.FL antenna) -- leave it undefined. WiFi band is pinned to 2.4GHz
 // in main.cpp since the C5 is dual-band and the venue AP is 2.4GHz-only.
@@ -38,4 +36,5 @@
 //   #define STATUS_LED_GPIO 23   // D5, external LED1 via its own MOSFET (see C5 comment above)
 //   #define LED_ACTIVE_LOW 0     // external LED1 is lit when driven HIGH (MOSFET gate)
 //   #define PILOT_LED_GPIO 16    // D6, external LED2 (pilot lamp) via its own MOSFET, active-high
+//   #define MODE_SWITCH_GPIO 19  // D8, start/goal role switch (INPUT_PULLUP, GND=Goal, OPEN=Start)
 //   #define USE_EXTERNAL_ANTENNA 0  // 0 = onboard chip antenna, 1 = external (u.FL)
