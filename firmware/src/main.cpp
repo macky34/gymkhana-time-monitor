@@ -19,6 +19,7 @@
 
 #include "board.h"
 #include "config.h"
+#include "debug_monitor.h"
 #include "edge_queue.h"
 #include "identity.h"
 #include "link_switch.h"
@@ -33,6 +34,17 @@
 
 #ifndef LED_ACTIVE_LOW
 #define LED_ACTIVE_LOW 0
+#endif
+
+#if defined(DEBUG_FORCE_ROLE_START) && defined(DEBUG_FORCE_ROLE_GOAL)
+#error "DEBUG_FORCE_ROLE_START and DEBUG_FORCE_ROLE_GOAL are mutually exclusive"
+#endif
+#if defined(DEBUG_FORCE_LINK_ESPNOW) && defined(DEBUG_FORCE_LINK_WIFI)
+#error "DEBUG_FORCE_LINK_ESPNOW and DEBUG_FORCE_LINK_WIFI are mutually exclusive"
+#endif
+
+#ifdef DEBUG_VERBOSE
+static DebugMonitor debugMonitor;
 #endif
 
 static StatusLed statusLed;
@@ -150,19 +162,35 @@ void setup() {
   modeSwitch.begin(MODE_SWITCH_GPIO);
   linkSwitch.begin(LINK_SWITCH_GPIO);
   wire::Role role = modeSwitch.role();
+#if defined(DEBUG_FORCE_ROLE_START)
+  role = wire::Role::Start;
+#elif defined(DEBUG_FORCE_ROLE_GOAL)
+  role = wire::Role::Goal;
+#endif
   pilotLed.playRoleIntro(role);
 
   pinMode(SENSOR_GPIO, INPUT_PULLUP);
 
+  bool espNowEnabled = linkSwitch.espNowEnabled();
+#if defined(DEBUG_FORCE_LINK_ESPNOW)
+  espNowEnabled = true;
+#elif defined(DEBUG_FORCE_LINK_WIFI)
+  espNowEnabled = false;
+#endif
+
   uplinkWifi.setRole(role);
   uplinkEspNow.setRole(role);
-  uplink = linkSwitch.espNowEnabled() ? static_cast<Uplink *>(&uplinkEspNow)
-                                       : static_cast<Uplink *>(&uplinkWifi);
+  uplink = espNowEnabled ? static_cast<Uplink *>(&uplinkEspNow)
+                         : static_cast<Uplink *>(&uplinkWifi);
   uplink->begin();
   // Must run after uplink->begin() (which calls WiFi.mode(WIFI_STA)): the RF
   // hardware needs to be initialized for esp_random() to be a true hardware
   // RNG (see identity.h).
   identity.begin(role);
+
+#ifdef DEBUG_VERBOSE
+  debugMonitor.begin(&statusLed, &pilotLed, uplink);
+#endif
 
   // Block here (matching the original setup()'s behavior) until the uplink
   // reaches a terminal startup state, driving the same loop-based state
@@ -198,6 +226,10 @@ void loop() {
   modeSwitch.poll(nowMs);
   linkSwitch.poll(nowMs);
   maybeRestartOnSwitchChange(nowMs);
+
+#ifdef DEBUG_VERBOSE
+  debugMonitor.poll(nowMs);
+#endif
 
   delay(1);
 }

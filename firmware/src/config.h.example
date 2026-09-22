@@ -32,6 +32,19 @@
 // fallback stays in ms to match lockoutMs's internal representation).
 #define DEFAULT_LOCKOUT_MS 10000  // 10 seconds
 
+// --- Debug mode (issue #44) -------------------------------------------------
+// Uncomment ONE of these to override the physical role/link switch at boot
+// (for bench testing without wiring a switch). Leave both undefined to use
+// the switch as normal.
+// #define DEBUG_FORCE_ROLE_START
+// #define DEBUG_FORCE_ROLE_GOAL
+// #define DEBUG_FORCE_LINK_ESPNOW
+// #define DEBUG_FORCE_LINK_WIFI
+
+// Uncomment for verbose Serial logging: LED pattern/link-background
+// transitions, NTP sync status. Default off.
+// #define DEBUG_VERBOSE
+
 // --- Seeed Studio XIAO ESP32C6 (env:seeed_xiao_esp32c6) ---------------------
 // Uncomment/replace the above when building for the XIAO ESP32C6 instead:
 //   #define SENSOR_GPIO 1        // D1 pin (GPIO1)
