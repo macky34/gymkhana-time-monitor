@@ -29,6 +29,7 @@ class PilotIndicator {
   void flash(uint32_t nowMs);
 
   void setLinkBackground(LinkBackground bg) { background_ = bg; }
+  LinkBackground linkBackground() const { return background_; }
 
   // Starts a non-blocking pulse-count sequence (RSSI level: 1=strong,
   // 2=medium, 3=weak). Overrides the background layer until done; flash()

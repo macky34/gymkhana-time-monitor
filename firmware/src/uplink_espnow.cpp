@@ -118,7 +118,12 @@ void UplinkEspNow::loop(uint32_t nowMs) {
   }
 
   if (!haveHost_) {
-    state_ = UplinkState::Connecting;
+    // A role collision leaves haveHost_ false forever (handlePacket()
+    // refuses to link), so without this, state() would never reach
+    // Ready/Failed and main.cpp's setup() blocking loop would spin
+    // forever. Keep sweeping regardless -- the colliding host's role may
+    // change, or another (non-colliding) host may appear.
+    state_ = roleCollision_ ? UplinkState::Failed : UplinkState::Connecting;
     sweepChannel(nowMs);
     pollPendingTrigger(nowMs);
     return;
