@@ -66,7 +66,7 @@ void UplinkEspNow::handlePacket(const EspNowPacket &pkt, uint32_t nowMs) {
 
       if (!haveHost_) {
         memcpy(hostMac_, pkt.mac, 6);
-        radio_.addPeer(hostMac_);
+        radio_.addPeer(hostMac_, true);
         haveHost_ = true;
         Serial.println("[espnow] host found");
       }
