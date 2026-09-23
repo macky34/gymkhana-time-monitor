@@ -2,7 +2,7 @@
 
 #include <Arduino.h>
 
-bool LinkSwitch::read() const { return digitalRead(gpio_) == LOW; }
+bool LinkSwitch::read() const { return digitalRead(gpio_) != LOW; }
 
 void LinkSwitch::begin(uint8_t gpio) {
   gpio_ = gpio;
