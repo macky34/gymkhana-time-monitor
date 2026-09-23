@@ -1,14 +1,18 @@
 // UplinkEspNow: ESP-NOW client. Sweeps channels 1-13 (150ms dwell each)
 // broadcasting Discover until a host's Announce is heard, then locks onto
-// that channel. Detects a role collision (host announcing the same role as
-// this client) and refuses to link. A trigger (Burst3) queues for up to 3s
-// if the link isn't usable yet, then is dropped; hb (Once) is never queued.
+// that channel and that host's MAC -- packets from any other sender are
+// ignored from then on. Detects a role collision (host announcing the same
+// role as this client) and refuses to link. Once linked, a trigger
+// (Burst3) is relayed as a 3-packet burst (50ms apart) and also queues for
+// up to 3s if the link isn't usable yet; hb (Once) is sent at most once and
+// never queued. Re-sweeps if the host's Announce goes quiet for 10s or 5
+// relay sends in a row fail at the radio layer.
 //
 // Time sync: once linked, exchanges 5 TimeReq/TimeResp round trips (see
 // link_frame.h), keeps the lowest-delay sample (lib/timebase's
 // OffsetFilter, an NTP minimum filter), and anchors timebase() from it.
-// Re-syncs every 5 minutes; skips re-anchoring if a trigger was accepted
-// within the current lockout window, to avoid a mid-run timestamp jump.
+// Re-syncs every 5 minutes; a resync is slewed (TimeBase::reanchorSlewed),
+// never stepped, so it can't jump a timestamp mid-run.
 #pragma once
 
 #include "espnow_radio.h"
@@ -29,7 +33,6 @@ class UplinkEspNow : public Uplink {
 
   bool sendToServer(const char *payload, size_t len, Redundancy r) override;
   double ntpOffsetMs() const override { return ntpOffsetMs_; }
-  void onTriggerAccepted(uint32_t nowMs) override { lastTriggerAcceptedMs_ = nowMs; }
 
   // Whether the last Announce from our host reported its own uplink to the
   // server as up. Drives the pilot lamp's UplinkDown background pattern.
@@ -42,6 +45,12 @@ class UplinkEspNow : public Uplink {
 
   // RSSI of the last Announce heard from our host (dBm; 0 if none yet).
   int8_t rssi() const { return lastRssi_; }
+
+  // WiFi channel our host is on, from its last Announce (0 if none yet).
+  // Diagnostic only (see `status`'s printout) -- the client can't act on a
+  // channel change it hears about after the fact, since a channel switch is
+  // itself why the Announce carrying it would go unheard.
+  uint8_t hostChannel() const { return hostChannel_; }
 
  private:
   void handlePacket(const EspNowPacket &pkt, uint32_t nowMs);
@@ -67,12 +76,27 @@ class UplinkEspNow : public Uplink {
   bool hostUplinkUp_ = false;
   bool roleCollision_ = false;
   int8_t lastRssi_ = 0;
+  uint8_t hostChannel_ = 0;
   uint32_t lastAnnounceRxMs_ = 0;
 
   uint8_t currentChannel_ = 1;
   uint32_t channelSwitchMs_ = 0;
   static constexpr uint32_t kChannelDwellMs = 150;
   static constexpr uint32_t kAnnounceTimeoutMs = 10000;  // re-sweep if host goes quiet
+  static constexpr uint32_t kSendFailStreakLimit = 5;  // re-sweep if reached
+
+  // Non-blocking 3-packet relay burst for Redundancy::Burst3 (trigger),
+  // separate from pendingTrigger_ (which only applies before the link is
+  // usable at all): mirrors UplinkWifi's burst_, so a lost ESP-NOW frame
+  // doesn't lose the timing. hb (Once) is never queued here.
+  struct {
+    char payload[192];
+    size_t len = 0;
+    uint8_t remaining = 0;
+    uint32_t nextAtMs = 0;
+    bool active = false;
+  } relayBurst_;
+  void pollRelayBurst(uint32_t nowMs);
 
   // Holds a single trigger payload (Burst3 only) while the link isn't
   // usable yet, retrying for up to kTriggerRetryMs before giving up.
@@ -91,7 +115,6 @@ class UplinkEspNow : public Uplink {
   int syncExchangesDone_ = 0;
   uint32_t syncExchangeStartMs_ = 0;
   uint32_t lastSyncStartMs_ = 0;  // 0 = never yet synced
-  uint32_t lastTriggerAcceptedMs_ = 0;  // 0 = never
   double ntpOffsetMs_ = 0.0;
   static constexpr int kSyncExchangeCount = 5;
   static constexpr uint32_t kSyncExchangeTimeoutMs = 200;

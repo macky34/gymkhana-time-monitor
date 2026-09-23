@@ -16,7 +16,6 @@ class LinkSwitch {
   bool espNowEnabled() const { return enabled_; }
 
   bool changed() const { return changed_; }
-  void clearChanged() { changed_ = false; }
 
  private:
   static constexpr uint32_t kDebounceMs = 1000;

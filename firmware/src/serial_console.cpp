@@ -69,6 +69,7 @@ void SerialConsole::printStatus() const {
   Serial.printf("ntp offset uncertainty: %.3fms\n", uplink_->ntpOffsetMs());
   if (espNowEnabled_) {
     Serial.printf("rssi: %d dBm\n", uplinkEspNow_->rssi());
+    Serial.printf("host channel: %u\n", uplinkEspNow_->hostChannel());
     Serial.printf("role collision: %d\n", uplinkEspNow_->roleCollision());
     Serial.printf("host uplink up: %d\n", uplinkEspNow_->hostUplinkUp());
   }

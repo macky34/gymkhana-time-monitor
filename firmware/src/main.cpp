@@ -108,10 +108,29 @@ static void drainEdges(uint32_t nowMs) {
   }
 }
 
+static void maybeLogDroppedEdges(uint32_t nowMs) {
+  static uint32_t lastCheckMs = 0;
+  static uint32_t lastDropped = 0;
+  if (nowMs - lastCheckMs < 5000) return;
+  lastCheckMs = nowMs;
+
+  uint32_t dropped = edgeQueue.dropped();
+  if (dropped == lastDropped) return;
+  Serial.printf("[edge] queue overflow, dropped=%u (+%u)\n", dropped,
+                dropped - lastDropped);
+  lastDropped = dropped;
+}
+
 static void maybeHeartbeat(uint32_t nowMs) {
   static uint32_t lastHbMs = 0;
   if (nowMs - lastHbMs < 5000) return;
   lastHbMs = nowMs;
+
+  // Don't claim to be alive while triggers are still being silently
+  // dropped for lack of a clock (see drainEdges()) -- the admin UI's "last
+  // seen" would otherwise look healthy for a sensor that's actually
+  // recording nothing.
+  if (!uplink->timebase().synced()) return;
 
   uint32_t seq = identity.nextHbSeq();
   char payload[192];
@@ -214,9 +233,17 @@ void setup() {
   // Block here (matching the original setup()'s behavior) until the uplink
   // reaches a terminal startup state, driving the same loop-based state
   // machine so the LED updates normally instead of duplicating connect/sync
-  // logic here.
+  // logic here. Bounded, not indefinite: an ESP-NOW client's channel sweep
+  // has no timeout by design (Sensor-Device wiki §6.2/6.5) and WiFi-direct
+  // can retry for up to several minutes, so this must not stall the
+  // interrupt/switches/serial console forever waiting on a host or AP that
+  // hasn't appeared yet -- the state machine keeps advancing in loop()
+  // either way.
+  constexpr uint32_t kSetupWaitMs = 15000;
+  uint32_t setupStartMs = millis();
   while (uplink->state() != UplinkState::Ready && uplink->state() != UplinkState::Failed) {
     uint32_t now = millis();
+    if (now - setupStartMs > kSetupWaitMs) break;
     uplink->loop(now);
     statusLed.set(patternFor(uplink->state()));
     statusLed.poll(now);
@@ -238,6 +265,7 @@ void loop() {
   statusLed.poll(nowMs);
 
   drainEdges(nowMs);
+  maybeLogDroppedEdges(nowMs);
   maybeHeartbeat(nowMs);
   updateLinkBackground();
   maybeShowRssi(nowMs);

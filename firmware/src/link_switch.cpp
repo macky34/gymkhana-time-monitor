@@ -7,6 +7,7 @@ bool LinkSwitch::read() const { return digitalRead(gpio_) == LOW; }
 void LinkSwitch::begin(uint8_t gpio) {
   gpio_ = gpio;
   pinMode(gpio_, INPUT_PULLUP);
+  delay(5);  // let the pull-up settle before the first read
   enabled_ = read();
   pendingEnabled_ = enabled_;
   pendingInit_ = false;

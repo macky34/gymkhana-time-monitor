@@ -61,14 +61,13 @@ bool parseLockoutMs(const char *body, size_t len, uint32_t *outMs) {
   char *strEnd = nullptr;
   double sec = strtod(buf, &strEnd);
   if (strEnd == buf) return false;  // no digits consumed
-  if (sec <= 0) return false;
+  // Matches the admin API's own sensor_lockout_sec bounds (internal/web);
+  // also guards the double->uint32_t conversion below against overflow/UB
+  // on a garbage or malicious value.
+  if (sec <= 0 || sec > 60) return false;
 
   *outMs = (uint32_t)(sec * 1000.0 + 0.5);
   return true;
-}
-
-bool looksLikeServerJson(const char *p, size_t len) {
-  return len > 0 && p[0] == '{';
 }
 
 }  // namespace wire

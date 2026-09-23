@@ -6,6 +6,7 @@
 #include <esp_wifi.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/queue.h>
+#include <atomic>
 #include <cstring>
 #include <sys/time.h>
 
@@ -19,6 +20,16 @@ const uint8_t kEspNowBroadcastMac[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 namespace {
 QueueHandle_t g_rxQueue = nullptr;
+std::atomic<uint32_t> g_sendFailStreak{0};
+
+void onSent(const esp_now_send_info_t *txInfo, esp_now_send_status_t status) {
+  (void)txInfo;
+  if (status == ESP_NOW_SEND_SUCCESS) {
+    g_sendFailStreak.store(0, std::memory_order_relaxed);
+  } else {
+    g_sendFailStreak.fetch_add(1, std::memory_order_relaxed);
+  }
+}
 
 void onRecv(const esp_now_recv_info_t *info, const uint8_t *data, int len) {
   if (!g_rxQueue || len <= 0 || (size_t)len > kEspNowMaxPayload) return;
@@ -44,6 +55,8 @@ bool EspNowRadio::begin() {
     g_rxQueue = xQueueCreate(8, sizeof(EspNowPacket));
   }
   esp_now_register_recv_cb(onRecv);
+  esp_now_register_send_cb(onSent);
+  g_sendFailStreak.store(0, std::memory_order_relaxed);
   return addPeer(kEspNowBroadcastMac);  // broadcast: always unencrypted
 }
 
@@ -75,6 +88,13 @@ bool EspNowRadio::sendBroadcast(const uint8_t *data, size_t len) {
 bool EspNowRadio::poll(EspNowPacket *out) {
   if (!g_rxQueue) return false;
   return xQueueReceive(g_rxQueue, out, 0) == pdTRUE;
+}
+
+uint32_t EspNowRadio::sendFailStreak() const {
+  return g_sendFailStreak.load(std::memory_order_relaxed);
+}
+void EspNowRadio::resetSendFailStreak() {
+  g_sendFailStreak.store(0, std::memory_order_relaxed);
 }
 
 bool EspNowRadio::enableLongRange() {

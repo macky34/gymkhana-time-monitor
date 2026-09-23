@@ -28,7 +28,8 @@ void StatusLed::poll(uint32_t nowMs) {
       write(true);
       break;
     case LedPattern::BlinkFast:
-      write(((nowMs - phaseStartMs_) / 250) % 2 == 0);
+      // ~4Hz (Sensor-Device wiki §4.1), i.e. faster than BlinkSlow below.
+      write(((nowMs - phaseStartMs_) / 125) % 2 == 0);
       break;
     case LedPattern::BlinkSlow:
       write(((nowMs - phaseStartMs_) / 200) % 2 == 0);

@@ -9,6 +9,7 @@ wire::Role ModeSwitch::read() const {
 void ModeSwitch::begin(uint8_t gpio) {
   gpio_ = gpio;
   pinMode(gpio_, INPUT_PULLUP);
+  delay(5);  // let the pull-up settle before the first read
   role_ = read();
   pendingRole_ = role_;
   pendingInit_ = false;

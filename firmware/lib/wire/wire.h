@@ -36,11 +36,8 @@ size_t buildHeartbeat(char *out, size_t cap, Role role, uint32_t bootId,
 // original parseLockoutMs()'s tolerant substring-scan behavior (no JSON
 // parser, no "type" field check). On success writes the value converted to
 // milliseconds (rounded) to *outMs and returns true. Leaves *outMs untouched
-// and returns false if the field is missing, unparsable, or <= 0.
+// and returns false if the field is missing, unparsable, or outside (0, 60]
+// seconds (matching the admin API's own sensor_lockout_sec validation).
 bool parseLockoutMs(const char *body, size_t len, uint32_t *outMs);
-
-// True if the first byte of the buffer is '{' (the server's cheap pre-filter
-// before attempting a JSON parse; timing.go:246).
-bool looksLikeServerJson(const char *p, size_t len);
 
 }  // namespace wire

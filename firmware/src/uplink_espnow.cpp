@@ -54,6 +54,15 @@ void UplinkEspNow::handlePacket(const EspNowPacket &pkt, uint32_t nowMs) {
   linkproto::FrameType type;
   if (!linkproto::peekType(pkt.data, pkt.len, &type)) return;
 
+  // Announce is the only frame type accepted from a not-yet-locked-in
+  // sender (that's how a host is discovered). Once linked, everything --
+  // including further Announces -- must come from the same MAC as our
+  // locked-in host, or it's ignored: this stops a second, independent
+  // sensor pair at the same venue (or a spoofed frame) from disrupting or
+  // corrupting this link.
+  if (haveHost_ && memcmp(pkt.mac, hostMac_, 6) != 0) return;
+  if (!haveHost_ && type != linkproto::FrameType::Announce) return;
+
   switch (type) {
     case linkproto::FrameType::Announce: {
       linkproto::AnnounceInfo info;
@@ -72,11 +81,13 @@ void UplinkEspNow::handlePacket(const EspNowPacket &pkt, uint32_t nowMs) {
       if (!haveHost_) {
         memcpy(hostMac_, pkt.mac, 6);
         radio_.addPeer(hostMac_, true);
+        radio_.resetSendFailStreak();
         haveHost_ = true;
         Serial.println("[espnow] host found");
       }
       lastAnnounceRxMs_ = nowMs;
       hostUplinkUp_ = info.uplinkUp;
+      hostChannel_ = info.channel;
       lastRssi_ = pkt.rssi;
       break;
     }
@@ -134,6 +145,7 @@ void UplinkEspNow::loop(uint32_t nowMs) {
     Serial.println("[espnow] host announce timed out, re-sweeping");
     haveHost_ = false;
     roleCollision_ = false;
+    relayBurst_.active = false;  // don't relay a stale burst to a new host
     timebase_.invalidate();
     syncPhase_ = SyncPhase::Idle;
     lastSyncStartMs_ = 0;
@@ -142,7 +154,27 @@ void UplinkEspNow::loop(uint32_t nowMs) {
     return;
   }
 
-  state_ = roleCollision_ ? UplinkState::Failed : UplinkState::Ready;
+  if (radio_.sendFailStreak() >= kSendFailStreakLimit) {
+    Serial.println("[espnow] too many failed sends in a row, re-sweeping");
+    radio_.resetSendFailStreak();
+    haveHost_ = false;
+    roleCollision_ = false;
+    relayBurst_.active = false;  // don't relay a stale burst to a new host
+    timebase_.invalidate();
+    syncPhase_ = SyncPhase::Idle;
+    lastSyncStartMs_ = 0;
+    state_ = UplinkState::Connecting;
+    pollPendingTrigger(nowMs);
+    return;
+  }
+
+  if (roleCollision_) {
+    state_ = UplinkState::Failed;
+  } else if (timebase_.synced()) {
+    state_ = UplinkState::Ready;
+  } else {
+    state_ = UplinkState::Syncing;
+  }
 
   pollTimeSync(nowMs);
   if (syncPhase_ == SyncPhase::Idle && linkUsable() &&
@@ -150,6 +182,7 @@ void UplinkEspNow::loop(uint32_t nowMs) {
     startTimeSync(nowMs);
   }
 
+  pollRelayBurst(nowMs);
   pollPendingTrigger(nowMs);
 }
 
@@ -187,25 +220,19 @@ void UplinkEspNow::pollTimeSync(uint32_t nowMs) {
 }
 
 void UplinkEspNow::finishTimeSync(uint32_t nowMs) {
+  (void)nowMs;
   syncPhase_ = SyncPhase::Idle;
   if (!offsetFilter_.hasSample()) {
     Serial.println("[espnow] time sync: no usable sample, will retry at next resync");
     return;
   }
 
-  // Avoid a mid-run timestamp jump: skip re-anchoring (but keep the
-  // existing anchor) if a trigger was accepted within the current lockout
-  // window.
-  bool recentlyTriggered = lastTriggerAcceptedMs_ != 0 &&
-      (nowMs - lastTriggerAcceptedMs_) < lockoutMs_;
-  if (timebase_.synced() && recentlyTriggered) {
-    Serial.println("[espnow] time sync: deferring re-anchor (recent trigger)");
-    return;
-  }
-
   int64_t nowMono = esp_timer_get_time();
   int64_t nowWall = nowMono + offsetFilter_.bestOffsetUs();
-  timebase_.anchor(nowWall, nowMono);
+  // Slewed, not stepped: a periodic resync must never jump a timestamp
+  // mid-run. reanchorSlewed() hard-anchors on the very first sync (nothing
+  // to slew from yet) and gradually corrects on every later one.
+  timebase_.reanchorSlewed(nowWall, nowMono);
   ntpOffsetMs_ = offsetFilter_.bestDelayUs() / 2 / 1000.0;
   Serial.printf("[espnow] time synced, offset_uncertainty=%.3fms\n", ntpOffsetMs_);
 }
@@ -217,10 +244,28 @@ bool UplinkEspNow::sendRelay(const char *payload, size_t len) {
   return radio_.send(hostMac_, buf, n);
 }
 
+void UplinkEspNow::pollRelayBurst(uint32_t nowMs) {
+  if (!relayBurst_.active) return;
+  if ((int32_t)(nowMs - relayBurst_.nextAtMs) < 0) return;
+
+  sendRelay(relayBurst_.payload, relayBurst_.len);
+  relayBurst_.remaining--;
+  if (relayBurst_.remaining == 0) {
+    relayBurst_.active = false;
+  } else {
+    relayBurst_.nextAtMs = nowMs + 50;
+  }
+}
+
 void UplinkEspNow::pollPendingTrigger(uint32_t nowMs) {
   if (!pendingTrigger_.active) return;
   if (linkUsable()) {
     sendRelay(pendingTrigger_.payload, pendingTrigger_.len);
+    memcpy(relayBurst_.payload, pendingTrigger_.payload, pendingTrigger_.len);
+    relayBurst_.len = pendingTrigger_.len;
+    relayBurst_.remaining = 2;
+    relayBurst_.nextAtMs = nowMs + 50;
+    relayBurst_.active = true;
     pendingTrigger_.active = false;
     return;
   }
@@ -231,14 +276,26 @@ void UplinkEspNow::pollPendingTrigger(uint32_t nowMs) {
 }
 
 bool UplinkEspNow::sendToServer(const char *payload, size_t len, Redundancy r) {
-  if (linkUsable()) return sendRelay(payload, len);
+  if (r != Redundancy::Burst3) {
+    // hb: single relay, no burst/queue -- the next one is 5s away anyway.
+    if (!linkUsable()) return false;
+    return sendRelay(payload, len);
+  }
 
-  // hb: don't queue, the next one is 5s away anyway.
-  if (r != Redundancy::Burst3) return false;
-
-  // trigger: queue for up to kTriggerRetryMs rather than dropping it
-  // immediately, in case the host's uplink recovers in time.
   if (len >= sizeof(pendingTrigger_.payload)) return false;
+
+  if (linkUsable()) {
+    sendRelay(payload, len);
+    memcpy(relayBurst_.payload, payload, len);
+    relayBurst_.len = len;
+    relayBurst_.remaining = 2;
+    relayBurst_.nextAtMs = millis() + 50;
+    relayBurst_.active = true;
+    return true;
+  }
+
+  // Link not usable yet: queue for up to kTriggerRetryMs rather than
+  // dropping it immediately, in case the host's uplink recovers in time.
   memcpy(pendingTrigger_.payload, payload, len);
   pendingTrigger_.len = len;
   pendingTrigger_.queuedAtMs = millis();

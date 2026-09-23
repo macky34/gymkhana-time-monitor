@@ -48,6 +48,9 @@
 // encrypted -- ESP-NOW doesn't support that. Both sensors run the same
 // firmware, so this stays in sync automatically. Default off (unencrypted,
 // matching all prior phases).
+//
+// Generate a real key with `openssl rand -hex 8` (16 hex characters = 16
+// bytes) -- do NOT uncomment the placeholder below as-is, it is not random.
 // #define ESPNOW_LMK "0123456789abcdef"
 
 // --- Debug mode (issue #44) -------------------------------------------------

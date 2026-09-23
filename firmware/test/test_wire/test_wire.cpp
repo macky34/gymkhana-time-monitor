@@ -99,10 +99,20 @@ static void test_parse_lockout_ms_not_null_terminated(void) {
   TEST_ASSERT_EQUAL_UINT32(7000, ms);
 }
 
-static void test_looks_like_server_json(void) {
-  TEST_ASSERT_TRUE(wire::looksLikeServerJson("{\"a\":1}", 7));
-  TEST_ASSERT_FALSE(wire::looksLikeServerJson("not json", 8));
-  TEST_ASSERT_FALSE(wire::looksLikeServerJson("", 0));
+static void test_parse_lockout_ms_rejects_over_60_sec(void) {
+  // Matches the admin API's own sensor_lockout_sec <= 60 bound; also guards
+  // the double->uint32_t conversion against an absurd value like 1e9.
+  uint32_t ms = 999;
+  const char *body = "{\"lockout_sec\":1e9}";
+  TEST_ASSERT_FALSE(wire::parseLockoutMs(body, strlen(body), &ms));
+  TEST_ASSERT_EQUAL_UINT32(999, ms);  // untouched
+}
+
+static void test_parse_lockout_ms_accepts_60_sec(void) {
+  uint32_t ms = 0;
+  const char *body = "{\"lockout_sec\":60}";
+  TEST_ASSERT_TRUE(wire::parseLockoutMs(body, strlen(body), &ms));
+  TEST_ASSERT_EQUAL_UINT32(60000, ms);
 }
 
 int main(int argc, char **argv) {
@@ -118,6 +128,7 @@ int main(int argc, char **argv) {
   RUN_TEST(test_parse_lockout_ms_rejects_negative);
   RUN_TEST(test_parse_lockout_ms_missing_field);
   RUN_TEST(test_parse_lockout_ms_not_null_terminated);
-  RUN_TEST(test_looks_like_server_json);
+  RUN_TEST(test_parse_lockout_ms_rejects_over_60_sec);
+  RUN_TEST(test_parse_lockout_ms_accepts_60_sec);
   return UNITY_END();
 }

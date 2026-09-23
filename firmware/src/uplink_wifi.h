@@ -69,6 +69,19 @@ class UplinkWifi : public Uplink {
   uint32_t lastResyncMs_ = 0;
   bool fetchedConfigOnce_ = false;
 
+  // Backoff for a failed SNTP sync (handleSyncing()'s 8s timeout), instead
+  // of falling through to the unconditional hourly resync check and
+  // effectively waiting up to an hour to retry.
+  uint8_t syncFailStreak_ = 0;
+  uint32_t nextSyncAttemptMs_ = 0;
+  static constexpr uint8_t kSyncFailRestartCount = 6;  // ESP.restart() past this
+
+  // WiFi channel of the last successful connection, so a reconnect can pin
+  // WiFi.begin() to it and skip a full-band scan (which would otherwise
+  // temporarily move this device's WiFi -- and hence ESP-NOW -- channel
+  // while a client is linked to it as a relay host). 0 = not yet known.
+  uint8_t lastConnectedChannel_ = 0;
+
   // Non-blocking 3-packet burst sender (replaces the original delay(50)x2
   // in sendTrigger()). Only one burst is ever in flight: sendToServer() is
   // only called from loop() after a lockout window has elapsed, so a new

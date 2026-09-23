@@ -17,6 +17,14 @@ int64_t nowWallUs() {
   return (int64_t)tv.tv_sec * 1000000LL + tv.tv_usec;
 }
 
+// Backoff schedule for a failed SNTP sync, indexed by (syncFailStreak_ - 1)
+// and capped at the last entry for any further failure.
+uint32_t syncBackoffMs(uint8_t streak) {
+  if (streak <= 1) return 10000;
+  if (streak == 2) return 30000;
+  return 60000;
+}
+
 }  // namespace
 
 void UplinkWifi::begin() {
@@ -44,6 +52,9 @@ void UplinkWifi::begin() {
   // reconnects (see loop()'s "just (re)connected" branch).
   wifiDownSinceMs_ = 0;
   lastReconnectAttemptMs_ = 0;
+  syncFailStreak_ = 0;
+  nextSyncAttemptMs_ = 0;
+  lastConnectedChannel_ = 0;
 }
 
 void UplinkWifi::loop(uint32_t nowMs) {
@@ -63,7 +74,16 @@ void UplinkWifi::loop(uint32_t nowMs) {
       lastReconnectAttemptMs_ = nowMs;
       Serial.println("[wifi] disconnected, reconnecting...");
       WiFi.disconnect();
-      WiFi.begin(ssid_, pass_);
+      if (lastConnectedChannel_ != 0) {
+        // Pin to the channel we were last connected on: WiFi.begin()'s
+        // default full-band scan would otherwise move this device's WiFi
+        // (and hence its ESP-NOW radio, shared hardware) to whatever
+        // channel it scans next, breaking the link to any client relaying
+        // through this device as its host.
+        WiFi.begin(ssid_, pass_, lastConnectedChannel_);
+      } else {
+        WiFi.begin(ssid_, pass_);
+      }
     }
 
     // Initial connect gets a shorter timeout (matching the original
@@ -85,6 +105,7 @@ void UplinkWifi::loop(uint32_t nowMs) {
   if (wifiDownSinceMs_ != 0) {
     // Just (re)connected.
     wifiDownSinceMs_ = 0;
+    lastConnectedChannel_ = WiFi.channel();
     if (!everConnected_) {
       everConnected_ = true;
       // Bind a fixed local port so we can both send heartbeats/triggers and
@@ -100,6 +121,8 @@ void UplinkWifi::loop(uint32_t nowMs) {
     // LED a clean, deterministic state instead of wherever a stale blink
     // phase left it (issue #36 follow-up).
     startSync(nowMs);
+  } else if (state_ == UplinkState::Failed) {
+    if ((int32_t)(nowMs - nextSyncAttemptMs_) >= 0) startSync(nowMs);
   } else if (state_ != UplinkState::Syncing && nowMs - lastResyncMs_ > 3600UL * 1000UL) {
     startSync(nowMs);
   }
@@ -134,12 +157,21 @@ void UplinkWifi::handleSyncing(uint32_t nowMs) {
   if (getLocalTime(&tm, 0)) {
     timebase_.anchor(nowWallUs(), esp_timer_get_time());
     state_ = UplinkState::Ready;
+    syncFailStreak_ = 0;
     Serial.println("[sync] clock synced");
     fetchConfigOnce();
     return;
   }
   if (nowMs - syncStartMs_ > 8000) {
-    Serial.println("[sync] FAILED (will retry)");
+    if (syncFailStreak_ < 255) syncFailStreak_++;
+    if (syncFailStreak_ > kSyncFailRestartCount) {
+      Serial.println("[sync] FAILED too many times in a row, restarting");
+      delay(50);
+      ESP.restart();
+    }
+    uint32_t backoffMs = syncBackoffMs(syncFailStreak_);
+    nextSyncAttemptMs_ = nowMs + backoffMs;
+    Serial.printf("[sync] FAILED (retry in %lus)\n", (unsigned long)(backoffMs / 1000));
     state_ = UplinkState::Failed;
     fetchConfigOnce();
   }
@@ -193,25 +225,26 @@ void UplinkWifi::pollConfigReply() {
 bool UplinkWifi::sendToServer(const char *payload, size_t len, Redundancy r) {
   if (len >= sizeof(burst_.payload)) return false;
 
+  if (r != Redundancy::Burst3) {
+    // hb: sent directly, never touching burst_ -- otherwise this would
+    // overwrite (and cut short) a trigger burst still in flight.
+    sendPacketNow(payload, len);
+    return true;
+  }
+
   memcpy(burst_.payload, payload, len);
   burst_.payload[len] = '\0';
   burst_.len = len;
-
   sendPacketNow(burst_.payload, burst_.len);
-
-  if (r == Redundancy::Burst3) {
-    burst_.remaining = 2;
-    burst_.nextAtMs = millis() + 50;
-    burst_.active = true;
-  } else {
-    burst_.active = false;
-  }
+  burst_.remaining = 2;
+  burst_.nextAtMs = millis() + 50;
+  burst_.active = true;
   return true;
 }
 
 void UplinkWifi::pollBurst(uint32_t nowMs) {
   if (!burst_.active) return;
-  if (nowMs < burst_.nextAtMs) return;
+  if ((int32_t)(nowMs - burst_.nextAtMs) < 0) return;
 
   sendPacketNow(burst_.payload, burst_.len);
   burst_.remaining--;

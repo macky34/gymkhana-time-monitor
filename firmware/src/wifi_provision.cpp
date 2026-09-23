@@ -19,7 +19,10 @@ constexpr const char *kPassKey = "pass";
 void readLine(char *buf, size_t bufLen) {
   size_t n = 0;
   while (true) {
-    if (!Serial.available()) continue;
+    if (!Serial.available()) {
+      delay(1);  // yield to the IDLE task instead of starving the WDT
+      continue;
+    }
     int c = Serial.read();
     if (c == '\r') continue;
     if (c == '\n') {
@@ -63,12 +66,16 @@ void getCredentials(char ssidOut[kMaxSsidLen + 1], char passOut[kMaxPassLen + 1]
   Preferences prefs;
   prefs.begin(kNamespace, true);  // read-only
   bool has = prefs.isKey(kSsidKey) && prefs.isKey(kPassKey);
+  size_t ssidLen = 0, passLen = 0;
   if (has) {
-    prefs.getString(kSsidKey, ssidOut, kMaxSsidLen + 1);
-    prefs.getString(kPassKey, passOut, kMaxPassLen + 1);
+    ssidLen = prefs.getString(kSsidKey, ssidOut, kMaxSsidLen + 1);
+    passLen = prefs.getString(kPassKey, passOut, kMaxPassLen + 1);
   }
   prefs.end();
-  if (has && ssidOut[0] != '\0') return;
+  // Both reads must have actually produced a value -- a partial read (e.g.
+  // NVS corruption on just the password key) must not silently proceed with
+  // a blank password, which just looks like a wrong-password hang later.
+  if (has && ssidLen > 0 && passLen > 0) return;
 
   promptAndSave(ssidOut, kMaxSsidLen + 1, passOut, kMaxPassLen + 1);
 #endif

@@ -16,10 +16,8 @@ class ModeSwitch {
 
   wire::Role role() const { return role_; }
 
-  // True once a confirmed role change has happened since the last
-  // clearChanged() call.
+  // True once a confirmed role change has happened.
   bool changed() const { return changed_; }
-  void clearChanged() { changed_ = false; }
 
  private:
   static constexpr uint32_t kDebounceMs = 1000;

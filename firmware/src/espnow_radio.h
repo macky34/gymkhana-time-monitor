@@ -39,6 +39,14 @@ class EspNowRadio {
   // Non-blocking pop from the receive queue. Returns false if empty.
   bool poll(EspNowPacket *out);
 
+  // Number of esp_now_send() calls in a row that the radio has reported as
+  // failed (ESP_NOW_SEND_FAIL), since the last resetSendFailStreak(). Reset
+  // to 0 automatically on any successful send. Lets a caller notice a peer
+  // that's gone silent at the radio layer despite still being a registered
+  // peer (e.g. out of range, or powered off).
+  uint32_t sendFailStreak() const;
+  void resetSendFailStreak();
+
   // Adds WIFI_PROTOCOL_LR to the STA protocol bitmap (kept alongside
   // 11b/g/n, not instead of -- LR devices still need to interoperate with
   // any legacy-rate peer). Returns false (protocol left unchanged) if the
