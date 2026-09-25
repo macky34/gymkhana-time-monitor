@@ -1,5 +1,5 @@
-// ModeSwitch: start/goal role switch. INPUT_PULLUP; GND-shorted = Goal,
-// OPEN = Start (safe default). Confirms a role only after the raw reading
+// ModeSwitch: start/goal role switch. INPUT_PULLUP; GND-shorted = Start,
+// OPEN = Goal (safe default). Confirms a role only after the raw reading
 // has been stable for kDebounceMs, to reject vibration-induced chatter.
 #pragma once
 

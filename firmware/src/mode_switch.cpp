@@ -3,7 +3,7 @@
 #include <Arduino.h>
 
 wire::Role ModeSwitch::read() const {
-  return digitalRead(gpio_) == LOW ? wire::Role::Goal : wire::Role::Start;
+  return digitalRead(gpio_) == LOW ? wire::Role::Start : wire::Role::Goal;
 }
 
 void ModeSwitch::begin(uint8_t gpio) {
