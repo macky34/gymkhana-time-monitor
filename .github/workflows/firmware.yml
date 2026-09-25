@@ -68,6 +68,8 @@ jobs:
   # config.h.example から生成する config.h は WIFI_SSID/WIFI_PASS を持たない
   # ため、実機は初回起動時にシリアル経由のプロビジョニング(wifi_provision.cpp)
   # に入る -- バイナリにパスワードは一切埋め込まれない。
+  # メインで使うボードはC6のみのため、配布はC6バイナリのみ(C5はplatformio.ini
+  # に設定を残しつつ上の build ジョブでコンパイル確認のみ行い、配布はしない)。
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     name: release (${{ matrix.env }})
@@ -77,9 +79,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - env: seeed_xiao_esp32c5
-            chip: esp32c5
-            bootloader_offset: '0x2000'
           - env: seeed_xiao_esp32c6
             chip: esp32c6
             bootloader_offset: '0x0'
