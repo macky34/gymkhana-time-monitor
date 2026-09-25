@@ -19,20 +19,14 @@
 // piggybacked on heartbeat responses (issue #18: live lockout reload).
 #define LOCAL_UDP_PORT 9999
 
-// --- Seeed Studio XIAO ESP32C5 (env:seeed_xiao_esp32c5), the default board --
-// D2 and D3 are strapping pins on the C5 (SDIO edge select / JTAG source
-// select respectively -- see the ESP32-C5 datasheet's "Boot Configurations"
-// chapter), but this project uses neither SDIO nor external JTAG, so
-// reusing them as plain GPIO here doesn't affect boot.
-#define SENSOR_GPIO 25       // D2 pin (GPIO25)
-#define STATUS_LED_GPIO 7    // D3, external LED1 via MOSFET (GPIO27 is LED_BUILTIN-only, not header-accessible)
-#define LED_ACTIVE_LOW 0     // external LED1 is lit when the GPIO is driven HIGH (MOSFET gate)
-#define PILOT_LED_GPIO 11    // D6, external LED2 (pilot lamp) via its own MOSFET, active-high
-#define MODE_SWITCH_GPIO 12  // D7, start/goal role switch (INPUT_PULLUP, GND=Start, OPEN=Goal)
-#define LINK_SWITCH_GPIO 8   // D8, ESP-NOW enable switch (INPUT_PULLUP, GND=WiFi-direct, OPEN=ESP-NOW client)
-// USE_EXTERNAL_ANTENNA has no effect on the C5 (no antenna switch; fixed
-// onboard u.FL antenna) -- leave it undefined. WiFi band is pinned to 2.4GHz
-// in main.cpp since the C5 is dual-band and the venue AP is 2.4GHz-only.
+// --- Seeed Studio XIAO ESP32C6 (env:seeed_xiao_esp32c6), the main board -----
+#define SENSOR_GPIO 2         // D2 pin (GPIO2)
+#define STATUS_LED_GPIO 21    // D3, external LED1 via its own MOSFET (onboard LED is GPIO15, a dedicated pin not brought out to the header)
+#define LED_ACTIVE_LOW 0      // external LED1 is lit when the GPIO is driven HIGH (MOSFET gate)
+#define PILOT_LED_GPIO 16     // D6, external LED2 (pilot lamp) via its own MOSFET, active-high
+#define MODE_SWITCH_GPIO 17   // D7, start/goal role switch (INPUT_PULLUP, GND=Start, OPEN=Goal)
+#define LINK_SWITCH_GPIO 19   // D8, ESP-NOW enable switch (INPUT_PULLUP, GND=WiFi-direct, OPEN=ESP-NOW client)
+// #define USE_EXTERNAL_ANTENNA 0  // 0 = onboard chip antenna, 1 = external (u.FL)
 
 // Fallback debounce lockout if the server config fetch fails (ms; the
 // server config wire protocol itself is in seconds, but this internal
@@ -70,12 +64,20 @@
 // transitions, NTP sync status. Default off.
 // #define DEBUG_VERBOSE
 
-// --- Seeed Studio XIAO ESP32C6 (env:seeed_xiao_esp32c6) ---------------------
-// Uncomment/replace the above when building for the XIAO ESP32C6 instead:
-//   #define SENSOR_GPIO 2        // D2 pin (GPIO2)
-//   #define STATUS_LED_GPIO 21   // D3, external LED1 via its own MOSFET (see C5 comment above)
+// --- Seeed Studio XIAO ESP32C5 (env:seeed_xiao_esp32c5) ---------------------
+// Kept for reference/local testing only -- release/distribution builds no
+// longer ship a C5 binary (firmware.yml's release job builds C6 only).
+// Uncomment/replace the above when building for the XIAO ESP32C5 instead:
+//   #define SENSOR_GPIO 25       // D2 pin (GPIO25)
+//   #define STATUS_LED_GPIO 7    // D3, external LED1 via MOSFET (GPIO27 is LED_BUILTIN-only, not header-accessible)
 //   #define LED_ACTIVE_LOW 0     // external LED1 is lit when driven HIGH (MOSFET gate)
-//   #define PILOT_LED_GPIO 16    // D6, external LED2 (pilot lamp) via its own MOSFET, active-high
-//   #define MODE_SWITCH_GPIO 17  // D7, start/goal role switch (INPUT_PULLUP, GND=Start, OPEN=Goal)
-//   #define LINK_SWITCH_GPIO 19  // D8, ESP-NOW enable switch (INPUT_PULLUP, GND=WiFi-direct, OPEN=ESP-NOW client)
-//   #define USE_EXTERNAL_ANTENNA 0  // 0 = onboard chip antenna, 1 = external (u.FL)
+//   #define PILOT_LED_GPIO 11    // D6, external LED2 (pilot lamp) via its own MOSFET, active-high
+//   #define MODE_SWITCH_GPIO 12  // D7, start/goal role switch (INPUT_PULLUP, GND=Start, OPEN=Goal)
+//   #define LINK_SWITCH_GPIO 8   // D8, ESP-NOW enable switch (INPUT_PULLUP, GND=WiFi-direct, OPEN=ESP-NOW client)
+// D2 and D3 are strapping pins on the C5 (SDIO edge select / JTAG source
+// select respectively -- see the ESP32-C5 datasheet's "Boot Configurations"
+// chapter), but this project uses neither SDIO nor external JTAG, so
+// reusing them as plain GPIO here doesn't affect boot. USE_EXTERNAL_ANTENNA
+// has no effect on the C5 (no antenna switch; fixed onboard u.FL antenna) --
+// leave it undefined. WiFi band is pinned to 2.4GHz in main.cpp since the C5
+// is dual-band and the venue AP is 2.4GHz-only.
