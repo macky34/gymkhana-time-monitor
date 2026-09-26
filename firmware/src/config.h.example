@@ -24,8 +24,8 @@
 #define STATUS_LED_GPIO 21    // D3, external LED1 via its own MOSFET (onboard LED is GPIO15, a dedicated pin not brought out to the header)
 #define LED_ACTIVE_LOW 0      // external LED1 is lit when the GPIO is driven HIGH (MOSFET gate)
 #define PILOT_LED_GPIO 16     // D6, external LED2 (pilot lamp) via its own MOSFET, active-high
-#define MODE_SWITCH_GPIO 17   // D7, start/goal role switch (INPUT_PULLUP, GND=Start, OPEN=Goal)
-#define LINK_SWITCH_GPIO 19   // D8, ESP-NOW enable switch (INPUT_PULLUP, GND=WiFi-direct, OPEN=ESP-NOW client)
+#define MODE_SWITCH_GPIO 17   // D7, start/goal role switch (INPUT_PULLUP, GND=Goal, OPEN=Start)
+#define LINK_SWITCH_GPIO 19   // D8, ESP-NOW enable switch (INPUT_PULLUP, GND=ESP-NOW client, OPEN=WiFi-direct)
 // #define USE_EXTERNAL_ANTENNA 0  // 0 = onboard chip antenna, 1 = external (u.FL)
 
 // Fallback debounce lockout if the server config fetch fails (ms; the
@@ -72,8 +72,8 @@
 //   #define STATUS_LED_GPIO 7    // D3, external LED1 via MOSFET (GPIO27 is LED_BUILTIN-only, not header-accessible)
 //   #define LED_ACTIVE_LOW 0     // external LED1 is lit when driven HIGH (MOSFET gate)
 //   #define PILOT_LED_GPIO 11    // D6, external LED2 (pilot lamp) via its own MOSFET, active-high
-//   #define MODE_SWITCH_GPIO 12  // D7, start/goal role switch (INPUT_PULLUP, GND=Start, OPEN=Goal)
-//   #define LINK_SWITCH_GPIO 8   // D8, ESP-NOW enable switch (INPUT_PULLUP, GND=WiFi-direct, OPEN=ESP-NOW client)
+//   #define MODE_SWITCH_GPIO 12  // D7, start/goal role switch (INPUT_PULLUP, GND=Goal, OPEN=Start)
+//   #define LINK_SWITCH_GPIO 8   // D8, ESP-NOW enable switch (INPUT_PULLUP, GND=ESP-NOW client, OPEN=WiFi-direct)
 // D2 and D3 are strapping pins on the C5 (SDIO edge select / JTAG source
 // select respectively -- see the ESP32-C5 datasheet's "Boot Configurations"
 // chapter), but this project uses neither SDIO nor external JTAG, so
