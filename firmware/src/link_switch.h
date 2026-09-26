@@ -1,5 +1,5 @@
-// LinkSwitch: ESP-NOW enable switch. INPUT_PULLUP; GND-shorted = WiFi-direct
-// (safe default), OPEN = ESP-NOW client. Same debounce approach as
+// LinkSwitch: ESP-NOW enable switch. INPUT_PULLUP; GND-shorted = ESP-NOW
+// client, OPEN = WiFi-direct (safe default). Same debounce approach as
 // ModeSwitch, kept separate since it toggles a plain bool rather than a
 // wire::Role.
 #pragma once
